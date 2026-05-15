@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@theme {
+  /* ─── Palette (DESIGN.md) ──────────────────────────────── */
+  --color-cash-lime: #00d54f;
+  --color-midnight-black: #000000;
+  --color-canvas-white: #ffffff;
+  --color-cloud-gray: #f4f4f5;
+  --color-subtle-gray: #858585;
+  --color-hinting-gray: #b3b3b3;
+  --color-ghost-border: #e5e7eb;
+
+  /* ─── Semantic mapping (for shadcn / dapp-kit primitives) ── */
+  --color-background: var(--color-canvas-white);
+  --color-foreground: var(--color-midnight-black);
+  --color-card: var(--color-cloud-gray);
+  --color-card-foreground: var(--color-midnight-black);
+  --color-popover: var(--color-canvas-white);
+  --color-popover-foreground: var(--color-midnight-black);
+  --color-primary: var(--color-cash-lime);
+  --color-primary-foreground: var(--color-midnight-black);
+  --color-secondary: var(--color-cloud-gray);
+  --color-secondary-foreground: var(--color-midnight-black);
+  --color-muted: var(--color-cloud-gray);
+  --color-muted-foreground: var(--color-subtle-gray);
+  --color-accent: var(--color-cash-lime);
+  --color-accent-foreground: var(--color-midnight-black);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: var(--color-canvas-white);
+  --color-warning: #f59e0b;
+  --color-warning-foreground: var(--color-midnight-black);
+  --color-border: var(--color-ghost-border);
+  --color-input: var(--color-ghost-border);
+  --color-ring: var(--color-cash-lime);
+
+  /* ─── Typography (DESIGN.md) ───────────────────────────── */
+  /* --font-brand is supplied by next/font/local in layout.tsx (Cash Sans). */
+  --font-cashsans:
+    var(--font-brand), "CashSans", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: var(--font-cashsans);
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Cascadia Code", monospace;
+
+  --text-caption: 12px;
+  --leading-caption: 1.5;
+  --text-body-sm: 14px;
+  --leading-body-sm: 1.5;
+  --text-body: 16px;
+  --leading-body: 1.5;
+  --text-body-lg: 20px;
+  --leading-body-lg: 1.5;
+  --text-title: 32px;
+  --leading-title: 1.2;
+  --text-subhead: 48px;
+  --leading-subhead: 1.1;
+  --text-hero: clamp(56px, 9vw, 96px);
+  --leading-hero: 1.0;
+  --text-display: clamp(64px, 12vw, 120px);
+  --leading-display: 0.95;
+
+  /* ─── Radii (DESIGN.md) — pills + soft cards ──────────── */
+  --radius-pill: 9999px;
+  --radius-mark: 14px;
+  --radius-card: 24px;
+  --radius-card-lg: 32px;
+  --radius-image: 28px;
+  --radius-phone: 40px;
+  /* Override Tailwind defaults so legacy rounded-* classes resolve softly */
+  --radius-sm: 14px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-canvas-white);
+  color: var(--color-midnight-black);
+  font-family: var(--font-cashsans);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  letter-spacing: -0.015em;
+}
+
+/* Display sizes lean tighter per DESIGN.md (-0.025em) */
+.display-tight {
+  letter-spacing: -0.025em;
+}
+
+/* Continuous lime-shimmer text — GPU-accelerated via CSS keyframes */
+@keyframes shimmer-flow {
+  0% {
+    background-position: 0% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.text-shimmer-lime {
+  background: linear-gradient(
+    90deg,
+    #00d54f 0%,
+    #5cf088 25%,
+    #00b842 50%,
+    #5cf088 75%,
+    #00d54f 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-flow 4s linear infinite;
+  will-change: background-position;
+}
+
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+  letter-spacing: inherit;
+}
+
+/* dapp-kit ConnectButton — coerce to pill + brand colors */
+[data-dapp-kit] button {
+  border-radius: 9999px !important;
+  background: var(--color-cash-lime) !important;
+  color: var(--color-midnight-black) !important;
+  font-weight: 500 !important;
+  padding: 12px 24px !important;
+  border: none !important;
+  box-shadow: none !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+[data-dapp-kit] button:hover {
+  opacity: 0.85;
+}
