@@ -8,6 +8,8 @@ import { ThinkingBlock } from "@/components/agent-blocks/thinking-block";
 import { ProposalBlock } from "@/components/agent-blocks/proposal-block";
 import { GuardianBlock } from "@/components/agent-blocks/guardian-block";
 import { ReceiptBlock } from "@/components/agent-blocks/receipt-block";
+import { OverrideDialog } from "@/components/override-dialog";
+import { SigningProgress } from "@/components/signing-progress";
 import {
   DEFAULT_INTENT,
   DEFAULT_TUNE,
@@ -19,7 +21,17 @@ import { buildMockAllocation } from "@/lib/mock-allocation";
 import { evaluateGuardian } from "@/lib/mock-guardian";
 import { fadeUp, slideInRight, SPRING } from "@/lib/motion";
 
-type Stage = "idle" | "thinking" | "proposed" | "signing" | "confirmed";
+type Stage =
+  | "idle"
+  | "thinking"
+  | "proposed"
+  | "wallet_pending"
+  | "submitting"
+  | "finalizing"
+  | "confirmed";
+
+const IS_SIGNING_STAGE = (s: Stage): s is "wallet_pending" | "submitting" | "finalizing" =>
+  s === "wallet_pending" || s === "submitting" || s === "finalizing";
 
 function makeDigest() {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -35,6 +47,7 @@ export function Conversation() {
   const [intent, setIntent] = useState<IntentInput>(DEFAULT_INTENT);
   const [tune, setTune] = useState<TuneState>(DEFAULT_TUNE);
   const [digest, setDigest] = useState<string>("");
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const allocation = useMemo(
@@ -62,11 +75,36 @@ export function Conversation() {
     setTimeout(() => setStage("proposed"), 1400);
   }
 
+  function executeConfirm() {
+    setOverrideOpen(false);
+    // Stage 1: hand off to wallet (mock — user sees the wallet popup)
+    setStage("wallet_pending");
+    setTimeout(() => {
+      // Stage 2: user signed, broadcasting
+      setDigest(makeDigest());
+      setStage("submitting");
+      setTimeout(() => {
+        // Stage 3: tx submitted, waiting for finalization
+        setStage("finalizing");
+        setTimeout(() => {
+          // Done
+          setStage("confirmed");
+        }, 1000);
+      }, 1300);
+    }, 1800);
+  }
+
+  function cancelSigning() {
+    setStage("proposed");
+    setDigest("");
+  }
+
   function confirm() {
-    if (blocking) return;
-    setStage("signing");
-    setDigest(makeDigest());
-    setTimeout(() => setStage("confirmed"), 1400);
+    if (blocking) {
+      setOverrideOpen(true);
+      return;
+    }
+    executeConfirm();
   }
 
   function reset() {
@@ -76,6 +114,7 @@ export function Conversation() {
     setIntent(DEFAULT_INTENT);
     setTune(DEFAULT_TUNE);
     setDigest("");
+    setOverrideOpen(false);
   }
 
   if (stage === "idle") {
@@ -112,17 +151,43 @@ export function Conversation() {
         )}
       </AnimatePresence>
 
-      {(stage === "proposed" || stage === "signing") && allocation && (
+      {(stage === "proposed" || IS_SIGNING_STAGE(stage)) && allocation && (
         <>
-          <ProposalBlock
-            intent={intent}
-            allocation={allocation}
-            tune={tune}
-            onIntentChange={setIntent}
-            onTuneChange={setTune}
-          />
-          <GuardianBlock risks={risks} />
+          {stage === "proposed" && (
+            <>
+              <ProposalBlock
+                intent={intent}
+                allocation={allocation}
+                tune={tune}
+                onIntentChange={setIntent}
+                onTuneChange={setTune}
+              />
+              <GuardianBlock risks={risks} />
+            </>
+          )}
 
+          <AnimatePresence>
+            {IS_SIGNING_STAGE(stage) && (
+              <motion.div
+                key="signing"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ ...SPRING }}
+              >
+                <SigningProgress
+                  stage={stage}
+                  digest={digest || undefined}
+                  gasUsd={allocation.estimatedGasUsd}
+                  onCancel={
+                    stage === "wallet_pending" ? cancelSigning : undefined
+                  }
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {stage === "proposed" && (
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -133,37 +198,57 @@ export function Conversation() {
               className="flex flex-col gap-3 bg-cloud-gray p-3 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)] sm:flex-row sm:items-center sm:justify-between sm:pl-6"
               style={{ borderRadius: 9999 }}
             >
-              <div className="text-body-sm text-subtle-gray sm:pl-2">
-                {blocking
-                  ? "Guardian is blocking — adjust your intent above."
-                  : `${allocation.legs.length} ${allocation.legs.length === 1 ? "step" : "legs"} · 1 atomic PTB · ~$${allocation.estimatedGasUsd.toFixed(3)} gas`}
+              <div className="text-body-sm sm:pl-2">
+                {blocking ? (
+                  <span className="text-destructive">
+                    <span className="font-semibold">Guardian flagged risk</span> ·
+                    sign anyway?
+                  </span>
+                ) : (
+                  <span className="text-subtle-gray">
+                    {allocation.legs.length}{" "}
+                    {allocation.legs.length === 1 ? "step" : "legs"} · 1 atomic
+                    PTB · ~${allocation.estimatedGasUsd.toFixed(3)} gas
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <motion.button
                   onClick={reset}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.96 }}
-                  transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-                  className="bg-canvas-white px-5 py-2.5 text-body-sm font-medium text-midnight-black disabled:opacity-50"
+                  transition={{
+                    type: "spring",
+                    visualDuration: 0.2,
+                    bounce: 0.3,
+                  }}
+                  className="bg-canvas-white px-5 py-2.5 text-body-sm font-medium text-midnight-black"
                   style={{ borderRadius: 9999 }}
-                  disabled={stage === "signing"}
                 >
                   Start over
                 </motion.button>
                 <motion.button
                   onClick={confirm}
-                  disabled={blocking || stage === "signing"}
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.96 }}
-                  transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-                  className="bg-cash-lime px-6 py-2.5 text-body-sm font-semibold text-midnight-black disabled:bg-hinting-gray disabled:text-canvas-white"
+                  transition={{
+                    type: "spring",
+                    visualDuration: 0.2,
+                    bounce: 0.3,
+                  }}
+                  className={`px-6 py-2.5 text-body-sm font-semibold ${
+                    blocking
+                      ? "bg-destructive text-canvas-white"
+                      : "bg-cash-lime text-midnight-black"
+                  }`}
                   style={{ borderRadius: 9999 }}
                 >
-                  {stage === "signing" ? "Signing…" : "Confirm & sign →"}
+                  {blocking ? "Sign anyway →" : "Confirm & sign →"}
                 </motion.button>
               </div>
             </div>
           </motion.div>
+          )}
         </>
       )}
 
@@ -196,6 +281,13 @@ export function Conversation() {
       )}
 
       <div ref={endRef} />
+
+      <OverrideDialog
+        open={overrideOpen}
+        risks={risks}
+        onCancel={() => setOverrideOpen(false)}
+        onConfirm={executeConfirm}
+      />
     </section>
   );
 }

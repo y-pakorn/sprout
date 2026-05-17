@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Sometype_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
@@ -11,6 +12,13 @@ const cashSans = localFont({
     { path: "./Bold.woff2", weight: "700", style: "normal" },
   ],
   variable: "--font-brand",
+  display: "swap",
+});
+
+const sometypeMono = Sometype_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-mono-brand",
   display: "swap",
 });
 
@@ -26,7 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${cashSans.variable} h-full`}>
+    <html
+      lang="en"
+      className={`${cashSans.variable} ${sometypeMono.variable} h-full`}
+    >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
       </body>

@@ -25,7 +25,7 @@ export function GuardianBlock({ risks }: { risks: GuardianRisk[] }) {
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-4 bg-cloud-gray p-6"
+      className="space-y-3 bg-cloud-gray p-6"
       style={{ borderRadius: 24 }}
     >
       <div className="flex items-center gap-2.5">
@@ -51,7 +51,7 @@ export function GuardianBlock({ risks }: { risks: GuardianRisk[] }) {
       </div>
 
       <motion.div
-        variants={stagger(0.15, 0.05)}
+        variants={stagger(0.1, 0.04)}
         initial="initial"
         animate="animate"
         className="divide-y divide-ghost-border"
@@ -60,25 +60,22 @@ export function GuardianBlock({ risks }: { risks: GuardianRisk[] }) {
           <motion.div
             key={r.id}
             variants={fadeUp}
-            className="flex flex-col gap-2 py-3 first:pt-1 last:pb-1 sm:flex-row sm:items-start sm:justify-between"
+            className="flex items-center justify-between gap-3 py-2.5 first:pt-1 last:pb-1"
           >
-            <div className="flex-1 space-y-0.5">
-              <div className="text-body font-semibold leading-tight">
+            <div className="min-w-0 flex-1">
+              <div className="text-body-sm font-medium leading-tight">
                 {r.label}
               </div>
-              <div className="text-body-sm text-subtle-gray">{r.detail}</div>
-            </div>
-            <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
-              <div className="text-body-sm text-midnight-black">
+              <div className="truncate text-body-sm text-subtle-gray">
                 {r.summary}
               </div>
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 text-caption font-semibold uppercase tracking-wider ${verdictPill(r.verdict)}`}
-                style={{ borderRadius: 9999 }}
-              >
-                {VERDICT_LABEL[r.verdict]}
-              </span>
             </div>
+            <span
+              className={`inline-flex shrink-0 items-center px-2.5 py-0.5 text-caption font-semibold uppercase tracking-wider ${verdictPill(r.verdict)}`}
+              style={{ borderRadius: 9999 }}
+            >
+              {VERDICT_LABEL[r.verdict]}
+            </span>
           </motion.div>
         ))}
       </motion.div>

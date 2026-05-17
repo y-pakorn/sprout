@@ -1,28 +1,18 @@
 "use client";
 
-import { ConnectButton } from "@mysten/dapp-kit";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Sprout } from "lucide-react";
+import { WalletButton } from "@/components/wallet-button";
 
-function BrandMark({ size = 28 }: { size?: number }) {
+function BrandMark({ size = 32 }: { size?: number }) {
   return (
     <span
       aria-hidden
-      className="inline-flex shrink-0 items-center justify-center bg-cash-lime text-canvas-white"
-      style={{ width: size, height: size, borderRadius: 14 }}
+      className="inline-flex shrink-0 items-center justify-center bg-cash-lime text-midnight-black"
+      style={{ width: size, height: size, borderRadius: 12 }}
     >
-      <svg viewBox="0 0 24 24" fill="none" className="size-[60%]">
-        <path
-          d="M12 4c2 2 3 4.5 3 7a3 3 0 1 1-6 0c0-2.5 1-5 3-7Z"
-          fill="currentColor"
-        />
-        <path
-          d="M9 13.5c-1.5 1.5-3.5 2-5.5 2 .5 2.5 2.5 4 5.5 4"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-        />
-      </svg>
+      <Sprout className="size-[62%]" strokeWidth={2.4} />
     </span>
   );
 }
@@ -59,7 +49,7 @@ export function SiteHeader() {
             <NavLink href="/portfolio" label="Portfolio" />
           </nav>
         </div>
-        <ConnectButton />
+        <WalletButton />
       </div>
     </header>
   );
