@@ -5,6 +5,8 @@ import type { UIMessage } from "ai";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
 import { LiveSwapCard } from "@/components/parts/live-swap-card";
+import { BalanceCard } from "@/components/parts/balance-card";
+import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
 import { quoteCache } from "@/lib/ai/quote-cache";
 
 type IconLookup = (coinType: string) => string | undefined;
@@ -168,6 +170,115 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
               executed={isActive && swapAction.executed}
               txDigest={isActive ? swapAction.txDigest : undefined}
               walletConnected={swapAction.walletConnected}
+            />
+          );
+        }
+
+        if (part.type === "tool-getBalance") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { symbol?: string };
+            output?: {
+              error?: string;
+              symbol?: string;
+              balance?: number;
+              coinType?: string;
+            };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Balance read failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            const sym = p.input?.symbol?.toUpperCase();
+            return (
+              <ToolCallRow
+                key={key}
+                label={sym ? `Reading ${sym} balance…` : "Reading balance…"}
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          return (
+            <BalanceCard
+              key={key}
+              symbol={p.output?.symbol ?? p.input?.symbol?.toUpperCase() ?? "?"}
+              balance={p.output?.balance ?? 0}
+              iconUrl={
+                p.output?.coinType
+                  ? swapAction.iconLookup(p.output.coinType)
+                  : undefined
+              }
+            />
+          );
+        }
+
+        if (part.type === "tool-getBalances") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: {
+              error?: string;
+              balances?: WalletBalance[];
+            };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Wallet read failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Reading wallet balances…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          return (
+            <WalletCard
+              key={key}
+              balances={p.output?.balances ?? []}
+              iconLookup={swapAction.iconLookup}
             />
           );
         }

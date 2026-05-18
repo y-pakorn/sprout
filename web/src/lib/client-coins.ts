@@ -68,6 +68,21 @@ export function resolveSymbol(
 }
 
 /**
+ * Canonicalizes a Sui coin_type by left-padding the address segment to a
+ * full 32-byte (64 hex char) value. This makes short-form types like
+ * `0x2::sui::SUI` compare equal to the canonical long form
+ * `0x000…002::sui::SUI` returned by some RPC endpoints.
+ */
+export function canonicalCoinType(coinType: string): string {
+  const segments = coinType.split("::");
+  const addr = segments[0];
+  if (!addr || !addr.startsWith("0x")) return coinType;
+  const hex = addr.slice(2).padStart(64, "0").toLowerCase();
+  segments[0] = `0x${hex}`;
+  return segments.join("::");
+}
+
+/**
  * Truncates a Sui coin_type for display.
  *
  * "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"

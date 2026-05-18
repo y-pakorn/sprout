@@ -29,6 +29,20 @@ export const swapTools = {
         ),
     }),
   }),
+  getBalance: tool({
+    description:
+      "Read the connected wallet's balance for a single token. Use this BEFORE getSwapQuote whenever the user phrases the amount relative to their holdings — e.g. 'half my USDC', 'all my SUI', '25% of my WAL', 'a quarter of my BUCK'. Returns the balance in human units. Errors if no wallet is connected.",
+    inputSchema: z.object({
+      symbol: z
+        .string()
+        .describe("Token symbol to read — e.g. USDC, SUI, WAL"),
+    }),
+  }),
+  getBalances: tool({
+    description:
+      "Read ALL non-zero token balances in the connected wallet. Use when the user asks 'what do I have', 'what's in my wallet', 'show my portfolio', or when picking a source token requires seeing what they own. Errors if no wallet is connected.",
+    inputSchema: z.object({}),
+  }),
 };
 
 export type ToolName = keyof typeof swapTools;

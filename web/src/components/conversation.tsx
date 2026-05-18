@@ -8,12 +8,19 @@ import { StickToBottom } from "use-stick-to-bottom";
 import {
   useCurrentAccount,
   useSignAndExecuteTransaction,
+  useSuiClient,
 } from "@mysten/dapp-kit";
+
+type SuiClientLike = ReturnType<typeof useSuiClient>;
 import type { Transaction } from "@mysten/sui/transactions";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
 import { AgentMessage } from "@/components/agent-message";
-import { useCoinMap, resolveSymbol } from "@/lib/client-coins";
+import {
+  useCoinMap,
+  resolveSymbol,
+  canonicalCoinType,
+} from "@/lib/client-coins";
 import { quoteCache } from "@/lib/ai/quote-cache";
 import {
   getQuote,
@@ -29,7 +36,15 @@ import {
 export function Conversation() {
   const account = useCurrentAccount();
   const coinMap = useCoinMap();
+  const suiClient = useSuiClient();
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+
+  // Refs so onToolCall (which captures first-render closure) always reads
+  // the latest wallet/client values without re-subscribing.
+  const accountRef = useRef(account);
+  accountRef.current = account;
+  const suiClientRef = useRef(suiClient);
+  suiClientRef.current = suiClient;
 
   // Active swap-action state (one swap card may be live at a time)
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
@@ -59,17 +74,23 @@ export function Conversation() {
   const { messages, sendMessage, addToolResult, status, error } = useChat({
     transport,
     sendAutomaticallyWhen: ({ messages: msgs }) => {
+      // After ANY client-side tool result lands, re-submit so the agent
+      // can chain (e.g. getBalance → getSwapQuote) or send its follow-up
+      // text. The SDK won't auto-continue otherwise — without this the
+      // stream just stops at "ready" after the tool resolves.
       const last = msgs[msgs.length - 1];
       if (!last || last.role !== "assistant") return false;
-      const hasOutput = last.parts.some(
-        (p) =>
-          p.type === "tool-getSwapQuote" &&
-          (p as { state?: string }).state === "output-available",
+      const toolParts = last.parts.filter((p) =>
+        p.type.startsWith("tool-"),
+      ) as { state?: string }[];
+      if (toolParts.length === 0) return false;
+      const allResolved = toolParts.every(
+        (p) => p.state === "output-available" || p.state === "output-error",
       );
       const hasText = last.parts.some(
         (p) => p.type === "text" && (p as { text?: string }).text?.trim(),
       );
-      return hasOutput && !hasText;
+      return allResolved && !hasText;
     },
     /**
      * onToolCall MUST return quickly. The SDK awaits us, and addToolResult
@@ -80,8 +101,30 @@ export function Conversation() {
      */
     onToolCall({ toolCall }) {
       console.log("[onToolCall] fired", toolCall.toolName, toolCall.toolCallId);
-      if (toolCall.toolName !== "getSwapQuote") return;
-      void runSwapQuote(toolCall, coinMap, addToolResultRef);
+      if (toolCall.toolName === "getSwapQuote") {
+        void runSwapQuote(toolCall, coinMap, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "getBalance") {
+        void runGetBalance(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef,
+        );
+        return;
+      }
+      if (toolCall.toolName === "getBalances") {
+        void runGetBalances(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef,
+        );
+        return;
+      }
     },
   });
 
@@ -212,6 +255,141 @@ export function Conversation() {
     }
   }
 
+  async function runGetBalance(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>,
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    if (!acct) {
+      await addResult({
+        tool: "getBalance",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "Wallet not connected. The user needs to connect a wallet (button in the top-right) before I can read balances.",
+        },
+      });
+      return;
+    }
+    const { symbol } = toolCall.input as { symbol: string };
+    const coin = resolveSymbol(map, symbol);
+    if (!coin) {
+      await addResult({
+        tool: "getBalance",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: `Unknown token symbol: ${symbol}. Try USDC, SUI, USDT, WAL, DEEP, or BUCK.`,
+        },
+      });
+      return;
+    }
+    try {
+      const res = await client.getBalance({
+        owner: acct.address,
+        coinType: coin.coin_type,
+      });
+      const human = Number(res.totalBalance) / 10 ** coin.decimals;
+      await addResult({
+        tool: "getBalance",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          symbol: symbol.toUpperCase(),
+          balance: Number(human.toFixed(6)),
+          decimals: coin.decimals,
+          coinType: coin.coin_type,
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getBalance",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Balance lookup failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetBalances(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>,
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    if (!acct) {
+      await addResult({
+        tool: "getBalances",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "Wallet not connected. The user needs to connect a wallet (button in the top-right) before I can read balances.",
+        },
+      });
+      return;
+    }
+    try {
+      const all = await client.getAllBalances({ owner: acct.address });
+      // Reverse-index coinType → {symbol, decimals} from the known coin map
+      const byType = new Map<
+        string,
+        { symbol: string; decimals: number }
+      >();
+      if (map) {
+        for (const [symbol, info] of Object.entries(map)) {
+          // Canonicalize so short-form (0x2::sui::SUI) and long-form
+          // (0x000…002::sui::SUI) collide on the same key.
+          byType.set(canonicalCoinType(info.coin_type), {
+            symbol,
+            decimals: info.decimals,
+          });
+        }
+      }
+      type RawBal = { coinType: string; totalBalance: string };
+      type OutBal = {
+        symbol: string;
+        balance: number;
+        coinType: string;
+        known: boolean;
+      };
+      const balances: OutBal[] = (all as RawBal[])
+        .filter((b) => BigInt(b.totalBalance) > BigInt(0))
+        .map((b) => {
+          const canonType = canonicalCoinType(b.coinType);
+          const known = byType.get(canonType);
+          const decimals = known?.decimals ?? 9;
+          const human = Number(b.totalBalance) / 10 ** decimals;
+          return {
+            symbol: known?.symbol ?? b.coinType.split("::").pop() ?? "?",
+            balance: Number(human.toFixed(6)),
+            // Use the canonical type so the icon lookup (also canonicalized
+            // via the same coin map) hits.
+            coinType: canonType,
+            known: !!known,
+          };
+        })
+        .sort((a, b) => {
+          if (a.known !== b.known) return a.known ? -1 : 1;
+          return b.balance - a.balance;
+        });
+      await addResult({
+        tool: "getBalances",
+        toolCallId: toolCall.toolCallId,
+        output: { balances },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getBalances",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Wallet read failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
   // Scroll handled by StickToBottom wrapper below
 
   async function handleConfirm(toolCallId: string) {
@@ -312,9 +490,9 @@ export function Conversation() {
     if (!coinMap) return () => undefined;
     const byType = new Map<string, string | undefined>();
     for (const v of Object.values(coinMap)) {
-      byType.set(v.coin_type, v.icon_url);
+      byType.set(canonicalCoinType(v.coin_type), v.icon_url);
     }
-    return (coinType: string) => byType.get(coinType);
+    return (coinType: string) => byType.get(canonicalCoinType(coinType));
   }, [coinMap]);
 
   // Draft input
