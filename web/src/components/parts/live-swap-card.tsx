@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ChevronDown,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import type { CachedQuote } from "@/lib/ai/quote-cache";
@@ -20,6 +21,12 @@ import { extractRoute, dexLabel } from "@/lib/bluefin7k";
 import { truncateCoinType } from "@/lib/client-coins";
 import { fadeUp, scaleIn, stagger, SPRING_BOUNCY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useWalletHoldings } from "@/lib/client-wallet";
+import {
+  computeBalanceCheckFromRequirements,
+  type BalanceCheck,
+} from "@/lib/balance-check";
+import { fmtAmount } from "@/lib/format";
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -222,6 +229,26 @@ export function LiveSwapCard({
   const flagged = risks.filter((r) => r.verdict !== "pass").length;
   const blocking = risks.some((r) => r.verdict === "block");
 
+  const route = extractRoute(quote);
+  const swapGasSui = estimatedGasSui(route.hopCount);
+  const walletHoldings = useWalletHoldings();
+  const balanceCheck =
+    walletHoldings.state.status === "ready"
+      ? computeBalanceCheckFromRequirements(
+          [
+            {
+              symbol: cached.fromSymbol,
+              coinType: cached.fromCoinType,
+              decimals: cached.fromDecimals,
+              amount: cached.fromAmountHuman,
+            },
+          ],
+          swapGasSui,
+          walletHoldings.state.data,
+        )
+      : null;
+  const insufficient = balanceCheck?.hasAnyShortfall ?? false;
+
   // Auto-refresh: every 5s + immediately after slippage change. Skipped
   // while signing or after execution.
   const [refreshing, setRefreshing] = useState(false);
@@ -406,6 +433,35 @@ export function LiveSwapCard({
         </div>
       </div>
 
+      {!executed && insufficient && balanceCheck && (
+        <div
+          className="flex items-start gap-2 border-l-2 border-destructive bg-destructive/10 px-3 py-2"
+          style={{ borderRadius: 10 }}
+        >
+          <AlertTriangle
+            className="mt-0.5 size-4 shrink-0 text-destructive"
+            strokeWidth={2.4}
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-body-sm font-semibold text-canvas-white">
+              Insufficient balance
+            </span>
+            <span className="text-caption text-canvas-white/75">
+              {swapShortfallSummary(balanceCheck)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={walletHoldings.refresh}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 bg-white/[0.08] px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-white/[0.14]"
+            style={{ borderRadius: 9999 }}
+          >
+            <RefreshCw className="size-3" strokeWidth={2.4} />
+            Refresh
+          </button>
+        </div>
+      )}
+
       {!executed && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border/60 pt-3">
           <div className="flex items-center gap-2">
@@ -453,14 +509,18 @@ export function LiveSwapCard({
             </motion.button>
             <motion.button
               onClick={onConfirm}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.96 }}
-              disabled={signing || confirming || !walletConnected}
+              whileHover={{ scale: insufficient ? 1 : 1.04 }}
+              whileTap={{ scale: insufficient ? 1 : 0.96 }}
+              disabled={
+                signing || confirming || !walletConnected || insufficient
+              }
               className={cn(
                 "inline-flex items-center gap-1.5 px-4 py-1.5 text-body-sm font-semibold disabled:bg-hinting-gray disabled:text-canvas-white",
-                blocking
+                insufficient
                   ? "bg-destructive text-canvas-white"
-                  : "bg-cash-lime text-midnight-black",
+                  : blocking
+                    ? "bg-destructive text-canvas-white"
+                    : "bg-cash-lime text-midnight-black",
               )}
               style={{ borderRadius: 9999 }}
             >
@@ -473,9 +533,11 @@ export function LiveSwapCard({
                   ? "Confirming…"
                   : !walletConnected
                     ? "Connect wallet first"
-                    : blocking
-                      ? "Sign anyway →"
-                      : "Confirm & sign →"}
+                    : insufficient && balanceCheck
+                      ? swapShortfallButtonLabel(balanceCheck)
+                      : blocking
+                        ? "Sign anyway →"
+                        : "Confirm & sign →"}
             </motion.button>
           </div>
         </div>
@@ -836,4 +898,38 @@ function SplitRow({
       })}
     </div>
   );
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Insufficient-balance copy helpers
+// ───────────────────────────────────────────────────────────────────────
+
+function swapShortfallSummary(check: BalanceCheck): string {
+  const inputs = check.inputShortfalls;
+  const gas = check.gasShortfall;
+  if (inputs.length === 0 && gas) {
+    return `Wallet is short ${fmtAmount(gas.deficit)} ${gas.symbol} for the network fee (has ${fmtAmount(gas.available)}, plan needs ~${fmtAmount(gas.required)}).`;
+  }
+  if (inputs.length === 1 && !gas) {
+    const s = inputs[0];
+    return `Wallet has ${fmtAmount(s.available)} ${s.symbol}, plan needs ${fmtAmount(s.required)} (short by ${fmtAmount(s.deficit)}).`;
+  }
+  const parts: string[] = [];
+  for (const s of inputs) {
+    parts.push(`${fmtAmount(s.deficit)} ${s.symbol}`);
+  }
+  if (gas) parts.push(`${fmtAmount(gas.deficit)} SUI for gas`);
+  return `Wallet is short ${parts.join(", ")}.`;
+}
+
+function swapShortfallButtonLabel(check: BalanceCheck): string {
+  const inputs = check.inputShortfalls;
+  const gas = check.gasShortfall;
+  if (inputs.length === 0 && gas) {
+    return `Need ${fmtAmount(gas.deficit)} more ${gas.symbol}`;
+  }
+  if (inputs.length === 1 && !gas) {
+    return `Need ${fmtAmount(inputs[0].deficit)} more ${inputs[0].symbol}`;
+  }
+  return "Insufficient balance";
 }

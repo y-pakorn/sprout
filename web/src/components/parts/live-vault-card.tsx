@@ -12,6 +12,7 @@ import {
   Repeat,
   Split,
   Merge,
+  RefreshCw,
   X,
 } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
@@ -30,6 +31,11 @@ import type {
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
 import { fmtAmount, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useWalletHoldings } from "@/lib/client-wallet";
+import {
+  computeBalanceCheck,
+  type BalanceCheck,
+} from "@/lib/balance-check";
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -79,15 +85,50 @@ export function LiveVaultCard({
     ? depositSteps.find((d) => d.vault.id === openVaultId)?.vault ?? null
     : null;
 
+  const walletHoldings = useWalletHoldings();
+  const balanceCheck =
+    walletHoldings.state.status === "ready"
+      ? computeBalanceCheck(
+          cached.steps,
+          cached.summary.estimatedGasSui,
+          walletHoldings.state.data,
+        )
+      : null;
+  const insufficient = balanceCheck?.hasAnyShortfall ?? false;
+
+  const insufficientRow: GuardianRow | null =
+    balanceCheck && insufficient
+      ? {
+          id: "insufficient-balance",
+          title: "Insufficient balance",
+          summary: shortfallSummary(balanceCheck),
+          verdict: "block",
+          detail: shortfallDetail(balanceCheck),
+          askPrompt: shortfallAskPrompt(balanceCheck),
+          extra: (
+            <button
+              type="button"
+              onClick={walletHoldings.refresh}
+              className="inline-flex cursor-pointer items-center gap-1 bg-white/[0.08] px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-white/[0.14]"
+              style={{ borderRadius: 9999 }}
+            >
+              <RefreshCw className="size-3" strokeWidth={2.4} />
+              Refresh balance
+            </button>
+          ),
+        }
+      : null;
+
   const rawRisks = buildRisks(cached);
   const severityOrder: Record<RiskVerdict, number> = {
     block: 0,
     flag: 1,
     pass: 2,
   };
-  const risks = [...rawRisks].sort(
-    (a, b) => severityOrder[a.verdict] - severityOrder[b.verdict],
-  );
+  const risks = [
+    ...(insufficientRow ? [insufficientRow] : []),
+    ...rawRisks,
+  ].sort((a, b) => severityOrder[a.verdict] - severityOrder[b.verdict]);
   const passCount = risks.filter((r) => r.verdict === "pass").length;
   const flagCount = risks.filter((r) => r.verdict === "flag").length;
   const blockCount = risks.filter((r) => r.verdict === "block").length;
@@ -207,7 +248,9 @@ export function LiveVaultCard({
               detail={r.detail}
               defaultOpen={i === topIdx}
               onAskAgent={onAskAgent ? () => onAskAgent(r.askPrompt) : undefined}
-            />
+            >
+              {r.extra}
+            </VaultRiskDetail>
           ))}
         </div>
       </div>
@@ -227,14 +270,18 @@ export function LiveVaultCard({
           </motion.button>
           <motion.button
             onClick={onConfirm}
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
-            disabled={signing || confirming || !walletConnected}
+            whileHover={{ scale: insufficient ? 1 : 1.04 }}
+            whileTap={{ scale: insufficient ? 1 : 0.96 }}
+            disabled={
+              signing || confirming || !walletConnected || insufficient
+            }
             className={cn(
               "inline-flex items-center gap-1.5 px-4 py-1.5 text-body-sm font-semibold disabled:bg-hinting-gray disabled:text-canvas-white",
-              blocking
+              insufficient
                 ? "bg-destructive text-canvas-white"
-                : "bg-cash-lime text-midnight-black",
+                : blocking
+                  ? "bg-destructive text-canvas-white"
+                  : "bg-cash-lime text-midnight-black",
             )}
             style={{ borderRadius: 9999 }}
           >
@@ -245,9 +292,11 @@ export function LiveVaultCard({
               ? "Signing…"
               : !walletConnected
                 ? "Connect wallet first"
-                : blocking
-                  ? "Sign anyway →"
-                  : "Confirm & sign →"}
+                : insufficient && balanceCheck
+                  ? shortfallButtonLabel(balanceCheck)
+                  : blocking
+                    ? "Sign anyway →"
+                    : "Confirm & sign →"}
           </motion.button>
         </div>
       )}
@@ -685,6 +734,9 @@ type GuardianRow = {
   verdict: RiskVerdict;
   detail: string;
   askPrompt: string;
+  /** Optional extra body content rendered below the markdown detail (e.g. a
+   *  refresh-balance button on the insufficient-balance row). */
+  extra?: React.ReactNode;
 };
 
 function buildRisks(cached: CachedActionPlan): GuardianRow[] {
@@ -934,4 +986,61 @@ function PlanReceipt({
       )}
     </motion.div>
   );
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Insufficient-balance copy helpers
+// ───────────────────────────────────────────────────────────────────────
+
+function shortfallSummary(check: BalanceCheck): string {
+  const inputs = check.inputShortfalls;
+  const gas = check.gasShortfall;
+  if (inputs.length === 0 && gas) {
+    return `Need ${fmtAmount(gas.deficit)} more ${gas.symbol} for gas`;
+  }
+  if (inputs.length === 1 && !gas) {
+    return `Need ${fmtAmount(inputs[0].deficit)} more ${inputs[0].symbol}`;
+  }
+  return "Wallet doesn't have enough tokens";
+}
+
+function shortfallDetail(check: BalanceCheck): string {
+  const lines: string[] = [
+    "Your wallet doesn't have enough of the required token(s) to execute this plan. Signing now would burn gas without completing the action.",
+    "",
+  ];
+  for (const s of check.inputShortfalls) {
+    lines.push(
+      `- **${s.symbol}** — wallet has ${fmtAmount(s.available)}, plan needs ${fmtAmount(s.required)} (short by ${fmtAmount(s.deficit)}).`,
+    );
+  }
+  if (check.gasShortfall) {
+    const g = check.gasShortfall;
+    lines.push(
+      `- **${g.symbol}** (network fee) — wallet has ${fmtAmount(g.available)}, plan needs ~${fmtAmount(g.required)} (short by ${fmtAmount(g.deficit)}).`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function shortfallAskPrompt(check: BalanceCheck): string {
+  if (check.inputShortfalls.length === 1 && !check.gasShortfall) {
+    return `How do I get more ${check.inputShortfalls[0].symbol} on Sui?`;
+  }
+  if (check.gasShortfall && check.inputShortfalls.length === 0) {
+    return "How do I get more SUI for gas on Sui?";
+  }
+  return "How do I top up my wallet for this plan?";
+}
+
+function shortfallButtonLabel(check: BalanceCheck): string {
+  const inputs = check.inputShortfalls;
+  const gas = check.gasShortfall;
+  if (inputs.length === 0 && gas) {
+    return `Need ${fmtAmount(gas.deficit)} more ${gas.symbol}`;
+  }
+  if (inputs.length === 1 && !gas) {
+    return `Need ${fmtAmount(inputs[0].deficit)} more ${inputs[0].symbol}`;
+  }
+  return "Insufficient balance";
 }
