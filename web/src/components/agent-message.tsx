@@ -9,6 +9,10 @@ import { ToolCallRow } from "@/components/parts/tool-call-row";
 import { LiveSwapCard } from "@/components/parts/live-swap-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
+import {
+  MessageFooter,
+  type MessageMeta,
+} from "@/components/parts/message-footer";
 import { quoteCache } from "@/lib/ai/quote-cache";
 
 type IconLookup = (coinType: string) => string | undefined;
@@ -16,10 +20,18 @@ type IconLookup = (coinType: string) => string | undefined;
 type SwapActionState = {
   /** The active getSwapQuote toolCallId to show actions on (may be null) */
   activeQuoteId: string | null;
+  /** The most-recent getSwapQuote toolCallId across the whole conversation.
+   *  Older quotes that aren't the active one collapse to a "superseded" pill. */
+  latestQuoteId: string | null;
   slippagePct: number;
   signing: boolean;
+  confirming: boolean;
   executed: boolean;
   txDigest?: string;
+  txStatus?: "success" | "failure";
+  txError?: string;
+  gasUsedSui?: number;
+  receivedAmount?: number;
   walletConnected: boolean;
   iconLookup: IconLookup;
   onSlippageChange: (pct: number) => void;
@@ -32,9 +44,18 @@ type Props = {
   message: UIMessage;
   isStreaming: boolean;
   swapAction: SwapActionState;
+  /** True only for the last assistant message — controls regenerate visibility. */
+  canRegenerate?: boolean;
+  onRegenerate?: () => void;
 };
 
-export function AgentMessage({ message, isStreaming, swapAction }: Props) {
+export function AgentMessage({
+  message,
+  isStreaming,
+  swapAction,
+  canRegenerate = false,
+  onRegenerate,
+}: Props) {
   const isUser = message.role === "user";
 
   if (isUser) {
@@ -46,8 +67,8 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
         className="flex justify-end"
       >
         <div
-          className="max-w-[80%] bg-cloud-gray px-5 py-3 text-body text-midnight-black"
-          style={{ borderRadius: 24 }}
+          className="max-w-[80%] bg-cloud-gray px-3.5 py-2 text-body-sm text-midnight-black"
+          style={{ borderRadius: 16 }}
         >
           {message.parts
             .filter((p) => p.type === "text")
@@ -60,7 +81,7 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {message.parts.map((part, i) => {
         const key = `${message.id}-${i}`;
 
@@ -223,6 +244,19 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
           }
 
           const isActive = swapAction.activeQuoteId === p.toolCallId;
+          const isLatest = swapAction.latestQuoteId === p.toolCallId;
+          // If a newer quote has been requested and this one isn't
+          // currently mid-sign/executed, collapse to a one-line summary
+          // so the conversation doesn't accumulate stale swap panels.
+          if (!isLatest && !isActive) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Earlier quote · ${cached.fromAmountHuman} ${cached.fromSymbol} → ${cached.toSymbol} · superseded`}
+                status="output-available"
+              />
+            );
+          }
           return (
             <LiveSwapCard
               key={key}
@@ -234,8 +268,13 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
               onRefresh={() => swapAction.onRefresh(p.toolCallId)}
               iconLookup={swapAction.iconLookup}
               signing={isActive && swapAction.signing}
+              confirming={isActive && swapAction.confirming}
               executed={isActive && swapAction.executed}
               txDigest={isActive ? swapAction.txDigest : undefined}
+              txStatus={isActive ? swapAction.txStatus : undefined}
+              txError={isActive ? swapAction.txError : undefined}
+              gasUsedSui={isActive ? swapAction.gasUsedSui : undefined}
+              receivedAmount={isActive ? swapAction.receivedAmount : undefined}
               walletConnected={swapAction.walletConnected}
             />
           );
@@ -370,6 +409,14 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
 
         return null;
       })}
+
+      {!isStreaming && (
+        <MessageFooter
+          meta={(message as { metadata?: MessageMeta }).metadata}
+          canRegenerate={canRegenerate}
+          onRegenerate={onRegenerate}
+        />
+      )}
     </div>
   );
 }

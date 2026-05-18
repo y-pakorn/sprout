@@ -46,12 +46,19 @@ export function Conversation() {
   const suiClientRef = useRef(suiClient);
   suiClientRef.current = suiClient;
 
-  // Active swap-action state (one swap card may be live at a time)
+  // Active swap-action state (one swap card may be live at a time).
+  // Flow: idle → signing (wallet popup) → confirming (waiting for finality)
+  //   → executed:success | executed:failure
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
   const [slippagePct, setSlippagePct] = useState(1);
   const [signing, setSigning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [executed, setExecuted] = useState(false);
   const [txDigest, setTxDigest] = useState<string | undefined>();
+  const [txStatus, setTxStatus] = useState<"success" | "failure" | undefined>();
+  const [txError, setTxError] = useState<string | undefined>();
+  const [gasUsedSui, setGasUsedSui] = useState<number | undefined>();
+  const [receivedAmount, setReceivedAmount] = useState<number | undefined>();
   const [signError, setSignError] = useState<string | null>(null);
 
   const transport = useMemo(
@@ -71,7 +78,7 @@ export function Conversation() {
     | null
   >(null);
 
-  const { messages, sendMessage, addToolResult, status, error } = useChat({
+  const { messages, sendMessage, addToolResult, regenerate, status, error } = useChat({
     transport,
     sendAutomaticallyWhen: ({ messages: msgs }) => {
       // After ANY client-side tool result lands, re-submit so the agent
@@ -394,6 +401,10 @@ export function Conversation() {
 
   async function handleConfirm(toolCallId: string) {
     setSignError(null);
+    setTxError(undefined);
+    setTxStatus(undefined);
+    setGasUsedSui(undefined);
+    setReceivedAmount(undefined);
     const cached = quoteCache.get(toolCallId);
     if (!cached) {
       setSignError("Quote expired. Ask again to re-price.");
@@ -405,6 +416,7 @@ export function Conversation() {
     }
     setActiveQuoteId(toolCallId);
     setSigning(true);
+    setConfirming(false);
     setExecuted(false);
     setTxDigest(undefined);
     try {
@@ -421,15 +433,75 @@ export function Conversation() {
       // (sponsor-routed). MVP only supports the standard path; cast and
       // surface a runtime error if a BluefinX route slips through.
       const tx = buildResult.tx as Transaction;
-      const result = await signAndExecute({
-        transaction: tx,
-      });
-      setTxDigest(result.digest);
-      setExecuted(true);
+      const signed = await signAndExecute({ transaction: tx });
+      // Wallet signed + submitted — but the tx isn't final on chain yet.
+      setSigning(false);
+      setConfirming(true);
+      setTxDigest(signed.digest);
+
+      // Poll the fullnode until the tx is included + executed. waitFor-
+      // Transaction returns the effects/events/balanceChanges when ready
+      // so we can parse the real outcome (success vs failure, gas used,
+      // received amount) rather than just trusting the submit response.
+      try {
+        const finalized = await suiClient.waitForTransaction({
+          digest: signed.digest,
+          options: {
+            showEffects: true,
+            showBalanceChanges: true,
+          },
+          timeout: 30_000,
+        });
+        const status = finalized.effects?.status?.status;
+        if (status === "success") {
+          setTxStatus("success");
+          // Gas — convert MIST → SUI. computationCost + storageCost - storageRebate.
+          const gas = finalized.effects?.gasUsed;
+          if (gas) {
+            const mist =
+              BigInt(gas.computationCost) +
+              BigInt(gas.storageCost) -
+              BigInt(gas.storageRebate);
+            setGasUsedSui(Number(mist) / 1e9);
+          }
+          // Received amount — positive balance change of the destination
+          // coin type for the signing address.
+          const change = finalized.balanceChanges?.find((b) => {
+            const owner = b.owner as { AddressOwner?: string };
+            return (
+              owner?.AddressOwner === account.address &&
+              b.coinType === cached.toCoinType &&
+              BigInt(b.amount) > BigInt(0)
+            );
+          });
+          if (change) {
+            setReceivedAmount(
+              Number(BigInt(change.amount)) / 10 ** cached.toDecimals,
+            );
+          }
+        } else {
+          setTxStatus("failure");
+          setTxError(
+            finalized.effects?.status?.error ||
+              "Transaction failed on chain.",
+          );
+        }
+      } catch (waitErr) {
+        // Wait failed (timeout, network) — tx still went out, mark as
+        // unknown so the UI can show the digest but no confirmation.
+        console.warn("[waitForTransaction] failed", waitErr);
+        setTxStatus("failure");
+        setTxError(
+          `Couldn't confirm on chain: ${(waitErr as Error).message}. The tx may still be processing.`,
+        );
+      } finally {
+        setConfirming(false);
+        setExecuted(true);
+      }
     } catch (e) {
       setSignError((e as Error).message || "Wallet rejected");
-    } finally {
       setSigning(false);
+      setConfirming(false);
     }
   }
 
@@ -437,8 +509,13 @@ export function Conversation() {
     if (activeQuoteId === toolCallId) {
       setActiveQuoteId(null);
       setSigning(false);
+      setConfirming(false);
       setExecuted(false);
       setTxDigest(undefined);
+      setTxStatus(undefined);
+      setTxError(undefined);
+      setGasUsedSui(undefined);
+      setReceivedAmount(undefined);
       setSignError(null);
     }
   }
@@ -544,6 +621,22 @@ export function Conversation() {
     );
   }
 
+  // Find the most recent getSwapQuote toolCallId across all messages.
+  // Only that one renders a full LiveSwapCard; earlier ones collapse so
+  // the conversation doesn't accumulate stale quote panels.
+  const latestSwapQuoteToolCallId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      for (let j = msg.parts.length - 1; j >= 0; j--) {
+        const part = msg.parts[j] as { type: string; toolCallId?: string };
+        if (part.type === "tool-getSwapQuote" && part.toolCallId) {
+          return part.toolCallId;
+        }
+      }
+    }
+    return null;
+  })();
+
   return (
     <div
       className="flex w-full flex-col"
@@ -554,27 +647,38 @@ export function Conversation() {
         resize="smooth"
         initial="smooth"
       >
-        <StickToBottom.Content className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8 pb-6">
-          {messages.map((m, i) => (
-            <AgentMessage
-              key={m.id}
-              message={m}
-              isStreaming={isStreaming && i === lastAssistantIdx}
-              swapAction={{
-                activeQuoteId,
-                slippagePct,
-                signing,
-                executed,
-                txDigest,
-                walletConnected: !!account,
-                iconLookup,
-                onSlippageChange: setSlippagePct,
-                onConfirm: handleConfirm,
-                onCancel: handleCancel,
-                onRefresh: handleRefresh,
-              }}
-            />
-          ))}
+        <StickToBottom.Content className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3">
+          {messages.map((m, i) => {
+            const isLastAssistant = i === lastAssistantIdx;
+            return (
+              <AgentMessage
+                key={m.id}
+                message={m}
+                isStreaming={isStreaming && isLastAssistant}
+                canRegenerate={isLastAssistant && !isStreaming}
+                onRegenerate={() => regenerate()}
+                swapAction={{
+                  activeQuoteId,
+                  latestQuoteId: latestSwapQuoteToolCallId,
+                  slippagePct,
+                  signing,
+                  confirming,
+                  executed,
+                  txDigest,
+                  txStatus,
+                  txError,
+                  gasUsedSui,
+                  receivedAmount,
+                  walletConnected: !!account,
+                  iconLookup,
+                  onSlippageChange: setSlippagePct,
+                  onConfirm: handleConfirm,
+                  onCancel: handleCancel,
+                  onRefresh: handleRefresh,
+                }}
+              />
+            );
+          })}
 
           {/* Thinking pill — shown after user submits but before first AI token arrives */}
           {status === "submitted" && (
