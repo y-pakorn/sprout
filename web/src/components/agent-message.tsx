@@ -25,6 +25,7 @@ import {
   vaultsListCache,
 } from "@/lib/ai/action-plan-cache";
 import type { SuiVault } from "@/lib/vaults";
+import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -746,7 +747,14 @@ function VaultListCard({
             <button
               type="button"
               onClick={() => setOpenVaultId(v.id)}
-              className="liquid-glass flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-cash-lime/10"
+              className={cn(
+                "group relative flex w-full cursor-pointer items-center gap-2.5 overflow-hidden px-3 py-2 text-left",
+                "bg-white/[0.04]",
+                "transition-[background-color,box-shadow,transform] duration-200 ease-out",
+                "hover:bg-white/[0.12] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]",
+                "active:translate-y-px active:bg-white/[0.16]",
+                "focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_rgba(192,228,77,0.65)]",
+              )}
               style={{ borderRadius: 14 }}
             >
               <AssetIcon
