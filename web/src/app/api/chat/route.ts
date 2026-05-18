@@ -12,11 +12,13 @@ export async function POST(req: Request) {
         error:
           "OPENROUTER_API_KEY is not set. Add it to web/.env.local and restart the dev server.",
       }),
-      { status: 500, headers: { "content-type": "application/json" } },
+      { status: 500, headers: { "content-type": "application/json" } }
     );
   }
 
   const { messages }: { messages: UIMessage[] } = await req.json();
+
+  const startedAt = Date.now();
 
   const result = streamText({
     model: aiModel,
@@ -34,5 +36,20 @@ export async function POST(req: Request) {
 
   return result.toUIMessageStreamResponse({
     sendReasoning: true,
+    // Attach usage + duration to the message metadata on the final
+    // 'finish' chunk so the client can render a cost/duration footer.
+    messageMetadata: ({ part }) => {
+      if (part.type === "finish") {
+        return {
+          usage: {
+            inputTokens: part.totalUsage?.inputTokens,
+            outputTokens: part.totalUsage?.outputTokens,
+            cachedInputTokens: part.totalUsage?.cachedInputTokens,
+            totalTokens: part.totalUsage?.totalTokens,
+          },
+          durationMs: Date.now() - startedAt,
+        };
+      }
+    },
   });
 }

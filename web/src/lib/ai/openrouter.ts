@@ -13,5 +13,9 @@ const openrouter = createOpenRouter({
   apiKey: apiKey ?? "",
 });
 
-/** DeepSeek v4 Flash with medium reasoning effort via OpenRouter. */
-export const aiModel = openrouter("deepseek/deepseek-v4-flash");
+/** Tencent Hunyuan 3 Preview via OpenRouter. */
+export const aiModel = openrouter("tencent/hy3-preview");
+
+// Pricing + cost math lives in ./pricing.ts so the client can import it
+// without pulling the server-only provider chain.
+export { MODEL_PRICING, computeMessageCost } from "./pricing";
