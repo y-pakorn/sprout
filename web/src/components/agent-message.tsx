@@ -2,6 +2,8 @@
 
 import { motion } from "motion/react";
 import type { UIMessage } from "ai";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
 import { LiveSwapCard } from "@/components/parts/live-swap-card";
@@ -84,9 +86,74 @@ export function AgentMessage({ message, isStreaming, swapAction }: Props) {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="text-body text-midnight-black"
+              className="prose-sprout text-body text-midnight-black"
             >
-              {text}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // Inline-only: no h1-h6, no images, no raw html. Lists, bold,
+                  // italic, code, links stay. Keep paragraphs as plain spans
+                  // so consecutive text parts don't gain extra block margin.
+                  p: ({ children }) => <p className="m-0">{children}</p>,
+                  a: ({ href, children }) => (
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-midnight-black underline underline-offset-2 decoration-cash-lime decoration-2"
+                    >
+                      {children}
+                    </a>
+                  ),
+                  code: ({ children }) => (
+                    <code className="rounded-md bg-cloud-gray px-1.5 py-0.5 font-mono text-[0.85em]">
+                      {children}
+                    </code>
+                  ),
+                  ul: ({ children }) => (
+                    <ul className="my-2 list-disc pl-5">{children}</ul>
+                  ),
+                  ol: ({ children }) => (
+                    <ol className="my-2 list-decimal pl-5">{children}</ol>
+                  ),
+                  li: ({ children }) => <li className="my-0.5">{children}</li>,
+                  // Markdown tables — system prompt discourages them, but
+                  // style cleanly as a fallback so they don't look broken.
+                  table: ({ children }) => (
+                    <div
+                      className="my-3 overflow-hidden bg-cloud-gray"
+                      style={{ borderRadius: 18 }}
+                    >
+                      <table className="w-full border-collapse text-body-sm">
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  thead: ({ children }) => (
+                    <thead className="bg-cloud-gray text-caption font-medium uppercase tracking-wide text-subtle-gray">
+                      {children}
+                    </thead>
+                  ),
+                  tbody: ({ children }) => (
+                    <tbody className="bg-canvas-white">{children}</tbody>
+                  ),
+                  tr: ({ children }) => (
+                    <tr className="border-b border-ghost-border/60 last:border-b-0">
+                      {children}
+                    </tr>
+                  ),
+                  th: ({ children }) => (
+                    <th className="px-3 py-2 text-left font-medium">
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="px-3 py-2">{children}</td>
+                  ),
+                }}
+              >
+                {text}
+              </ReactMarkdown>
             </motion.div>
           );
         }
