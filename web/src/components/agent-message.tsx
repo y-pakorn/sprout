@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import type { UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
@@ -7,13 +8,21 @@ import remarkGfm from "remark-gfm";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
 import { LiveSwapCard } from "@/components/parts/live-swap-card";
+import { LiveVaultCard } from "@/components/parts/live-vault-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
+import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
+import { AssetIcon } from "@/components/asset-icon";
 import {
   MessageFooter,
   type MessageMeta,
 } from "@/components/parts/message-footer";
 import { quoteCache } from "@/lib/ai/quote-cache";
+import {
+  actionPlanCache,
+  vaultsListCache,
+} from "@/lib/ai/action-plan-cache";
+import type { SuiVault } from "@/lib/vaults";
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -40,10 +49,29 @@ type SwapActionState = {
   onRefresh: (toolCallId: string) => Promise<void>;
 };
 
+export type DepositActionState = {
+  activeDepositId: string | null;
+  latestDepositId: string | null;
+  signing: boolean;
+  confirming: boolean;
+  executed: boolean;
+  txDigest?: string;
+  txStatus?: "success" | "failure";
+  txError?: string;
+  gasUsedSui?: number;
+  /** Per-allocation shares received (human units), indexed by order */
+  receivedShares?: number[];
+  walletConnected: boolean;
+  iconLookup: IconLookup;
+  onConfirm: (toolCallId: string) => void;
+  onCancel: (toolCallId: string) => void;
+};
+
 type Props = {
   message: UIMessage;
   isStreaming: boolean;
   swapAction: SwapActionState;
+  depositAction: DepositActionState;
   /** True only for the last assistant message — controls regenerate visibility. */
   canRegenerate?: boolean;
   onRegenerate?: () => void;
@@ -53,6 +81,7 @@ export function AgentMessage({
   message,
   isStreaming,
   swapAction,
+  depositAction,
   canRegenerate = false,
   onRegenerate,
 }: Props) {
@@ -407,6 +436,204 @@ export function AgentMessage({
           return null;
         }
 
+        if (part.type === "tool-listVaults") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { depositSymbol?: string };
+            output?: {
+              error?: string;
+              count?: number;
+              vaults?: Array<{
+                id: string;
+                name: string;
+                apyPct: number;
+                depositSymbol: string;
+                withdrawalPeriodDays?: number;
+              }>;
+            };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Vault list failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            const sym = p.input?.depositSymbol?.toUpperCase();
+            return (
+              <ToolCallRow
+                key={key}
+                label={sym ? `Finding ${sym} vaults…` : "Listing vaults…"}
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const list = vaultsListCache.get(p.toolCallId);
+          const vaults = list?.vaults ?? [];
+          if (vaults.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={
+                  list?.filteredSymbol
+                    ? `No ${list.filteredSymbol} vaults available`
+                    : "No vaults available"
+                }
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <VaultListCard
+              key={key}
+              vaults={vaults}
+              filteredSymbol={list?.filteredSymbol}
+              iconLookup={swapAction.iconLookup}
+            />
+          );
+        }
+
+        if (part.type === "tool-executePlan") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { steps?: Array<{ kind?: string }> };
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Plan build failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            const n = p.input?.steps?.length;
+            return (
+              <ToolCallRow
+                key={key}
+                label={
+                  n
+                    ? `Building plan · ${n} step${n === 1 ? "" : "s"}…`
+                    : "Building plan…"
+                }
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const cached = actionPlanCache.get(p.toolCallId);
+          if (!cached) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Plan expired — ask again to rebuild"
+                status="output-error"
+              />
+            );
+          }
+          const isActiveDep =
+            depositAction.activeDepositId === p.toolCallId;
+          const isLatestDep =
+            depositAction.latestDepositId === p.toolCallId;
+          if (!isLatestDep && !isActiveDep) {
+            const depCount = cached.summary.depositCount;
+            const swCount = cached.summary.swapCount;
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Earlier plan · ${swCount} swap${swCount === 1 ? "" : "s"} + ${depCount} deposit${depCount === 1 ? "" : "s"} · superseded`}
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <LiveVaultCard
+              key={key}
+              cached={cached}
+              iconLookup={depositAction.iconLookup}
+              onConfirm={() => depositAction.onConfirm(p.toolCallId)}
+              onCancel={() => depositAction.onCancel(p.toolCallId)}
+              signing={isActiveDep && depositAction.signing}
+              confirming={isActiveDep && depositAction.confirming}
+              executed={isActiveDep && depositAction.executed}
+              txDigest={isActiveDep ? depositAction.txDigest : undefined}
+              txStatus={isActiveDep ? depositAction.txStatus : undefined}
+              txError={isActiveDep ? depositAction.txError : undefined}
+              gasUsedSui={isActiveDep ? depositAction.gasUsedSui : undefined}
+              receivedShares={
+                isActiveDep ? depositAction.receivedShares : undefined
+              }
+              walletConnected={depositAction.walletConnected}
+            />
+          );
+        }
+
+        if (part.type === "tool-explainConcept") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { key?: string };
+            output?: { key?: string; text?: string; error?: string };
+          };
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Looking up ${p.input?.key ?? "concept"}…`}
+                status={p.state}
+              />
+            );
+          }
+          // The agent quotes the glossary text inline in its own message, so
+          // we just render a tiny acknowledgement chip to keep the trail
+          // clean instead of duplicating the explanation.
+          return (
+            <ToolCallRow
+              key={key}
+              label={`Explainer: ${p.output?.key ?? "concept"}`}
+              status="output-available"
+            />
+          );
+        }
+
         return null;
       })}
 
@@ -418,5 +645,99 @@ export function AgentMessage({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Compact list of Ember vaults rendered after listVaults resolves. Each row
+ * links to the vault info dialog (deep details + charts).
+ */
+function VaultListCard({
+  vaults,
+  filteredSymbol,
+  iconLookup,
+}: {
+  vaults: SuiVault[];
+  filteredSymbol?: string;
+  iconLookup: IconLookup;
+}) {
+  const [openVaultId, setOpenVaultId] = useState<string | null>(null);
+  const openVault = openVaultId
+    ? vaults.find((v) => v.id === openVaultId) ?? null
+    : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
+      className="bg-cloud-gray p-2"
+      style={{ borderRadius: 18, maxWidth: 520 }}
+    >
+      <div className="flex items-center justify-between px-2 pt-1 pb-2">
+        <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+          {filteredSymbol ? `${filteredSymbol} vaults` : "Top vaults by APY"}
+        </span>
+        <span className="text-caption text-subtle-gray">
+          {vaults.length} option{vaults.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {vaults.map((v) => (
+          <li key={v.id}>
+            <button
+              type="button"
+              onClick={() => setOpenVaultId(v.id)}
+              className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2 text-left transition-colors hover:bg-cash-lime/10"
+              style={{ borderRadius: 14 }}
+            >
+              <AssetIcon
+                src={v.logoUrl ?? iconLookup(v.depositCoinType)}
+                label={v.depositSymbol}
+                size={28}
+              />
+              <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-body-sm font-semibold text-midnight-black">
+                    {v.name}
+                  </span>
+                  <span
+                    className="inline-flex shrink-0 items-center bg-cloud-gray px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-midnight-black"
+                    style={{ borderRadius: 9999 }}
+                  >
+                    {v.depositSymbol}
+                  </span>
+                </div>
+                <span className="truncate text-caption text-subtle-gray">
+                  {v.category}
+                  {v.withdrawalPeriodDays
+                    ? ` · ${v.withdrawalPeriodDays}d lockup`
+                    : ""}
+                </span>
+              </div>
+              <div className="flex flex-col items-end leading-tight">
+                <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+                  {v.apyPct.toFixed(2)}%
+                </span>
+                <span className="text-caption text-subtle-gray tabular-nums">
+                  {v.tvlUsd >= 1_000_000
+                    ? `$${(v.tvlUsd / 1_000_000).toFixed(1)}M`
+                    : v.tvlUsd >= 1_000
+                      ? `$${(v.tvlUsd / 1_000).toFixed(1)}K`
+                      : `$${v.tvlUsd.toFixed(0)}`}{" "}
+                  TVL
+                </span>
+              </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <VaultInfoDialog
+        vault={openVault}
+        open={!!openVaultId}
+        onOpenChange={(o) => !o && setOpenVaultId(null)}
+        iconLookup={iconLookup}
+      />
+    </motion.div>
   );
 }

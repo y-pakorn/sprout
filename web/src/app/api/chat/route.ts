@@ -25,11 +25,22 @@ export async function POST(req: Request) {
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools: swapTools,
-    // Allow the model to make tool calls, receive results, then continue
-    stopWhen: ({ steps }) => steps.length >= 5,
+    stopWhen: ({ steps }) => steps.length >= 10,
+    // Plenty of output budget so tool-call args don't get truncated.
+    maxOutputTokens: 8192,
+    onError: (e) => {
+      console.error("[api/chat] streamText error", e);
+    },
+    onFinish: ({ finishReason, usage }) => {
+      console.log("[api/chat] finish", { finishReason, usage });
+    },
     providerOptions: {
       openrouter: {
-        reasoning: { effort: "medium" },
+        // Reasoning OFF. hy3-preview is a reasoning model; with CoT on,
+        // hidden tokens eat the output budget mid-stream and tool-call
+        // args get truncated. For multi-step plans, accurate tool args
+        // matter more than the model thinking aloud.
+        reasoning: { enabled: false, exclude: true },
         models: aiModels,
       },
     },
