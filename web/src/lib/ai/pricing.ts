@@ -5,11 +5,11 @@
 
 export const MODEL_PRICING = {
   /** Fresh prompt tokens */
-  inputPer1M: 0.066,
+  inputPer1M: 0.112,
   /** Cached prompt tokens (subset of input, discounted) */
-  cachedInputPer1M: 0.029,
+  cachedInputPer1M: 0.022,
   /** Completion tokens */
-  outputPer1M: 0.26,
+  outputPer1M: 0.224,
 } as const;
 
 /** Computes USD cost from a `LanguageModelUsage`-shaped object. */

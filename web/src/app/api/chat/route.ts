@@ -1,5 +1,5 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
-import { aiModel } from "@/lib/ai/openrouter";
+import { aiModel, aiModels } from "@/lib/ai/openrouter";
 import { systemPrompt } from "@/lib/ai/system-prompt";
 import { swapTools } from "@/lib/ai/tools";
 
@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     providerOptions: {
       openrouter: {
         reasoning: { effort: "medium" },
+        models: aiModels,
       },
     },
   });
