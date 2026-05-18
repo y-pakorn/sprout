@@ -30,12 +30,6 @@ export async function fetchCoinMap(): Promise<CoinMap> {
     .then((map) => {
       cachedMap = map;
       inflight = null;
-      console.log(
-        "[client-coins] loaded",
-        Object.keys(map).length,
-        "symbols. USDC →",
-        map.USDC?.coin_type,
-      );
       return map;
     });
   return inflight;

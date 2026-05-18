@@ -26,7 +26,6 @@ export async function fetchVaults(): Promise<SuiVault[]> {
     .then((list) => {
       cached = list;
       inflight = null;
-      console.log("[client-vaults] loaded", list.length, "Sui vaults");
       return list;
     })
     .catch((e) => {
@@ -78,10 +77,6 @@ export async function fetchDeployment(): Promise<VaultDeployment> {
     .then((d) => {
       cachedDeployment = d;
       inflightDeployment = null;
-      console.log(
-        "[client-vaults] loaded deployment",
-        d.packageId.slice(0, 10),
-      );
       return d;
     })
     .catch((e) => {

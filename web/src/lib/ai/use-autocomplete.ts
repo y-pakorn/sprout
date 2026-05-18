@@ -62,7 +62,6 @@ export function useAutoComplete(
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setLoading(true);
-      console.log("[autocomplete] fetch", { draft: value });
       try {
         const res = await fetch("/api/autocomplete", {
           method: "POST",
@@ -73,11 +72,6 @@ export function useAutoComplete(
           }),
           signal: ctrl.signal,
         });
-        console.log(
-          "[autocomplete] response",
-          res.status,
-          res.headers.get("content-type"),
-        );
         if (!res.ok) {
           const errText = await res.text().catch(() => "");
           console.warn("[autocomplete] non-ok response", res.status, errText);

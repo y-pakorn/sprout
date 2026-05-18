@@ -227,13 +227,6 @@ export function AgentMessage({
             };
             errorText?: string;
           };
-          if (typeof window !== "undefined") {
-            // Helpful diagnostic — strip once stable
-            console.log(
-              `[render tool-getSwapQuote] state=${p.state} id=${p.toolCallId} hasOutput=${!!p.output}`,
-            );
-          }
-
           if (p.state === "output-error") {
             return (
               <ToolCallRow

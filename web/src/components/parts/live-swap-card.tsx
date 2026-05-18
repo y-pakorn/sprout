@@ -728,20 +728,6 @@ function RouteBreakdown({
     return { ...r, _share: declared ?? derived };
   });
 
-  // Diagnostic so we can verify the raw SDK shape in dev tools
-  if (typeof window !== "undefined") {
-    console.log(
-      "[route] routes=",
-      routes.length,
-      "shares=",
-      withShares.map((r) => Number((r._share * 100).toFixed(2))),
-      "dexes=",
-      withShares.map((r) =>
-        r.hops.map((h) => h.pool?.type).join(" → "),
-      ),
-    );
-  }
-
   const sorted = [...withShares].sort((a, b) => b._share - a._share);
   const VISIBLE = 4;
   const visible = expanded ? sorted : sorted.slice(0, VISIBLE);
