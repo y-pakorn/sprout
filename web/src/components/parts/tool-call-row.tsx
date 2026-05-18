@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { Loader2, Check, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Status = "input-streaming" | "input-available" | "output-available" | "output-error";
 
@@ -24,13 +25,12 @@ export function ToolCallRow({ label, status }: Props) {
       style={{ borderRadius: 9999 }}
     >
       <span
-        className={`inline-flex size-5 items-center justify-center ${
-          isDone
-            ? "bg-cash-lime text-midnight-black"
-            : isError
-              ? "bg-destructive text-canvas-white"
-              : "bg-canvas-white text-subtle-gray"
-        }`}
+        className={cn(
+          "inline-flex size-5 items-center justify-center",
+          isDone && "bg-cash-lime text-midnight-black",
+          isError && "bg-destructive text-canvas-white",
+          !isDone && !isError && "bg-canvas-white text-subtle-gray",
+        )}
         style={{ borderRadius: 9999 }}
       >
         {isDone ? (

@@ -19,6 +19,7 @@ import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { extractRoute, dexLabel } from "@/lib/bluefin7k";
 import { truncateCoinType } from "@/lib/client-coins";
 import { fadeUp, scaleIn, stagger, SPRING_BOUNCY } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -31,10 +32,24 @@ type Props = {
   onRefresh: () => Promise<void>;
   iconLookup: IconLookup;
   signing: boolean;
+  confirming: boolean;
   executed: boolean;
   txDigest?: string;
+  txStatus?: "success" | "failure";
+  txError?: string;
+  gasUsedSui?: number;
+  receivedAmount?: number;
   walletConnected: boolean;
 };
+
+/**
+ * Heuristic pre-trade gas estimate (SUI). 7K's estimateGasFee needs a
+ * built tx with a signer; this hop-count heuristic is close enough for
+ * the guardian panel without a wallet round-trip.
+ */
+function estimatedGasSui(hops: number): number {
+  return Math.max(0.005, Math.min(0.03, hops * 0.006));
+}
 
 const REFRESH_INTERVAL_MS = 5000;
 
@@ -87,6 +102,24 @@ function evaluateRisks(cached: CachedQuote, slippagePct: number): Risk[] {
   let slippageVerdict: RiskVerdict = "pass";
   if (slippagePct < impactPct) slippageVerdict = "flag";
 
+  // 5. Gas cost — heuristic SUI estimate × oracle SUI price.
+  //    The SUI price comes from the same getTokenPrices call that powers
+  //    the price-impact calc; spotRate (priceIn/priceOut) gets us there
+  //    via the destination/source pair when one of them is SUI. As a
+  //    fallback we assume $3 SUI to keep the verdict meaningful.
+  const gasSui = estimatedGasSui(route.hopCount);
+  let suiUsd: number | undefined;
+  if (cached.fromSymbol === "SUI" && cached.spotRate > 0) {
+    suiUsd = 1 / cached.spotRate; // toUnits per SUI inverted is USD per SUI when to is USDC-ish
+  } else if (cached.toSymbol === "SUI" && cached.spotRate > 0) {
+    suiUsd = cached.spotRate; // 1 fromUnit ≈ spotRate SUI ⇒ SUI USD ≈ spotRate when from is stable
+  }
+  // The heuristic above is approximate — use $3 as a sane fallback.
+  const gasUsd = (suiUsd ?? 3) * gasSui;
+  let gasVerdict: RiskVerdict = "pass";
+  if (gasUsd >= 1) gasVerdict = "block";
+  else if (gasUsd >= 0.1) gasVerdict = "flag";
+
   return [
     {
       id: "tokens",
@@ -120,6 +153,18 @@ function evaluateRisks(cached: CachedQuote, slippagePct: number): Risk[] {
           ? `${slippagePct}% cap is tighter than ${impactPct.toFixed(2)}% impact — may revert`
           : `${slippagePct}% cap leaves headroom`,
     },
+    {
+      id: "gas",
+      label: "Gas cost",
+      verdict: gasVerdict,
+      summary: `~${gasSui.toFixed(3)} SUI (~$${gasUsd.toFixed(3)}) — ${
+        gasVerdict === "block"
+          ? "high"
+          : gasVerdict === "flag"
+            ? "elevated"
+            : "low"
+      }`,
+    },
   ];
 }
 
@@ -148,8 +193,13 @@ export function LiveSwapCard({
   onRefresh,
   iconLookup,
   signing,
+  confirming,
   executed,
   txDigest,
+  txStatus,
+  txError,
+  gasUsedSui,
+  receivedAmount,
   walletConnected,
 }: Props) {
   const { quote, fromSymbol, toSymbol, fromDecimals, toDecimals } = cached;
@@ -166,7 +216,7 @@ export function LiveSwapCard({
   const [refreshing, setRefreshing] = useState(false);
   const inFlight = useRef(false);
   const refresh = async () => {
-    if (signing || executed || inFlight.current) return;
+    if (signing || confirming || executed || inFlight.current) return;
     inFlight.current = true;
     setRefreshing(true);
     try {
@@ -179,13 +229,13 @@ export function LiveSwapCard({
 
   // Periodic refresh
   useEffect(() => {
-    if (signing || executed) return;
+    if (signing || confirming || executed) return;
     const id = setInterval(() => {
       void refresh();
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signing, executed]);
+  }, [signing, confirming, executed]);
 
   // Refresh on slippage change (skip first render)
   const firstSlippageRender = useRef(true);
@@ -211,8 +261,8 @@ export function LiveSwapCard({
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-5 bg-cloud-gray p-6"
-      style={{ borderRadius: 24 }}
+      className="space-y-3 bg-cloud-gray p-4"
+      style={{ borderRadius: 20 }}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="text-caption font-medium uppercase tracking-wider text-cash-lime">
@@ -243,7 +293,7 @@ export function LiveSwapCard({
         variants={stagger(0.05, 0.1)}
         initial="initial"
         animate="animate"
-        className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
+        className="flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center"
       >
         <TokenCard
           label="You send"
@@ -262,11 +312,11 @@ export function LiveSwapCard({
               transition: SPRING_BOUNCY,
             },
           }}
-          className="inline-flex size-9 shrink-0 items-center justify-center self-center bg-cash-lime text-midnight-black"
+          className="inline-flex size-7 shrink-0 items-center justify-center self-center bg-cash-lime text-midnight-black"
           style={{ borderRadius: 9999 }}
         >
-          <ArrowRight className="hidden size-4 sm:block" strokeWidth={2.5} />
-          <ArrowDown className="size-4 sm:hidden" strokeWidth={2.5} />
+          <ArrowRight className="hidden size-3.5 sm:block" strokeWidth={2.6} />
+          <ArrowDown className="size-3.5 sm:hidden" strokeWidth={2.6} />
         </motion.div>
         <TokenCard
           label="You receive"
@@ -279,7 +329,7 @@ export function LiveSwapCard({
       </motion.div>
 
       {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Stat label="Rate" value={`1 ${fromSymbol} ≈ ${rate.toFixed(6)} ${toSymbol}`} />
         <Stat
           label="Price impact"
@@ -295,45 +345,47 @@ export function LiveSwapCard({
       <RouteBreakdown cached={cached} iconLookup={iconLookup} />
 
       {/* Guardian — inline risk panel (warning row removed; impact verdict already covers it) */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2.5">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
           <span
-            className="inline-flex size-7 items-center justify-center bg-cash-lime text-midnight-black"
-            style={{ borderRadius: 12 }}
+            className="inline-flex size-5 items-center justify-center bg-cash-lime text-midnight-black"
+            style={{ borderRadius: 9 }}
           >
-            <ShieldCheck className="size-3.5" strokeWidth={2.4} />
+            <ShieldCheck className="size-2.5" strokeWidth={2.6} />
           </span>
-          <div>
-            <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
-              Guardian
-            </div>
-            <div className="text-body-sm font-semibold leading-tight">
-              {flagged === 0
-                ? "All clear"
-                : `${flagged} need${flagged === 1 ? "s" : ""} attention`}
-            </div>
-          </div>
+          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+            Guardian
+          </span>
+          <span className="text-caption font-semibold text-midnight-black">
+            ·{" "}
+            {flagged === 0
+              ? "All clear"
+              : `${flagged} need${flagged === 1 ? "s" : ""} attention`}
+          </span>
         </div>
-        <div className="divide-y divide-ghost-border">
+        <div className="divide-y divide-ghost-border/60">
           {risks.map((r) => (
             <div
               key={r.id}
-              className="flex items-center gap-3 py-2 first:pt-1 last:pb-1"
+              className="flex items-center gap-2.5 py-1.5 first:pt-0 last:pb-0"
             >
               <span
-                className={`inline-block size-1.5 shrink-0 ${verdictDot(r.verdict)}`}
+                className={cn("inline-block size-1.5 shrink-0", verdictDot(r.verdict))}
                 style={{ borderRadius: 9999 }}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-body-sm font-medium leading-tight">
-                  {r.label}
-                </div>
-                <div className="truncate text-body-sm text-subtle-gray">
-                  {r.summary}
+                <div className="flex items-baseline gap-1.5 leading-tight">
+                  <span className="text-body-sm font-medium">{r.label}</span>
+                  <span className="truncate text-caption text-subtle-gray">
+                    {r.summary}
+                  </span>
                 </div>
               </div>
               <span
-                className={`inline-flex shrink-0 items-center px-2 py-0.5 text-caption font-semibold uppercase tracking-wider ${verdictPill(r.verdict)}`}
+                className={cn(
+                  "inline-flex shrink-0 items-center px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  verdictPill(r.verdict),
+                )}
                 style={{ borderRadius: 9999 }}
               >
                 {VERDICT_LABEL[r.verdict]}
@@ -344,98 +396,196 @@ export function LiveSwapCard({
       </div>
 
       {!executed && (
-        <div className="space-y-2 border-t border-ghost-border pt-4">
-          <div className="text-body-sm font-medium text-midnight-black">
-            Max slippage
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border/60 pt-3">
+          <div className="flex items-center gap-2">
+            <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+              Slippage
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {SLIPPAGE_OPTIONS.map((opt) => {
+                const active = slippagePct === opt;
+                return (
+                  <motion.button
+                    key={opt}
+                    type="button"
+                    onClick={() => onSlippageChange(opt)}
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    transition={{
+                      type: "spring",
+                      visualDuration: 0.2,
+                      bounce: 0.3,
+                    }}
+                    disabled={signing || confirming}
+                    className={cn(
+                      "px-2.5 py-1 text-caption font-semibold text-midnight-black disabled:opacity-50",
+                      active ? "bg-cash-lime" : "bg-canvas-white",
+                    )}
+                    style={{ borderRadius: 9999 }}
+                  >
+                    {opt}%
+                  </motion.button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {SLIPPAGE_OPTIONS.map((opt) => {
-              const active = slippagePct === opt;
-              return (
-                <motion.button
-                  key={opt}
-                  type="button"
-                  onClick={() => onSlippageChange(opt)}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  transition={{
-                    type: "spring",
-                    visualDuration: 0.2,
-                    bounce: 0.3,
-                  }}
-                  disabled={signing}
-                  className={`px-4 py-2 text-body-sm font-medium ${
-                    active
-                      ? "bg-cash-lime text-midnight-black"
-                      : "bg-canvas-white text-midnight-black"
-                  }`}
-                  style={{ borderRadius: 9999 }}
-                >
-                  {opt}%
-                </motion.button>
-              );
-            })}
+          <div className="flex items-center gap-1.5">
+            <motion.button
+              onClick={onCancel}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              disabled={signing || confirming}
+              className="bg-canvas-white px-3.5 py-1.5 text-body-sm font-medium text-midnight-black disabled:opacity-50"
+              style={{ borderRadius: 9999 }}
+            >
+              Cancel
+            </motion.button>
+            <motion.button
+              onClick={onConfirm}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
+              disabled={signing || confirming || !walletConnected}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-1.5 text-body-sm font-semibold disabled:bg-hinting-gray disabled:text-canvas-white",
+                blocking
+                  ? "bg-destructive text-canvas-white"
+                  : "bg-cash-lime text-midnight-black",
+              )}
+              style={{ borderRadius: 9999 }}
+            >
+              {(signing || confirming) && (
+                <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
+              )}
+              {signing
+                ? "Signing…"
+                : confirming
+                  ? "Confirming…"
+                  : !walletConnected
+                    ? "Connect wallet first"
+                    : blocking
+                      ? "Sign anyway →"
+                      : "Confirm & sign →"}
+            </motion.button>
           </div>
         </div>
       )}
 
-      {!executed ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-          <motion.button
-            onClick={onCancel}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            disabled={signing}
-            className="bg-canvas-white px-5 py-2.5 text-body-sm font-medium text-midnight-black disabled:opacity-50"
-            style={{ borderRadius: 9999 }}
-          >
-            Cancel
-          </motion.button>
-          <motion.button
-            onClick={onConfirm}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            disabled={signing || !walletConnected}
-            className={`inline-flex items-center gap-2 px-6 py-2.5 text-body-sm font-semibold disabled:bg-hinting-gray disabled:text-canvas-white ${
-              blocking
-                ? "bg-destructive text-canvas-white"
-                : "bg-cash-lime text-midnight-black"
-            }`}
-            style={{ borderRadius: 9999 }}
-          >
-            {signing && (
+      {(confirming || executed) && (
+        <Receipt
+          confirming={confirming}
+          txStatus={txStatus}
+          txError={txError}
+          txDigest={txDigest}
+          gasUsedSui={gasUsedSui}
+          receivedAmount={receivedAmount}
+          toSymbol={toSymbol}
+        />
+      )}
+    </motion.div>
+  );
+}
+
+function Receipt({
+  confirming,
+  txStatus,
+  txError,
+  txDigest,
+  gasUsedSui,
+  receivedAmount,
+  toSymbol,
+}: {
+  confirming: boolean;
+  txStatus?: "success" | "failure";
+  txError?: string;
+  txDigest?: string;
+  gasUsedSui?: number;
+  receivedAmount?: number;
+  toSymbol: string;
+}) {
+  const success = txStatus === "success";
+  const failure = txStatus === "failure";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
+      className={cn(
+        "space-y-2 px-3 py-2.5",
+        confirming && "bg-cloud-gray",
+        success && "bg-cash-lime/15",
+        failure && "bg-destructive/15",
+      )}
+      style={{ borderRadius: 14 }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-body-sm font-semibold text-midnight-black">
+          {confirming ? (
+            <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
-            )}
-            {signing
-              ? "Signing…"
-              : !walletConnected
-                ? "Connect wallet first"
-                : blocking
-                  ? "Sign anyway →"
-                  : "Confirm & sign →"}
-          </motion.button>
-        </div>
-      ) : (
-        <div
-          className="flex flex-col gap-2 bg-cash-lime/15 p-4 sm:flex-row sm:items-center sm:justify-between"
-          style={{ borderRadius: 14 }}
-        >
-          <div className="text-body-sm font-semibold text-midnight-black">
-            ✓ Submitted to Sui
-          </div>
-          {txDigest && (
-            <a
-              href={`https://suiscan.xyz/mainnet/tx/${txDigest}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 bg-canvas-white px-3 py-1 font-mono text-body-sm text-midnight-black"
-              style={{ borderRadius: 9999 }}
-            >
-              {txDigest.slice(0, 6)}…{txDigest.slice(-4)}
-              <ExternalLink className="size-3" />
-            </a>
+              Waiting for finality on Sui…
+            </>
+          ) : success ? (
+            <>
+              <span
+                className="inline-flex size-5 items-center justify-center bg-cash-lime text-midnight-black"
+                style={{ borderRadius: 9999 }}
+              >
+                <Check className="size-3" strokeWidth={2.8} />
+              </span>
+              Swap confirmed
+            </>
+          ) : (
+            <>
+              <span
+                className="inline-flex size-5 items-center justify-center bg-destructive text-canvas-white"
+                style={{ borderRadius: 9999 }}
+              >
+                ✕
+              </span>
+              Swap failed
+            </>
           )}
         </div>
+        {txDigest && (
+          <a
+            href={`https://suiscan.xyz/mainnet/tx/${txDigest}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 bg-canvas-white px-2.5 py-1 font-mono text-caption text-midnight-black"
+            style={{ borderRadius: 9999 }}
+          >
+            {txDigest.slice(0, 6)}…{txDigest.slice(-4)}
+            <ExternalLink className="size-3" strokeWidth={2.2} />
+          </a>
+        )}
+      </div>
+
+      {success && (receivedAmount !== undefined || gasUsedSui !== undefined) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-subtle-gray">
+          {receivedAmount !== undefined && (
+            <span>
+              Received{" "}
+              <span className="font-semibold tabular-nums text-midnight-black">
+                +{receivedAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+              </span>{" "}
+              {toSymbol}
+            </span>
+          )}
+          {gasUsedSui !== undefined && (
+            <span>
+              Gas{" "}
+              <span className="font-semibold tabular-nums text-midnight-black">
+                {gasUsedSui.toFixed(4)}
+              </span>{" "}
+              SUI
+            </span>
+          )}
+        </div>
+      )}
+
+      {failure && txError && (
+        <div className="text-caption text-destructive">{txError}</div>
       )}
     </motion.div>
   );
@@ -468,16 +618,31 @@ function TokenCard({
   return (
     <motion.div
       variants={fadeUp}
-      className="flex flex-1 items-center gap-3 bg-canvas-white p-4"
-      style={{ borderRadius: 18 }}
+      className="flex flex-1 items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      style={{ borderRadius: 14 }}
     >
-      <AssetIcon src={iconUrl} label={symbol} size={44} />
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
-          {label}
+      <AssetIcon src={iconUrl} label={symbol} size={32} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+            {label}
+          </span>
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex items-center gap-0.5 font-mono text-[10px] text-hinting-gray transition-colors hover:text-midnight-black"
+            title="Copy coin type"
+          >
+            {truncateCoinType(coinType)}
+            {copied ? (
+              <Check className="size-2.5 text-cash-lime" strokeWidth={2.6} />
+            ) : (
+              <Copy className="size-2.5" strokeWidth={2.2} />
+            )}
+          </button>
         </div>
-        <div className="flex items-baseline gap-2">
-          <span className="truncate text-title font-semibold tabular-nums leading-tight">
+        <div className="flex items-baseline gap-1.5 leading-tight">
+          <span className="truncate text-body-lg font-semibold tabular-nums">
             {approximate ? "≈" : ""}
             {amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
           </span>
@@ -485,19 +650,6 @@ function TokenCard({
             {symbol}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={copy}
-          className="inline-flex items-center gap-1 font-mono text-caption text-subtle-gray transition-colors hover:text-midnight-black"
-          title="Copy coin type"
-        >
-          {truncateCoinType(coinType)}
-          {copied ? (
-            <Check className="size-2.5 text-cash-lime" strokeWidth={2.6} />
-          ) : (
-            <Copy className="size-2.5" strokeWidth={2.2} />
-          )}
-        </button>
       </div>
     </motion.div>
   );
@@ -514,22 +666,21 @@ function Stat({
 }) {
   return (
     <div
-      className={`bg-canvas-white px-4 py-3 ${
-        tone === "warn"
-          ? "ring-2 ring-warning/40"
-          : tone === "block"
-            ? "ring-2 ring-destructive/40"
-            : ""
-      }`}
+      className={cn(
+        "bg-canvas-white px-3 py-2",
+        tone === "warn" && "ring-2 ring-warning/40",
+        tone === "block" && "ring-2 ring-destructive/40",
+      )}
       style={{ borderRadius: 14 }}
     >
       <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
         {label}
       </div>
       <div
-        className={`text-body font-semibold tabular-nums ${
-          tone === "block" ? "text-destructive" : ""
-        }`}
+        className={cn(
+          "text-body font-semibold tabular-nums",
+          tone === "block" && "text-destructive",
+        )}
       >
         {value}
       </div>
