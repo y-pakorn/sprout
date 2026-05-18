@@ -136,7 +136,15 @@ select {
 }
 
 /* Liquid-glass surface — frosted glass with a soft gradient hairline.
- * Used by all cinematic surfaces (header pill, content shells, cards). */
+ * Used by all cinematic surfaces (header pill, content shells, cards).
+ *
+ * Two-layer effect:
+ *   1. Base: plain blur+saturate (Safari, Firefox, anything without SVG
+ *      filter support in `backdrop-filter`).
+ *   2. Chrome override: layer the SVG `#liquid-glass-filter` BEFORE the
+ *      blur+saturate, so the iOS lens displacement runs on the crisp backdrop
+ *      and the frost lands on top. Defined in <GlassFilter />.
+ */
 .liquid-glass {
   background: rgba(255, 255, 255, 0.06);
   background-blend-mode: luminosity;
@@ -146,6 +154,11 @@ select {
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
+}
+@supports (backdrop-filter: url("#liquid-glass-filter")) {
+  .liquid-glass {
+    backdrop-filter: url("#liquid-glass-filter") blur(6px) saturate(150%);
+  }
 }
 /* Nested liquid-glass flattens — no second border, no second blur.
  * Keeps card-in-card from stacking wireframe outlines. */

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { HeroVideoBg } from "@/components/parts/hero-video-bg";
 import { SiteHeader } from "@/components/site-header";
+import { GlassFilter } from "@/components/glass-filter";
 
 export type CinematicMode = "bright" | "dim";
 
@@ -28,6 +29,7 @@ export function CinematicChrome({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<CinematicMode>("dim");
   return (
     <CinematicModeContext.Provider value={{ mode, setMode }}>
+      <GlassFilter />
       <HeroVideoBg mode={mode} />
       <SiteHeader variant="glass" />
       <div className="relative z-20 flex min-h-screen w-full flex-col">
