@@ -12,6 +12,7 @@ import {
   Repeat,
   Split,
   Merge,
+  X,
 } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import {
@@ -103,7 +104,7 @@ export function LiveVaultCard({
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-3 bg-cloud-gray p-4"
+      className="space-y-3 liquid-glass p-4"
       style={{ borderRadius: 20 }}
     >
       <div className="flex items-baseline justify-between gap-3">
@@ -111,7 +112,7 @@ export function LiveVaultCard({
           <span className="text-caption font-medium uppercase tracking-wider text-cash-lime">
             Plan
           </span>
-          <span className="text-caption text-subtle-gray">
+          <span className="text-caption text-canvas-white/55">
             {swapSteps.length > 0 && (
               <>
                 {swapSteps.length} swap
@@ -129,10 +130,10 @@ export function LiveVaultCard({
         </div>
         {depositSteps.length > 0 && (
           <div className="flex items-baseline gap-1.5">
-            <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+            <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
               Blended APY
             </span>
-            <span className="text-body font-semibold tabular-nums text-midnight-black">
+            <span className="text-body font-semibold tabular-nums text-canvas-white">
               {fmtPct(cached.summary.blendedApyPct)}
             </span>
           </div>
@@ -180,10 +181,10 @@ export function LiveVaultCard({
           >
             <ShieldCheck className="size-2.5" strokeWidth={2.6} />
           </span>
-          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
             Guardian
           </span>
-          <span className="text-caption font-semibold text-midnight-black">
+          <span className="text-caption font-semibold text-canvas-white">
             ·{" "}
             {flagged === 0
               ? "All clear"
@@ -213,7 +214,7 @@ export function LiveVaultCard({
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
             disabled={signing || confirming}
-            className="bg-canvas-white px-3.5 py-1.5 text-body-sm font-medium text-midnight-black disabled:opacity-50"
+            className="liquid-glass px-3.5 py-1.5 text-body-sm font-medium text-canvas-white disabled:opacity-50"
             style={{ borderRadius: 9999 }}
           >
             Cancel
@@ -288,6 +289,12 @@ function StepRow({
   if (step.kind === "merge") {
     return <MergeStepRow s={step} idx={idx} iconLookup={iconLookup} />;
   }
+  if (step.kind === "redeemFromVault") {
+    return <RedeemStepRow s={step} idx={idx} iconLookup={iconLookup} />;
+  }
+  if (step.kind === "cancelRedeemFromVault") {
+    return <CancelStepRow s={step} idx={idx} />;
+  }
   return (
     <DepositStepRow
       s={step}
@@ -298,14 +305,90 @@ function StepRow({
   );
 }
 
+function RedeemStepRow({
+  s,
+  idx,
+  iconLookup,
+}: {
+  s: import("@/lib/ai/action-plan-cache").ResolvedRedeemStep;
+  idx: number;
+  iconLookup: IconLookup;
+}) {
+  return (
+    <div
+      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
+      style={{ borderRadius: 14 }}
+    >
+      <StepIndex n={idx + 1} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <AssetIcon
+          src={s.vault.logoUrl ?? iconLookup(s.vault.depositCoinType)}
+          label={s.vault.name}
+          size={20}
+        />
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+          {fmtAmount(s.sharesHuman)}
+        </span>
+        <span className="text-caption text-canvas-white/55">
+          {s.receiptSymbol}
+        </span>
+        <ArrowRight
+          className="size-3 shrink-0 text-canvas-white/40"
+          strokeWidth={2.4}
+        />
+        <span className="truncate text-body-sm font-semibold text-canvas-white">
+          {s.vault.name}
+        </span>
+      </div>
+      <ActionTag
+        icon={<Repeat className="size-3 -scale-x-100" strokeWidth={2.4} />}
+        label={
+          s.vault.withdrawalPeriodDays
+            ? `Withdraw · ≤${s.vault.withdrawalPeriodDays}d`
+            : "Withdraw"
+        }
+      />
+    </div>
+  );
+}
+
+function CancelStepRow({
+  s,
+  idx,
+}: {
+  s: import("@/lib/ai/action-plan-cache").ResolvedCancelRedeemStep;
+  idx: number;
+}) {
+  return (
+    <div
+      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
+      style={{ borderRadius: 14 }}
+    >
+      <StepIndex n={idx + 1} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="truncate text-body-sm font-semibold text-canvas-white">
+          Cancel withdrawal · {s.vault.name}
+        </span>
+        <span className="text-caption text-canvas-white/55">
+          req #{s.sequenceNumber}
+        </span>
+      </div>
+      <ActionTag
+        icon={<X className="size-3" strokeWidth={2.4} />}
+        label="Cancel"
+      />
+    </div>
+  );
+}
+
 function StepIndex({ n, lit }: { n: number; lit?: boolean }) {
   return (
     <span
       className={cn(
         "inline-flex size-6 shrink-0 items-center justify-center text-caption font-semibold tabular-nums transition-colors",
         lit
-          ? "bg-midnight-black/5 text-midnight-black group-hover:bg-cash-lime"
-          : "bg-midnight-black/5 text-midnight-black",
+          ? "bg-midnight-black/5 text-canvas-white group-hover:bg-cash-lime"
+          : "bg-midnight-black/5 text-canvas-white",
       )}
       style={{ borderRadius: 8 }}
     >
@@ -322,7 +405,7 @@ function ActionTag({
   label: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 text-caption font-medium uppercase tracking-wider text-hinting-gray">
+    <div className="flex shrink-0 items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/40">
       {icon}
       <span>{label}</span>
     </div>
@@ -340,7 +423,7 @@ function MergeStepRow({
 }) {
   return (
     <div
-      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
       style={{ borderRadius: 14 }}
     >
       <StepIndex n={idx + 1} />
@@ -349,7 +432,7 @@ function MergeStepRow({
           {s.sources.map((src, i) => (
             <span
               key={i}
-              className="inline-flex items-center bg-cloud-gray px-1.5 py-0 text-caption tabular-nums text-midnight-black"
+              className="inline-flex items-center liquid-glass px-1.5 py-0 text-caption tabular-nums text-canvas-white"
               style={{ borderRadius: 9999 }}
             >
               {fmtAmount(src.human)}
@@ -357,14 +440,14 @@ function MergeStepRow({
           ))}
         </span>
         <ArrowRight
-          className="size-3 shrink-0 text-hinting-gray"
+          className="size-3 shrink-0 text-canvas-white/40"
           strokeWidth={2.4}
         />
         <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {fmtAmount(s.totalHuman)}
         </span>
-        <span className="text-caption text-subtle-gray">{s.symbol}</span>
+        <span className="text-caption text-canvas-white/55">{s.symbol}</span>
       </div>
       <ActionTag
         icon={<Merge className="size-3" strokeWidth={2.4} />}
@@ -391,7 +474,7 @@ function SwapStepRow({
       : null;
   return (
     <div
-      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
       style={{ borderRadius: 14 }}
     >
       <StepIndex n={idx + 1} />
@@ -401,12 +484,12 @@ function SwapStepRow({
           label={s.fromSymbol}
           size={20}
         />
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {fmtAmount(s.fromAmountHuman)}
         </span>
-        <span className="text-caption text-subtle-gray">{s.fromSymbol}</span>
+        <span className="text-caption text-canvas-white/55">{s.fromSymbol}</span>
         <ArrowRight
-          className="size-3 shrink-0 text-hinting-gray"
+          className="size-3 shrink-0 text-canvas-white/40"
           strokeWidth={2.4}
         />
         <AssetIcon
@@ -414,10 +497,10 @@ function SwapStepRow({
           label={s.toSymbol}
           size={20}
         />
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           ≈ {fmtAmount(s.toAmountHuman)}
         </span>
-        <span className="text-caption text-subtle-gray">{s.toSymbol}</span>
+        <span className="text-caption text-canvas-white/55">{s.toSymbol}</span>
       </div>
       <ActionTag
         icon={<Repeat className="size-3" strokeWidth={2.4} />}
@@ -438,7 +521,7 @@ function SplitStepRow({
 }) {
   return (
     <div
-      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
       style={{ borderRadius: 14 }}
     >
       <StepIndex n={idx + 1} />
@@ -448,19 +531,19 @@ function SplitStepRow({
           label={s.sourceSymbol}
           size={20}
         />
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {fmtAmount(s.totalHuman)}
         </span>
-        <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
+        <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
         <ArrowRight
-          className="size-3 shrink-0 text-hinting-gray"
+          className="size-3 shrink-0 text-canvas-white/40"
           strokeWidth={2.4}
         />
         <span className="flex flex-wrap items-center gap-1">
           {s.portions.map((p, i) => (
             <span
               key={i}
-              className="inline-flex items-center bg-cloud-gray px-2 py-0 text-caption font-semibold tabular-nums text-midnight-black"
+              className="inline-flex items-center liquid-glass px-2 py-0 text-caption font-semibold tabular-nums text-canvas-white"
               style={{ borderRadius: 9999 }}
             >
               {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
@@ -494,7 +577,7 @@ function DepositStepRow({
     <button
       type="button"
       onClick={() => onOpen(s.vault.id)}
-      className="group flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5 text-left transition-colors hover:bg-cash-lime/10"
+      className="group flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5 text-left transition-colors hover:bg-cash-lime/10"
       style={{ borderRadius: 14 }}
     >
       <StepIndex n={idx + 1} lit />
@@ -505,22 +588,22 @@ function DepositStepRow({
           label={s.sourceSymbol}
           size={20}
         />
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {fmtAmount(s.amountHuman)}
         </span>
-        <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
+        <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
       </div>
 
       <ArrowRight
-        className="size-3 shrink-0 text-hinting-gray"
+        className="size-3 shrink-0 text-canvas-white/40"
         strokeWidth={2.4}
       />
 
       <div className="min-w-0 flex-1">
-        <div className="truncate text-body-sm font-semibold leading-tight text-midnight-black">
+        <div className="truncate text-body-sm font-semibold leading-tight text-canvas-white">
           {s.vault.name}
         </div>
-        <div className="truncate text-caption leading-tight text-subtle-gray">
+        <div className="truncate text-caption leading-tight text-canvas-white/55">
           {s.vault.category}
           {lockup ? ` · ${lockup}` : ""}
         </div>
@@ -528,15 +611,15 @@ function DepositStepRow({
 
       <div className="flex shrink-0 items-center gap-1.5">
         <div className="text-right leading-tight">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-subtle-gray">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
             APY
           </div>
-          <div className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          <div className="text-body-sm font-semibold tabular-nums text-canvas-white">
             {fmtPct(s.vault.apyPct)}
           </div>
         </div>
         <ChevronRight
-          className="size-4 text-hinting-gray transition-transform group-hover:translate-x-0.5 group-hover:text-midnight-black"
+          className="size-4 text-canvas-white/40 transition-transform group-hover:translate-x-0.5 group-hover:text-canvas-white"
           strokeWidth={2.4}
         />
       </div>
@@ -574,15 +657,15 @@ function Stat({
   return (
     <div
       className={cn(
-        "bg-canvas-white px-3 py-2",
+        "liquid-glass px-3 py-2",
         tone === "lime" && "bg-cash-lime/15",
       )}
       style={{ borderRadius: 14 }}
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+      <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
         {label}
       </div>
-      <div className="text-body font-semibold tabular-nums text-midnight-black">
+      <div className="text-body font-semibold tabular-nums text-canvas-white">
         {value}
       </div>
     </div>
@@ -767,14 +850,14 @@ function PlanReceipt({
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
       className={cn(
         "space-y-2 px-3 py-2.5",
-        confirming && "bg-cloud-gray",
+        confirming && "liquid-glass",
         success && "bg-cash-lime/15",
         failure && "bg-destructive/15",
       )}
       style={{ borderRadius: 14 }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-body-sm font-semibold text-midnight-black">
+        <div className="flex items-center gap-2 text-body-sm font-semibold text-canvas-white">
           {confirming ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
@@ -807,7 +890,7 @@ function PlanReceipt({
             href={`https://suiscan.xyz/mainnet/tx/${txDigest}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 bg-canvas-white px-2.5 py-1 font-mono text-caption text-midnight-black"
+            className="inline-flex items-center gap-1 liquid-glass px-2.5 py-1 font-mono text-caption text-canvas-white"
             style={{ borderRadius: 9999 }}
           >
             {txDigest.slice(0, 6)}…{txDigest.slice(-4)}
@@ -817,14 +900,14 @@ function PlanReceipt({
       </div>
 
       {success && receivedShares && receivedShares.length > 0 && (
-        <ul className="space-y-1 text-caption text-subtle-gray">
+        <ul className="space-y-1 text-caption text-canvas-white/55">
           {deposits.map((d, i) => (
             <li
               key={d.id}
               className="flex items-center justify-between gap-2"
             >
               <span className="truncate">{d.vault.name}</span>
-              <span className="tabular-nums font-semibold text-midnight-black">
+              <span className="tabular-nums font-semibold text-canvas-white">
                 +{fmtAmount(receivedShares[i] ?? 0)} shares
               </span>
             </li>
@@ -832,7 +915,7 @@ function PlanReceipt({
           {gasUsedSui !== undefined && (
             <li className="flex items-center justify-between gap-2 pt-1">
               <span>Gas</span>
-              <span className="tabular-nums font-semibold text-midnight-black">
+              <span className="tabular-nums font-semibold text-canvas-white">
                 {gasUsedSui.toFixed(4)} SUI
               </span>
             </li>

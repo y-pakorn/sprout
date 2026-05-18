@@ -17,8 +17,7 @@ import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
 import { AgentMessage } from "@/components/agent-message";
 import { ErrorBanner } from "@/components/parts/error-banner";
-import { HeroVideoBg } from "@/components/parts/hero-video-bg";
-import { SiteHeader } from "@/components/site-header";
+import { CinematicShell } from "@/components/parts/cinematic-shell";
 import {
   useCoinMap,
   resolveSymbol,
@@ -39,6 +38,8 @@ import {
   type ResolvedSwapStep,
   type ResolvedSplitStep,
   type ResolvedDepositStep,
+  type ResolvedRedeemStep,
+  type ResolvedCancelRedeemStep,
 } from "@/lib/ai/action-plan-cache";
 import {
   getGlossary,
@@ -841,7 +842,13 @@ export function Conversation() {
     }
 
     type RawStep = {
-      kind: "swap" | "split" | "merge" | "deposit";
+      kind:
+        | "swap"
+        | "split"
+        | "merge"
+        | "deposit"
+        | "redeemFromVault"
+        | "cancelRedeemFromVault";
       id: string;
       fromHandle?: string;
       fromHandles?: string[];
@@ -851,16 +858,28 @@ export function Conversation() {
       slippagePct?: number;
       portionsBps?: number[];
       vaultId?: string;
+      sequenceNumber?: string;
     };
     const { steps } = toolCall.input as { steps: RawStep[] };
 
     try {
-      // Pre-resolve vaults + deployment when any deposit step exists
-      const hasDeposit = steps.some((s) => s.kind === "deposit");
-      const vaults = hasDeposit
+      // Vault list + deployment are needed for any step that touches the
+      // gateway (deposit, redeem, cancel).
+      const needsVaults = steps.some(
+        (s) =>
+          s.kind === "deposit" ||
+          s.kind === "redeemFromVault" ||
+          s.kind === "cancelRedeemFromVault",
+      );
+      const vaults = needsVaults
         ? (vaultList ?? (await fetchVaults()))
         : null;
-      const deployment = hasDeposit ? await fetchDeployment() : null;
+      const deployment = needsVaults ? await fetchDeployment() : null;
+      // Receipt-coin index lets us resolve receipt symbols (e.g. ercUSD)
+      // for redeemFromVault — they're not in the standard coin map.
+      const vaultByReceipt = needsVaults
+        ? await loadVaultReceiptIndex()
+        : new Map<string, never>();
 
       const tx = new SuiTransaction();
       tx.setSender(acct.address);
@@ -892,24 +911,54 @@ export function Conversation() {
           );
         }
         const coin = resolveSymbol(map, step.fromSymbol);
-        if (!coin) {
-          throw new Error(
-            `Step ${step.id}: unknown token symbol '${step.fromSymbol}'.`,
+        if (coin) {
+          const raw = BigInt(
+            Math.floor(step.fromAmount * 10 ** coin.decimals),
           );
+          const arg = tx.add(
+            coinWithBalance({ balance: raw, type: coin.coin_type }),
+          ) as unknown as TransactionObjectArgument;
+          return {
+            arg,
+            symbol: step.fromSymbol.toUpperCase(),
+            coinType: coin.coin_type,
+            decimals: coin.decimals,
+            expectedHuman: step.fromAmount,
+          };
         }
-        const raw = BigInt(
-          Math.floor(step.fromAmount * 10 ** coin.decimals),
+        // Fall back: receipt coin (vault share token) symbol lookup. Receipt
+        // tokens aren't in the standard coin map — they live in the vault
+        // receipt index.
+        const wantSym = step.fromSymbol.toUpperCase();
+        for (const v of vaultByReceipt.values()) {
+          const vTyped = v as {
+            position: { depositCoinType: string };
+            shareDecimals: number;
+          };
+          for (const ct of vaultByReceipt.keys()) {
+            if (vaultByReceipt.get(ct) !== v) continue;
+            // The receipt symbol is the trailing :: segment of the coin type.
+            const sym = ct.split("::").pop()?.toUpperCase();
+            if (sym === wantSym) {
+              const raw = BigInt(
+                Math.floor(step.fromAmount * 10 ** vTyped.shareDecimals),
+              );
+              const arg = tx.add(
+                coinWithBalance({ balance: raw, type: ct }),
+              ) as unknown as TransactionObjectArgument;
+              return {
+                arg,
+                symbol: wantSym,
+                coinType: ct,
+                decimals: vTyped.shareDecimals,
+                expectedHuman: step.fromAmount,
+              };
+            }
+          }
+        }
+        throw new Error(
+          `Step ${step.id}: unknown token symbol '${step.fromSymbol}'. If you meant a vault receipt token, use the symbol from getVaultBalance.positions[].receiptCoinSymbol.`,
         );
-        const arg = tx.add(
-          coinWithBalance({ balance: raw, type: coin.coin_type }),
-        ) as unknown as TransactionObjectArgument;
-        return {
-          arg,
-          symbol: step.fromSymbol.toUpperCase(),
-          coinType: coin.coin_type,
-          decimals: coin.decimals,
-          expectedHuman: step.fromAmount,
-        };
       }
 
       // Topo-sort steps by fromHandle dependencies. The agent may emit
@@ -977,6 +1026,60 @@ export function Conversation() {
       for (const s of steps) visit(s);
 
       for (const step of sorted) {
+        // cancelRedeemFromVault has no coin origin — just a vault + sequence.
+        if (step.kind === "cancelRedeemFromVault") {
+          if (!step.vaultId) {
+            throw new Error(`Cancel ${step.id}: missing vaultId.`);
+          }
+          if (!step.sequenceNumber) {
+            throw new Error(
+              `Cancel ${step.id}: missing sequenceNumber. Read it from getVaultBalance.withdrawals[].sequenceNumber.`,
+            );
+          }
+          if (!vaults || !deployment) {
+            throw new Error("Vaults / deployment data not available.");
+          }
+          const v = vaults.find((x) => x.id === step.vaultId);
+          if (!v) {
+            throw new Error(
+              `Cancel ${step.id}: unknown vault id '${step.vaultId}'.`,
+            );
+          }
+          const receiptCoinType =
+            v.receiptCoinType ||
+            deployment.vaultsByObjectId[v.objectId]?.receiptCoinType ||
+            "";
+          if (!receiptCoinType) {
+            throw new Error(
+              `Cancel ${step.id}: no receipt coin type for vault '${v.name}'.`,
+            );
+          }
+          let seqBig: bigint;
+          try {
+            seqBig = BigInt(step.sequenceNumber);
+          } catch {
+            throw new Error(
+              `Cancel ${step.id}: sequenceNumber '${step.sequenceNumber}' is not a valid u128.`,
+            );
+          }
+          tx.moveCall({
+            target: `${deployment.packageId}::gateway::cancel_pending_withdrawal_request`,
+            typeArguments: [v.depositCoinType, receiptCoinType],
+            arguments: [
+              tx.object(v.objectId),
+              tx.object(deployment.protocolConfigId),
+              tx.pure.u128(seqBig),
+            ],
+          });
+          resolved.push({
+            kind: "cancelRedeemFromVault",
+            id: step.id,
+            vault: v,
+            sequenceNumber: step.sequenceNumber,
+          });
+          continue;
+        }
+
         // Merge has a different origin shape (multiple sources). Handle
         // it before the single-origin resolution.
         if (step.kind === "merge") {
@@ -1262,6 +1365,56 @@ export function Conversation() {
             sourceDecimals: origin.decimals,
             amountHuman: origin.expectedHuman,
           });
+        } else if (step.kind === "redeemFromVault") {
+          if (!step.vaultId) {
+            throw new Error(`Redeem ${step.id}: missing vaultId.`);
+          }
+          if (!vaults || !deployment) {
+            throw new Error("Vaults / deployment data not available.");
+          }
+          const v = vaults.find((x) => x.id === step.vaultId);
+          if (!v) {
+            throw new Error(
+              `Redeem ${step.id}: unknown vault id '${step.vaultId}'.`,
+            );
+          }
+          const receiptCoinType =
+            v.receiptCoinType ||
+            deployment.vaultsByObjectId[v.objectId]?.receiptCoinType ||
+            "";
+          if (!receiptCoinType) {
+            throw new Error(
+              `Redeem ${step.id}: no receipt coin type for vault '${v.name}'.`,
+            );
+          }
+          if (
+            canonicalCoinType(origin.coinType) !==
+            canonicalCoinType(receiptCoinType)
+          ) {
+            throw new Error(
+              `Redeem ${step.id}: source coin (${origin.symbol}) doesn't match vault '${v.name}' receipt token (${v.receiptCoinSymbol ?? "share"}). Use fromSymbol="${v.receiptCoinSymbol ?? "ercUSD"}" for this redemption.`,
+            );
+          }
+          tx.moveCall({
+            target: `${deployment.packageId}::gateway::redeem_shares`,
+            typeArguments: [v.depositCoinType, receiptCoinType],
+            arguments: [
+              tx.object.clock(),
+              tx.object(v.objectId),
+              tx.object(deployment.protocolConfigId),
+              origin.arg,
+              tx.pure.option("address", null),
+            ],
+          });
+          resolved.push({
+            kind: "redeemFromVault",
+            id: step.id,
+            vault: v,
+            receiptSymbol: origin.symbol,
+            receiptCoinType: origin.coinType,
+            receiptDecimals: origin.decimals,
+            sharesHuman: origin.expectedHuman,
+          });
         }
       }
 
@@ -1274,6 +1427,13 @@ export function Conversation() {
       const splitSteps = resolved.filter(
         (s): s is ResolvedSplitStep => s.kind === "split",
       );
+      const redeemSteps = resolved.filter(
+        (s): s is ResolvedRedeemStep => s.kind === "redeemFromVault",
+      );
+      const cancelSteps = resolved.filter(
+        (s): s is ResolvedCancelRedeemStep =>
+          s.kind === "cancelRedeemFromVault",
+      );
 
       const blendedApyPct =
         depositSteps.length > 0
@@ -1283,7 +1443,9 @@ export function Conversation() {
       const estimatedGasSui =
         0.012 +
         0.004 * depositSteps.length +
-        0.006 * swapSteps.length;
+        0.006 * swapSteps.length +
+        0.004 * redeemSteps.length +
+        0.003 * cancelSteps.length;
 
       const cached: CachedActionPlan = {
         tx,
@@ -1292,6 +1454,8 @@ export function Conversation() {
           swapCount: swapSteps.length,
           splitCount: splitSteps.length,
           depositCount: depositSteps.length,
+          redeemCount: redeemSteps.length,
+          cancelCount: cancelSteps.length,
           vaults: depositSteps.map((d) => d.vault),
           blendedApyPct,
           estimatedGasSui,
@@ -1307,12 +1471,24 @@ export function Conversation() {
         swapCount: swapSteps.length,
         splitCount: splitSteps.length,
         depositCount: depositSteps.length,
+        redeemCount: redeemSteps.length,
+        cancelCount: cancelSteps.length,
         deposits: depositSteps.map((d) => ({
           vaultName: d.vault.name,
           apyPct: Number(d.vault.apyPct.toFixed(3)),
           amount: Number(d.amountHuman.toFixed(6)),
           symbol: d.sourceSymbol,
           withdrawalPeriodDays: d.vault.withdrawalPeriodDays,
+        })),
+        redeems: redeemSteps.map((r) => ({
+          vaultName: r.vault.name,
+          shares: Number(r.sharesHuman.toFixed(6)),
+          symbol: r.receiptSymbol,
+          withdrawalPeriodDays: r.vault.withdrawalPeriodDays,
+        })),
+        cancels: cancelSteps.map((c) => ({
+          vaultName: c.vault.name,
+          sequenceNumber: c.sequenceNumber,
         })),
         swaps: swapSteps.map((s) => ({
           id: s.id,
@@ -1724,10 +1900,9 @@ export function Conversation() {
   })();
 
   return (
-    <div className="flex w-full flex-col" style={{ height: "100vh" }}>
-      <SiteHeader variant="solid" />
+    <CinematicShell mode="dim">
       <StickToBottom
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto pt-16"
         resize="smooth"
         initial="smooth"
       >
@@ -1785,7 +1960,7 @@ export function Conversation() {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="inline-flex items-center gap-2 self-start bg-cloud-gray px-4 py-2 text-body-sm text-subtle-gray"
+              className="liquid-glass inline-flex items-center gap-2 self-start px-4 py-2 text-body-sm text-canvas-white/85"
               style={{ borderRadius: 9999 }}
             >
               <motion.span
@@ -1825,7 +2000,7 @@ export function Conversation() {
         </StickToBottom.Content>
       </StickToBottom>
 
-      <div className="shrink-0 border-t border-ghost-border/60 bg-canvas-white">
+      <div className="shrink-0">
         <div className="mx-auto w-full max-w-3xl px-6 py-4">
           <ChatInput
             value={draft}
@@ -1841,8 +2016,7 @@ export function Conversation() {
           />
         </div>
       </div>
-
-    </div>
+    </CinematicShell>
   );
 }
 
@@ -1858,13 +2032,7 @@ function IdleHero({
   ready: boolean;
 }) {
   return (
-    <section className="relative min-h-screen w-full overflow-hidden">
-      {/* Cinematic background video + vignette. Fixed, full-bleed, z-0. */}
-      <HeroVideoBg />
-
-      {/* Glass header overlays the page-level solid header on idle. */}
-      <SiteHeader variant="glass" />
-
+    <CinematicShell mode="bright">
       {/* Foreground content. Vertically centered stack: headline + input
        *  + example chips, all in one column. */}
       <div
@@ -1907,6 +2075,6 @@ function IdleHero({
           <ExamplePrompts onPick={onSubmit} tone="glass" />
         </motion.div>
       </div>
-    </section>
+    </CinematicShell>
   );
 }

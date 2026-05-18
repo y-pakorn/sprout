@@ -69,13 +69,20 @@ export const swapTools = {
   }),
   executePlan: tool({
     description:
-      "Assemble an atomic Sui transaction (PTB) from a sequence of low-level steps. The whole plan executes or none of it does, with ONE wallet signature. Steps reference each other through string `id`s — every step's output coin handle becomes available to later steps.\n\nStep kinds:\n- 'swap' — runs a Bluefin7K swap. Produces a coin of toSymbol under this step's id.\n- 'split' — splits one coin handle into N portions by bps (sum 10000). Produces handles `<id>.0`, `<id>.1`, …\n- 'merge' — merges multiple coin handles of the SAME token (and/or pulls from balance) into ONE coin. Produces a single handle under this step's id. Use when combining a swap output with an existing wallet balance, or two swap outputs, before splitting/depositing.\n- 'deposit' — deposits a coin handle into an Ember vault. Vault must accept the coin's token type; no auto-conversion (insert a swap step first).\n\nOrigin (how a step gets its input coin) — exactly ONE of:\n- `fromHandle` to consume an upstream output (e.g. `swap1`, `split1.0`).\n- `fromSymbol` + `fromAmount` to draw from sender's balance.\n- `fromHandles` (merge only) — array of upstream handle ids to combine. Optionally combined with `fromSymbol`+`fromAmount` to also include balance.",
+      "Assemble an atomic Sui transaction (PTB) from a sequence of low-level steps. The whole plan executes or none of it does, with ONE wallet signature. Steps reference each other through string `id`s — every step's output coin handle becomes available to later steps.\n\nStep kinds:\n- 'swap' — runs a Bluefin7K swap. Produces a coin of toSymbol under this step's id.\n- 'split' — splits one coin handle into N portions by bps (sum 10000). Produces handles `<id>.0`, `<id>.1`, …\n- 'merge' — merges multiple coin handles of the SAME token (and/or pulls from balance) into ONE coin. Produces a single handle under this step's id. Use when combining a swap output with an existing wallet balance, or two swap outputs, before splitting/depositing.\n- 'deposit' — deposits a coin handle into an Ember vault. Vault must accept the coin's token type; no auto-conversion (insert a swap step first).\n- 'redeemFromVault' — requests a withdrawal from an Ember vault by burning receipt shares. Funds arrive AFTER the vault's withdrawal lockup (NOT in this transaction); produces NO output coin handle. Use the receipt token symbol (e.g. ercUSD, eACRED) as the source. Optional 'sharesAmount' picks a partial redemption; omit to redeem all available shares (use 'fromAmount' if you want a specific amount via fromSymbol).\n- 'cancelRedeemFromVault' — cancels a previously-submitted pending withdrawal request, returning the shares to the user. Requires the request's 'sequenceNumber' (from getVaultBalance.withdrawals) and the matching vaultId. Has no coin handle input/output.\n\nOrigin (how a step gets its input coin) — exactly ONE of:\n- `fromHandle` to consume an upstream output (e.g. `swap1`, `split1.0`).\n- `fromSymbol` + `fromAmount` to draw from sender's balance.\n- `fromHandles` (merge only) — array of upstream handle ids to combine. Optionally combined with `fromSymbol`+`fromAmount` to also include balance.\n- For cancelRedeemFromVault, origin fields are ignored — it only needs vaultId + sequenceNumber.",
     inputSchema: z.object({
       steps: z
         .array(
           z.object({
             kind: z
-              .enum(["swap", "split", "merge", "deposit"])
+              .enum([
+                "swap",
+                "split",
+                "merge",
+                "deposit",
+                "redeemFromVault",
+                "cancelRedeemFromVault",
+              ])
               .describe("Step type."),
             id: z
               .string()
@@ -132,7 +139,13 @@ export const swapTools = {
               .string()
               .optional()
               .describe(
-                "(deposit only) Ember vault UUID from listVaults.",
+                "(deposit / redeemFromVault / cancelRedeemFromVault) Ember vault UUID from listVaults / getVaultBalance.",
+              ),
+            sequenceNumber: z
+              .string()
+              .optional()
+              .describe(
+                "(cancelRedeemFromVault only) The pending withdrawal's sequenceNumber from getVaultBalance.withdrawals[].",
               ),
           }),
         )

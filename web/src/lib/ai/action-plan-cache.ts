@@ -72,11 +72,32 @@ export type ResolvedMergeStep = {
   }>;
 };
 
+export type ResolvedRedeemStep = {
+  kind: "redeemFromVault";
+  id: string;
+  vault: SuiVault;
+  /** Receipt-token info (the share coin being burned). */
+  receiptSymbol: string;
+  receiptCoinType: string;
+  receiptDecimals: number;
+  /** Human shares being redeemed. */
+  sharesHuman: number;
+};
+
+export type ResolvedCancelRedeemStep = {
+  kind: "cancelRedeemFromVault";
+  id: string;
+  vault: SuiVault;
+  sequenceNumber: string;
+};
+
 export type ResolvedStep =
   | ResolvedSwapStep
   | ResolvedSplitStep
   | ResolvedMergeStep
-  | ResolvedDepositStep;
+  | ResolvedDepositStep
+  | ResolvedRedeemStep
+  | ResolvedCancelRedeemStep;
 
 export type CachedActionPlan = {
   tx: Transaction;
@@ -86,6 +107,8 @@ export type CachedActionPlan = {
     swapCount: number;
     splitCount: number;
     depositCount: number;
+    redeemCount: number;
+    cancelCount: number;
     /** Vaults targeted by all deposit steps in order. */
     vaults: SuiVault[];
     /** Blended APY weighted by per-vault deposit human amount * deposit-token USD ≈ tvlUsd proxy. We just average across deposit steps for v1. */

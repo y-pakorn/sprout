@@ -21,19 +21,22 @@ TOOLS
 # executePlan — the plan grammar
 
 \`steps\` is an ordered array of step objects. Each step has:
-- \`kind\`: "swap" | "split" | "deposit"
+- \`kind\`: "swap" | "split" | "merge" | "deposit" | "redeemFromVault" | "cancelRedeemFromVault"
 - \`id\`: a short string, unique within the plan (e.g. "swap1", "split1"). Downstream steps reference upstream outputs by this id.
 - An **origin**: EXACTLY ONE of (a) \`fromHandle\` to consume a previous step's output entirely, or (b) \`fromSymbol\` + \`fromAmount\` to draw from the sender's balance.
-- Kind-specific extras: swap → \`toSymbol\` (+ optional \`slippagePct\`); split → \`portionsBps\` (must sum to 10000); deposit → \`vaultId\`.
+- Kind-specific extras: swap → \`toSymbol\` (+ optional \`slippagePct\`); split → \`portionsBps\` (must sum to 10000); deposit → \`vaultId\`; redeemFromVault → \`vaultId\` (origin sources the receipt-token shares); cancelRedeemFromVault → \`vaultId\` + \`sequenceNumber\` (no origin needed).
 
 Step outputs:
 - swap → produces a coin handle named after its \`id\` (e.g. \`swap1\`).
 - split → produces handles \`<id>.0\`, \`<id>.1\`, … in portion order.
 - deposit → produces no handle; the receipt token is auto-transferred to the sender.
+- redeemFromVault → produces no handle. CRITICAL: funds DO NOT arrive in this transaction — Ember queues a withdrawal that processes after the vault's lockup (up to N days, in vault.withdrawalPeriodDays). Cannot atomically chain a swap of the redeemed funds in the same plan.
+- cancelRedeemFromVault → produces no handle. Returns the previously-redeemed shares to the user's balance.
 
 Rules:
 - Each step's \`id\` must be unique. Downstream \`fromHandle\` references must point at an existing handle id.
 - A deposit's source coin type MUST match the target vault's depositCoinType. If not, insert a swap step that produces the right token first.
+- A redeemFromVault's source coin type MUST equal the vault's receipt token (e.g. ercUSD, eACRED). Pull from \`fromSymbol\` = the receipt symbol from getVaultBalance.positions[].
 - bps in split MUST sum to exactly 10000.
 - Plans may not be empty. Keep them tight — only the steps you need.
 
@@ -86,6 +89,23 @@ User: "from my 1000 USDC, deposit 400 to the top USDC vault and 600 (swapped to 
 User: "swap half my usdc to sui"  (pure swap, no follow-on)
   → getBalance({ symbol: "USDC" })  // say 100
   → getSwapQuote({ fromSymbol: "USDC", toSymbol: "SUI", amount: 50 })
+
+User: "withdraw 50% of my rcUSD position"  (or "exit my USD Vault")
+  → getVaultBalance()  // find the rcUSD position; receipt symbol "ercUSD", current shares X
+  → executePlan({
+      steps: [
+        { kind: "redeemFromVault", id: "r1", fromSymbol: "ercUSD", fromAmount: X * 0.5, vaultId: usdVault.id },
+      ],
+    })
+  → tell the user "Submitted. Funds available in up to \${vault.withdrawalPeriodDays} days."
+
+User: "cancel my pending USD Vault withdrawal"
+  → getVaultBalance()  // find the matching withdrawal (vault + status="Pending")
+  → executePlan({
+      steps: [
+        { kind: "cancelRedeemFromVault", id: "c1", vaultId: usdVault.id, sequenceNumber: w.sequenceNumber },
+      ],
+    })
 
 User: "what's impermanent loss?"  (or any concept question)
   → explainConcept({ key: "impermanent-loss" })
