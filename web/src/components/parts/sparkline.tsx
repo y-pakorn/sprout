@@ -90,8 +90,8 @@ export function Sparkline({
   if (points.length === 0) {
     return (
       <div
-        className="bg-canvas-white"
-        style={{ width, height, borderRadius: 10 }}
+        className="w-full bg-canvas-white"
+        style={{ height, borderRadius: 10 }}
       />
     );
   }
@@ -116,18 +116,29 @@ export function Sparkline({
 
   function onMove(e: React.MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const xStep =
-      points.length > 1 ? (width - PAD * 2) / (points.length - 1) : 0;
-    const idx = Math.round(Math.max(0, x - PAD) / Math.max(1, xStep));
+    // Map pixel x → fractional position → nearest data index. Works
+    // regardless of how wide the SVG was scaled to fit the container.
+    const frac = Math.max(
+      0,
+      Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)),
+    );
+    const idx = Math.round(frac * (points.length - 1));
     setHoverIdx(Math.min(points.length - 1, Math.max(0, idx)));
   }
 
+  // Tooltip horizontal position as a percentage of the rendered width so
+  // it stays anchored to the focus point regardless of element size.
+  const hoverPct =
+    hoverIdx !== null && points.length > 1
+      ? (hoverIdx / (points.length - 1)) * 100
+      : null;
+
   return (
-    <div className="relative" style={{ width, height }}>
+    <div className="relative w-full" style={{ height }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        width={width}
+        preserveAspectRatio="none"
+        width="100%"
         height={height}
         className="block"
         onMouseMove={onMove}
@@ -219,13 +230,13 @@ export function Sparkline({
         )}
       </svg>
 
-      {hoverPoint && (
+      {hoverPoint && hoverPct !== null && (
         <div
           className={cn(
             "pointer-events-none absolute top-0 z-10 -translate-x-1/2 -translate-y-full bg-midnight-black px-2 py-1 text-[10px] font-medium text-canvas-white",
           )}
           style={{
-            left: hoverX ?? 0,
+            left: `${hoverPct}%`,
             borderRadius: 6,
             whiteSpace: "nowrap",
           }}

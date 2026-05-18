@@ -7,12 +7,11 @@ import {
   ShieldCheck,
   Check,
   ExternalLink,
-  Info,
-  ArrowDown,
+  ChevronRight,
   ArrowRight,
   Repeat,
   Split,
-  Vault as VaultIcon,
+  Merge,
 } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import {
@@ -107,24 +106,37 @@ export function LiveVaultCard({
       className="space-y-3 bg-cloud-gray p-4"
       style={{ borderRadius: 20 }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-caption font-medium uppercase tracking-wider text-cash-lime">
-          Plan · {cached.steps.length} step{cached.steps.length === 1 ? "" : "s"}
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-caption font-medium uppercase tracking-wider text-cash-lime">
+            Plan
+          </span>
+          <span className="text-caption text-subtle-gray">
+            {swapSteps.length > 0 && (
+              <>
+                {swapSteps.length} swap
+                {swapSteps.length === 1 ? "" : "s"}
+                {depositSteps.length > 0 ? " · " : ""}
+              </>
+            )}
+            {depositSteps.length > 0 && (
+              <>
+                {depositSteps.length} deposit
+                {depositSteps.length === 1 ? "" : "s"}
+              </>
+            )}
+          </span>
         </div>
-        <div className="text-caption text-subtle-gray">
-          {swapSteps.length > 0 && (
-            <span>
-              {swapSteps.length} swap{swapSteps.length === 1 ? "" : "s"}
-              {depositSteps.length > 0 ? " · " : ""}
+        {depositSteps.length > 0 && (
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+              Blended APY
             </span>
-          )}
-          {depositSteps.length > 0 && (
-            <span>
-              {depositSteps.length} deposit
-              {depositSteps.length === 1 ? "" : "s"}
+            <span className="text-body font-semibold tabular-nums text-midnight-black">
+              {fmtPct(cached.summary.blendedApyPct)}
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Step trail */}
@@ -134,10 +146,11 @@ export function LiveVaultCard({
         animate="animate"
         className="space-y-1.5"
       >
-        {cached.steps.map((s) => (
+        {cached.steps.map((s, i) => (
           <motion.li key={s.id} variants={fadeUp}>
             <StepRow
               step={s}
+              idx={i}
               iconLookup={iconLookup}
               onOpenVault={(id) => setOpenVaultId(id)}
             />
@@ -146,26 +159,14 @@ export function LiveVaultCard({
       </motion.ol>
 
       {/* Stats */}
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         <Stat
-          label="Blended APY"
-          value={
-            depositSteps.length > 0
-              ? fmtPct(cached.summary.blendedApyPct)
-              : "—"
-          }
+          label="Total deposit"
+          value={summarizeDeposits(depositSteps)}
           tone="lime"
         />
         <Stat
-          label="Deposits"
-          value={
-            depositSteps.length === 0
-              ? "—"
-              : `${depositSteps.length} vault${depositSteps.length === 1 ? "" : "s"}`
-          }
-        />
-        <Stat
-          label="Est. network fee"
+          label="Network fee"
           value={`~${cached.summary.estimatedGasSui.toFixed(4)} SUI`}
         />
       </div>
@@ -269,196 +270,296 @@ export function LiveVaultCard({
 
 function StepRow({
   step,
+  idx,
   iconLookup,
   onOpenVault,
 }: {
   step: CachedActionPlan["steps"][number];
+  idx: number;
   iconLookup: IconLookup;
   onOpenVault: (vaultId: string) => void;
 }) {
   if (step.kind === "swap") {
-    return <SwapStepRow s={step} iconLookup={iconLookup} />;
+    return <SwapStepRow s={step} idx={idx} iconLookup={iconLookup} />;
   }
   if (step.kind === "split") {
-    return <SplitStepRow s={step} iconLookup={iconLookup} />;
+    return <SplitStepRow s={step} idx={idx} iconLookup={iconLookup} />;
   }
   if (step.kind === "merge") {
-    return <MergeStepRow s={step} iconLookup={iconLookup} />;
+    return <MergeStepRow s={step} idx={idx} iconLookup={iconLookup} />;
   }
-  return <DepositStepRow s={step} iconLookup={iconLookup} onOpen={onOpenVault} />;
+  return (
+    <DepositStepRow
+      s={step}
+      idx={idx}
+      iconLookup={iconLookup}
+      onOpen={onOpenVault}
+    />
+  );
+}
+
+function StepIndex({ n, lit }: { n: number; lit?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex size-6 shrink-0 items-center justify-center text-caption font-semibold tabular-nums transition-colors",
+        lit
+          ? "bg-midnight-black/5 text-midnight-black group-hover:bg-cash-lime"
+          : "bg-midnight-black/5 text-midnight-black",
+      )}
+      style={{ borderRadius: 8 }}
+    >
+      {n}
+    </span>
+  );
+}
+
+function ActionTag({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1 text-caption font-medium uppercase tracking-wider text-hinting-gray">
+      {icon}
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function MergeStepRow({
   s,
+  idx,
   iconLookup,
 }: {
   s: import("@/lib/ai/action-plan-cache").ResolvedMergeStep;
+  idx: number;
   iconLookup: IconLookup;
 }) {
   return (
-    <StepShell icon={<Split className="size-3.5 rotate-180" strokeWidth={2.4} />} kind="Merge">
-      <span className="flex flex-wrap items-center gap-1 text-caption text-subtle-gray">
-        {s.sources.map((src, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-0.5 bg-cloud-gray px-1.5 py-0 tabular-nums text-midnight-black"
-            style={{ borderRadius: 9999 }}
-          >
-            {fmtAmount(src.human)}
-          </span>
-        ))}
-      </span>
-      <ArrowRight className="size-3 text-hinting-gray" strokeWidth={2.4} />
-      <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={22} />
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
-        {fmtAmount(s.totalHuman)}
-      </span>
-      <span className="text-caption text-subtle-gray">{s.symbol}</span>
-    </StepShell>
-  );
-}
-
-function StepShell({
-  icon,
-  kind,
-  children,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  kind: string;
-  children: React.ReactNode;
-  onClick?: () => void;
-}) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      type={onClick ? "button" : undefined}
-      onClick={onClick}
-      className={cn(
-        "flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2 text-left",
-        onClick && "transition-colors hover:bg-cash-lime/10",
-      )}
+    <div
+      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
       style={{ borderRadius: 14 }}
     >
-      <span
-        className="inline-flex size-7 shrink-0 items-center justify-center bg-cloud-gray text-midnight-black"
-        style={{ borderRadius: 8 }}
-      >
-        {icon}
-      </span>
-      <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
-        {kind}
-      </span>
-      <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
-    </Tag>
+      <StepIndex n={idx + 1} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <span className="flex flex-wrap items-center gap-1">
+          {s.sources.map((src, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center bg-cloud-gray px-1.5 py-0 text-caption tabular-nums text-midnight-black"
+              style={{ borderRadius: 9999 }}
+            >
+              {fmtAmount(src.human)}
+            </span>
+          ))}
+        </span>
+        <ArrowRight
+          className="size-3 shrink-0 text-hinting-gray"
+          strokeWidth={2.4}
+        />
+        <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
+        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          {fmtAmount(s.totalHuman)}
+        </span>
+        <span className="text-caption text-subtle-gray">{s.symbol}</span>
+      </div>
+      <ActionTag
+        icon={<Merge className="size-3" strokeWidth={2.4} />}
+        label="Merge"
+      />
+    </div>
   );
 }
 
 function SwapStepRow({
   s,
+  idx,
   iconLookup,
 }: {
   s: ResolvedSwapStep;
+  idx: number;
   iconLookup: IconLookup;
 }) {
+  const impact =
+    s.impactPct !== undefined && s.impactPct > 0
+      ? s.impactPct < 0.001
+        ? "<0.001%"
+        : `${s.impactPct.toFixed(3)}%`
+      : null;
   return (
-    <StepShell icon={<Repeat className="size-3.5" strokeWidth={2.4} />} kind="Swap">
-      <AssetIcon
-        src={iconLookup(s.fromCoinType)}
-        label={s.fromSymbol}
-        size={22}
-      />
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
-        {fmtAmount(s.fromAmountHuman)}
-      </span>
-      <span className="text-caption text-subtle-gray">{s.fromSymbol}</span>
-      <ArrowRight className="size-3 text-hinting-gray" strokeWidth={2.4} />
-      <AssetIcon
-        src={iconLookup(s.toCoinType)}
-        label={s.toSymbol}
-        size={22}
-      />
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
-        ≈ {fmtAmount(s.toAmountHuman)}
-      </span>
-      <span className="text-caption text-subtle-gray">{s.toSymbol}</span>
-      {s.impactPct !== undefined && s.impactPct > 0 && (
-        <span className="ml-auto text-caption text-subtle-gray tabular-nums">
-          {s.impactPct.toFixed(3)}% impact
+    <div
+      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      style={{ borderRadius: 14 }}
+    >
+      <StepIndex n={idx + 1} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <AssetIcon
+          src={iconLookup(s.fromCoinType)}
+          label={s.fromSymbol}
+          size={20}
+        />
+        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          {fmtAmount(s.fromAmountHuman)}
         </span>
-      )}
-    </StepShell>
+        <span className="text-caption text-subtle-gray">{s.fromSymbol}</span>
+        <ArrowRight
+          className="size-3 shrink-0 text-hinting-gray"
+          strokeWidth={2.4}
+        />
+        <AssetIcon
+          src={iconLookup(s.toCoinType)}
+          label={s.toSymbol}
+          size={20}
+        />
+        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          ≈ {fmtAmount(s.toAmountHuman)}
+        </span>
+        <span className="text-caption text-subtle-gray">{s.toSymbol}</span>
+      </div>
+      <ActionTag
+        icon={<Repeat className="size-3" strokeWidth={2.4} />}
+        label={impact ? `Swap · ${impact}` : "Swap"}
+      />
+    </div>
   );
 }
 
 function SplitStepRow({
   s,
+  idx,
   iconLookup,
 }: {
   s: ResolvedSplitStep;
+  idx: number;
   iconLookup: IconLookup;
 }) {
   return (
-    <StepShell icon={<Split className="size-3.5" strokeWidth={2.4} />} kind="Split">
-      <AssetIcon
-        src={iconLookup(s.sourceCoinType)}
-        label={s.sourceSymbol}
-        size={22}
+    <div
+      className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      style={{ borderRadius: 14 }}
+    >
+      <StepIndex n={idx + 1} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <AssetIcon
+          src={iconLookup(s.sourceCoinType)}
+          label={s.sourceSymbol}
+          size={20}
+        />
+        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          {fmtAmount(s.totalHuman)}
+        </span>
+        <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
+        <ArrowRight
+          className="size-3 shrink-0 text-hinting-gray"
+          strokeWidth={2.4}
+        />
+        <span className="flex flex-wrap items-center gap-1">
+          {s.portions.map((p, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center bg-cloud-gray px-2 py-0 text-caption font-semibold tabular-nums text-midnight-black"
+              style={{ borderRadius: 9999 }}
+            >
+              {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
+            </span>
+          ))}
+        </span>
+      </div>
+      <ActionTag
+        icon={<Split className="size-3" strokeWidth={2.4} />}
+        label="Split"
       />
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
-        {fmtAmount(s.totalHuman)}
-      </span>
-      <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
-      <ArrowDown className="size-3 rotate-[-90deg] text-hinting-gray" strokeWidth={2.4} />
-      <span className="flex flex-wrap items-center gap-1 text-caption text-subtle-gray">
-        {s.portions.map((p, i) => (
-          <span
-            key={i}
-            className="inline-flex items-center gap-0.5 bg-cloud-gray px-1.5 py-0 tabular-nums text-midnight-black"
-            style={{ borderRadius: 9999 }}
-          >
-            {(p.bps / 100).toFixed(0)}%
-          </span>
-        ))}
-      </span>
-    </StepShell>
+    </div>
   );
 }
 
 function DepositStepRow({
   s,
+  idx,
   iconLookup,
   onOpen,
 }: {
   s: ResolvedDepositStep;
+  idx: number;
   iconLookup: IconLookup;
   onOpen: (vaultId: string) => void;
 }) {
+  const lockup = s.vault.withdrawalPeriodDays
+    ? `${s.vault.withdrawalPeriodDays}d lockup`
+    : null;
   return (
-    <StepShell
-      icon={<VaultIcon className="size-3.5" strokeWidth={2.4} />}
-      kind="Deposit"
+    <button
+      type="button"
       onClick={() => onOpen(s.vault.id)}
+      className="group flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2.5 text-left transition-colors hover:bg-cash-lime/10"
+      style={{ borderRadius: 14 }}
     >
-      <AssetIcon
-        src={iconLookup(s.sourceCoinType)}
-        label={s.sourceSymbol}
-        size={22}
+      <StepIndex n={idx + 1} lit />
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <AssetIcon
+          src={iconLookup(s.sourceCoinType)}
+          label={s.sourceSymbol}
+          size={20}
+        />
+        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+          {fmtAmount(s.amountHuman)}
+        </span>
+        <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
+      </div>
+
+      <ArrowRight
+        className="size-3 shrink-0 text-hinting-gray"
+        strokeWidth={2.4}
       />
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
-        {fmtAmount(s.amountHuman)}
-      </span>
-      <span className="text-caption text-subtle-gray">{s.sourceSymbol}</span>
-      <ArrowRight className="size-3 text-hinting-gray" strokeWidth={2.4} />
-      <span className="truncate text-body-sm font-semibold text-midnight-black">
-        {s.vault.name}
-      </span>
-      <span className="ml-auto text-caption font-semibold tabular-nums text-midnight-black">
-        {fmtPct(s.vault.apyPct)}
-      </span>
-      <Info className="size-3 shrink-0 text-hinting-gray" strokeWidth={2.2} />
-    </StepShell>
+
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-body-sm font-semibold leading-tight text-midnight-black">
+          {s.vault.name}
+        </div>
+        <div className="truncate text-caption leading-tight text-subtle-gray">
+          {s.vault.category}
+          {lockup ? ` · ${lockup}` : ""}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="text-right leading-tight">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-subtle-gray">
+            APY
+          </div>
+          <div className="text-body-sm font-semibold tabular-nums text-midnight-black">
+            {fmtPct(s.vault.apyPct)}
+          </div>
+        </div>
+        <ChevronRight
+          className="size-4 text-hinting-gray transition-transform group-hover:translate-x-0.5 group-hover:text-midnight-black"
+          strokeWidth={2.4}
+        />
+      </div>
+    </button>
   );
+}
+
+function summarizeDeposits(deposits: ResolvedDepositStep[]): string {
+  if (deposits.length === 0) return "—";
+  const byToken = new Map<string, number>();
+  for (const d of deposits) {
+    byToken.set(
+      d.sourceSymbol,
+      (byToken.get(d.sourceSymbol) ?? 0) + d.amountHuman,
+    );
+  }
+  if (byToken.size === 1) {
+    const [[sym, total]] = Array.from(byToken.entries());
+    return `${fmtAmount(total)} ${sym}`;
+  }
+  return Array.from(byToken.entries())
+    .map(([sym, total]) => `${fmtAmount(total)} ${sym}`)
+    .join(" + ");
 }
 
 function Stat({
@@ -521,10 +622,20 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
       const c = d.vault.category.toLowerCase();
       return c.includes("liquidity") || c.includes("concentrated") || c.includes("amm");
     });
+    const categoryCounts = new Map<string, number>();
+    for (const d of deposits) {
+      categoryCounts.set(
+        d.vault.category,
+        (categoryCounts.get(d.vault.category) ?? 0) + 1,
+      );
+    }
+    const categorySummary = Array.from(categoryCounts.entries())
+      .map(([c, n]) => (n > 1 ? `${c} ×${n}` : c))
+      .join(" · ");
     out.push({
       id: "strategy",
       title: "Strategy risk",
-      summary: deposits.map((d) => d.vault.category).join(" · "),
+      summary: categorySummary,
       verdict: isLP ? "flag" : "pass",
       detail: isLP
         ? getGlossary("concentrated-liquidity") +

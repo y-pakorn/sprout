@@ -344,7 +344,7 @@ export function VaultInfoDialog({
               <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border pt-3">
                 <div className="flex flex-wrap gap-1.5 text-caption">
                   <a
-                    href="https://docs.ember.fi/protocol-overview/risks"
+                    href="https://ember.so/security"
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 bg-cloud-gray px-2.5 py-1 font-medium text-midnight-black"
@@ -354,7 +354,7 @@ export function VaultInfoDialog({
                     <ExternalLink className="size-3" strokeWidth={2.2} />
                   </a>
                   <a
-                    href="https://docs.ember.fi"
+                    href="https://learn.ember.so/"
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 bg-cloud-gray px-2.5 py-1 font-medium text-midnight-black"
