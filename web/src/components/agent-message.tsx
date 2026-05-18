@@ -98,7 +98,7 @@ export function AgentMessage({
         className="flex justify-end"
       >
         <div
-          className="max-w-[80%] bg-cloud-gray px-3.5 py-2 text-body-sm text-midnight-black"
+          className="liquid-glass max-w-[80%] px-3.5 py-2 text-body-sm text-canvas-white"
           style={{ borderRadius: 16 }}
         >
           {message.parts
@@ -138,7 +138,7 @@ export function AgentMessage({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="prose-sprout text-body text-midnight-black"
+              className="prose-sprout text-body text-canvas-white"
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -152,13 +152,13 @@ export function AgentMessage({
                       href={href}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-midnight-black underline underline-offset-2 decoration-cash-lime decoration-2"
+                      className="font-medium text-canvas-white underline underline-offset-2 decoration-cash-lime decoration-2"
                     >
                       {children}
                     </a>
                   ),
                   code: ({ children }) => (
-                    <code className="rounded-md bg-cloud-gray px-1.5 py-0.5 font-mono text-[0.85em]">
+                    <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-canvas-white">
                       {children}
                     </code>
                   ),
@@ -736,14 +736,14 @@ function VaultListCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="bg-cloud-gray p-2"
+      className="liquid-glass p-2"
       style={{ borderRadius: 18, maxWidth: 520 }}
     >
       <div className="flex items-center justify-between px-2 pt-1 pb-2">
-        <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+        <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
           {filteredSymbol ? `${filteredSymbol} vaults` : "Top vaults by APY"}
         </span>
-        <span className="text-caption text-subtle-gray">
+        <span className="text-caption text-canvas-white/55">
           {vaults.length} option{vaults.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -753,7 +753,7 @@ function VaultListCard({
             <button
               type="button"
               onClick={() => setOpenVaultId(v.id)}
-              className="flex w-full items-center gap-2.5 bg-canvas-white px-3 py-2 text-left transition-colors hover:bg-cash-lime/10"
+              className="liquid-glass flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-cash-lime/10"
               style={{ borderRadius: 14 }}
             >
               <AssetIcon
@@ -763,17 +763,17 @@ function VaultListCard({
               />
               <div className="flex min-w-0 flex-1 flex-col leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-body-sm font-semibold text-midnight-black">
+                  <span className="truncate text-body-sm font-semibold text-canvas-white">
                     {v.name}
                   </span>
                   <span
-                    className="inline-flex shrink-0 items-center bg-cloud-gray px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-midnight-black"
+                    className="inline-flex shrink-0 items-center bg-white/10 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-canvas-white/80"
                     style={{ borderRadius: 9999 }}
                   >
                     {v.depositSymbol}
                   </span>
                 </div>
-                <span className="truncate text-caption text-subtle-gray">
+                <span className="truncate text-caption text-canvas-white/55">
                   {v.category}
                   {v.withdrawalPeriodDays
                     ? ` · ${v.withdrawalPeriodDays}d lockup`
@@ -781,10 +781,10 @@ function VaultListCard({
                 </span>
               </div>
               <div className="flex flex-col items-end leading-tight">
-                <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+                <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
                   {v.apyPct.toFixed(2)}%
                 </span>
-                <span className="text-caption text-subtle-gray tabular-nums">
+                <span className="text-caption text-canvas-white/55 tabular-nums">
                   {v.tvlUsd >= 1_000_000
                     ? `$${(v.tvlUsd / 1_000_000).toFixed(1)}M`
                     : v.tvlUsd >= 1_000

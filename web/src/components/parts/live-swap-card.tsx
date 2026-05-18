@@ -272,14 +272,14 @@ export function LiveSwapCard({
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-3 bg-cloud-gray p-4"
+      className="space-y-3 liquid-glass p-4"
       style={{ borderRadius: 20 }}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="text-caption font-medium uppercase tracking-wider text-cash-lime">
           Swap quote · live from Bluefin7K
         </div>
-        <div className="flex items-center gap-1.5 text-caption text-subtle-gray">
+        <div className="flex items-center gap-1.5 text-caption text-canvas-white/55">
           <motion.span
             animate={{ rotate: refreshing ? 360 : 0 }}
             transition={
@@ -364,10 +364,10 @@ export function LiveSwapCard({
           >
             <ShieldCheck className="size-2.5" strokeWidth={2.6} />
           </span>
-          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
             Guardian
           </span>
-          <span className="text-caption font-semibold text-midnight-black">
+          <span className="text-caption font-semibold text-canvas-white">
             ·{" "}
             {flagged === 0
               ? "All clear"
@@ -387,7 +387,7 @@ export function LiveSwapCard({
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5 leading-tight">
                   <span className="text-body-sm font-medium">{r.label}</span>
-                  <span className="truncate text-caption text-subtle-gray">
+                  <span className="truncate text-caption text-canvas-white/55">
                     {r.summary}
                   </span>
                 </div>
@@ -409,7 +409,7 @@ export function LiveSwapCard({
       {!executed && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border/60 pt-3">
           <div className="flex items-center gap-2">
-            <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+            <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
               Slippage
             </span>
             <div className="flex flex-wrap gap-1">
@@ -429,8 +429,8 @@ export function LiveSwapCard({
                     }}
                     disabled={signing || confirming}
                     className={cn(
-                      "px-2.5 py-1 text-caption font-semibold text-midnight-black disabled:opacity-50",
-                      active ? "bg-cash-lime" : "bg-canvas-white",
+                      "px-2.5 py-1 text-caption font-semibold text-canvas-white disabled:opacity-50",
+                      active ? "bg-cash-lime" : "liquid-glass",
                     )}
                     style={{ borderRadius: 9999 }}
                   >
@@ -446,7 +446,7 @@ export function LiveSwapCard({
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               disabled={signing || confirming}
-              className="bg-canvas-white px-3.5 py-1.5 text-body-sm font-medium text-midnight-black disabled:opacity-50"
+              className="liquid-glass px-3.5 py-1.5 text-body-sm font-medium text-canvas-white disabled:opacity-50"
               style={{ borderRadius: 9999 }}
             >
               Cancel
@@ -523,14 +523,14 @@ function Receipt({
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
       className={cn(
         "space-y-2 px-3 py-2.5",
-        confirming && "bg-cloud-gray",
+        confirming && "liquid-glass",
         success && "bg-cash-lime/15",
         failure && "bg-destructive/15",
       )}
       style={{ borderRadius: 14 }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-body-sm font-semibold text-midnight-black">
+        <div className="flex items-center gap-2 text-body-sm font-semibold text-canvas-white">
           {confirming ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
@@ -563,7 +563,7 @@ function Receipt({
             href={`https://suiscan.xyz/mainnet/tx/${txDigest}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 bg-canvas-white px-2.5 py-1 font-mono text-caption text-midnight-black"
+            className="inline-flex items-center gap-1 liquid-glass px-2.5 py-1 font-mono text-caption text-canvas-white"
             style={{ borderRadius: 9999 }}
           >
             {txDigest.slice(0, 6)}…{txDigest.slice(-4)}
@@ -573,11 +573,11 @@ function Receipt({
       </div>
 
       {success && (receivedAmount !== undefined || gasUsedSui !== undefined) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-subtle-gray">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-canvas-white/55">
           {receivedAmount !== undefined && (
             <span>
               Received{" "}
-              <span className="font-semibold tabular-nums text-midnight-black">
+              <span className="font-semibold tabular-nums text-canvas-white">
                 +{receivedAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
               </span>{" "}
               {toSymbol}
@@ -586,7 +586,7 @@ function Receipt({
           {gasUsedSui !== undefined && (
             <span>
               Gas{" "}
-              <span className="font-semibold tabular-nums text-midnight-black">
+              <span className="font-semibold tabular-nums text-canvas-white">
                 {gasUsedSui.toFixed(4)}
               </span>{" "}
               SUI
@@ -629,19 +629,19 @@ function TokenCard({
   return (
     <motion.div
       variants={fadeUp}
-      className="flex flex-1 items-center gap-2.5 bg-canvas-white px-3 py-2.5"
+      className="flex flex-1 items-center gap-2.5 liquid-glass px-3 py-2.5"
       style={{ borderRadius: 14 }}
     >
       <AssetIcon src={iconUrl} label={symbol} size={32} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
             {label}
           </span>
           <button
             type="button"
             onClick={copy}
-            className="inline-flex items-center gap-0.5 font-mono text-[10px] text-hinting-gray transition-colors hover:text-midnight-black"
+            className="inline-flex items-center gap-0.5 font-mono text-[10px] text-canvas-white/40 transition-colors hover:text-canvas-white"
             title="Copy coin type"
           >
             {truncateCoinType(coinType)}
@@ -657,7 +657,7 @@ function TokenCard({
             {approximate ? "≈" : ""}
             {amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
           </span>
-          <span className="text-body-sm font-medium text-subtle-gray">
+          <span className="text-body-sm font-medium text-canvas-white/55">
             {symbol}
           </span>
         </div>
@@ -678,13 +678,13 @@ function Stat({
   return (
     <div
       className={cn(
-        "bg-canvas-white px-3 py-2",
+        "liquid-glass px-3 py-2",
         tone === "warn" && "ring-2 ring-warning/40",
         tone === "block" && "ring-2 ring-destructive/40",
       )}
       style={{ borderRadius: 14 }}
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+      <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
         {label}
       </div>
       <div
@@ -749,25 +749,25 @@ function RouteBreakdown({
 
   return (
     <div
-      className="space-y-3 bg-canvas-white p-4"
+      className="space-y-3 liquid-glass p-4"
       style={{ borderRadius: 18 }}
     >
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
           <AssetIcon src={cached.fromIcon} label={cached.fromSymbol} size={20} />
           <span className="text-body-sm font-medium">{cached.fromSymbol}</span>
-          <ArrowRight className="size-3 text-subtle-gray" strokeWidth={2.4} />
+          <ArrowRight className="size-3 text-canvas-white/55" strokeWidth={2.4} />
           <AssetIcon src={cached.toIcon} label={cached.toSymbol} size={20} />
           <span className="text-body-sm font-medium">{cached.toSymbol}</span>
         </div>
-        <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+        <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
           {sorted.length} split{sorted.length === 1 ? "" : "s"}
         </div>
       </div>
 
       <div className="space-y-1.5">
         {sorted.length === 0 ? (
-          <div className="text-body-sm text-subtle-gray">
+          <div className="text-body-sm text-canvas-white/55">
             Single direct route
           </div>
         ) : (
@@ -781,7 +781,7 @@ function RouteBreakdown({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1 bg-cloud-gray px-3 py-1 text-caption font-medium text-midnight-black transition-opacity hover:opacity-70"
+          className="inline-flex items-center gap-1 liquid-glass px-3 py-1 text-caption font-medium text-canvas-white transition-opacity hover:opacity-70"
           style={{ borderRadius: 9999 }}
         >
           <ChevronDown className="size-3" strokeWidth={2.4} />
@@ -815,7 +815,7 @@ function SplitRow({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span
-        className="inline-flex shrink-0 items-center bg-cash-lime/20 px-2 py-0.5 font-mono text-caption font-semibold tabular-nums text-midnight-black"
+        className="inline-flex shrink-0 items-center bg-cash-lime/20 px-2 py-0.5 font-mono text-caption font-semibold tabular-nums text-canvas-white"
         style={{ borderRadius: 9999, minWidth: 40, justifyContent: "center" }}
       >
         {pct}%
@@ -830,12 +830,12 @@ function SplitRow({
           <Fragment key={i}>
             {i > 0 && (
               <ArrowRight
-                className="size-3 shrink-0 text-subtle-gray"
+                className="size-3 shrink-0 text-canvas-white/55"
                 strokeWidth={2.4}
               />
             )}
             <span
-              className="inline-flex shrink-0 items-center gap-1.5 bg-cloud-gray py-0.5 pl-1 pr-2.5 text-body-sm font-medium text-midnight-black"
+              className="inline-flex shrink-0 items-center gap-1.5 liquid-glass py-0.5 pl-1 pr-2.5 text-body-sm font-medium text-canvas-white"
               style={{ borderRadius: 9999 }}
               title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
             >

@@ -91,7 +91,7 @@ export function WalletCard({ balances, iconLookup }: Props) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="bg-cloud-gray px-5 py-4 text-body-sm text-subtle-gray"
+        className="liquid-glass px-5 py-4 text-body-sm text-canvas-white/55"
         style={{ borderRadius: 24 }}
       >
         Wallet is empty — no token balances found.
@@ -114,19 +114,19 @@ export function WalletCard({ balances, iconLookup }: Props) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.35, bounce: 0.18 }}
-      className="bg-cloud-gray p-2"
+      className="liquid-glass p-2"
       style={{ borderRadius: 24, maxWidth: 460 }}
     >
       <div className="flex items-end justify-between gap-3 px-3 pt-3 pb-3">
         <div className="flex flex-col leading-tight">
-          <span className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
             Your wallet · {tokens.length} token
             {tokens.length === 1 ? "" : "s"}
             {positions.length > 0 &&
               ` · ${positions.length} vault position${positions.length === 1 ? "" : "s"}`}
           </span>
           {hasAnyValue && (
-            <span className="text-display-sm font-semibold tabular-nums text-midnight-black">
+            <span className="text-display-sm font-semibold tabular-nums text-canvas-white">
               {fmtUsd(totalUsd)}
             </span>
           )}
@@ -170,7 +170,7 @@ export function WalletCard({ balances, iconLookup }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-subtle-gray">
+    <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-canvas-white/55">
       {children}
     </div>
   );
@@ -194,7 +194,7 @@ function VaultPositionRow({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.2 }}
       className={cn(
-        "flex items-center gap-3 bg-canvas-white px-3 py-2.5",
+        "flex items-center gap-3 liquid-glass px-3 py-2.5",
       )}
       style={{
         borderRadius: 18,
@@ -215,18 +215,18 @@ function VaultPositionRow({
         </span>
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body-sm font-semibold leading-tight text-midnight-black">
+        <span className="truncate text-body-sm font-semibold leading-tight text-canvas-white">
           {v.vaultName}
         </span>
-        <span className="truncate text-caption leading-tight text-subtle-gray">
+        <span className="truncate text-caption leading-tight text-canvas-white/55">
           Vault position · {v.depositSymbol} · {fmtPct(v.apyPct)} APY
         </span>
       </div>
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {hasValue ? fmtUsd(b.valueUsd!) : formatAmount(b.balance)}
         </span>
-        <span className="text-caption tabular-nums text-subtle-gray">
+        <span className="text-caption tabular-nums text-canvas-white/55">
           {formatAmount(b.balance)} shares
         </span>
       </div>
@@ -254,15 +254,15 @@ function TokenRow({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.2 }}
-      className="flex items-center gap-3 bg-canvas-white px-3 py-2.5"
+      className="flex items-center gap-3 liquid-glass px-3 py-2.5"
       style={{ borderRadius: 18 }}
     >
       <AssetIcon src={iconLookup(b.coinType)} label={b.symbol} size={32} />
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="truncate text-body-sm font-semibold text-midnight-black">
+        <span className="truncate text-body-sm font-semibold text-canvas-white">
           {b.symbol}
         </span>
-        <span className="truncate text-caption text-subtle-gray">
+        <span className="truncate text-caption text-canvas-white/55">
           {hasPrice && fmtPriceUsd(b.priceUsd!)}
           {hasPrice && !b.known ? " · " : ""}
           {!b.known && (
@@ -272,10 +272,10 @@ function TokenRow({
         </span>
       </div>
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
           {hasValue ? fmtUsd(b.valueUsd!) : formatAmount(b.balance)}
         </span>
-        <span className="text-caption tabular-nums text-subtle-gray">
+        <span className="text-caption tabular-nums text-canvas-white/55">
           {formatAmount(b.balance)} {b.symbol}
         </span>
       </div>

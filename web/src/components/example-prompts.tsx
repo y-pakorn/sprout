@@ -30,10 +30,9 @@ export function ExamplePrompts({ onPick, tone = "default" }: Props) {
           onClick={() => onPick(p.text)}
           className={cn(
             "px-4 py-2 text-body-sm font-medium transition-colors",
-            tone === "default" &&
-              "bg-cloud-gray text-midnight-black",
+            tone === "default" && "bg-cloud-gray text-midnight-black",
             tone === "glass" &&
-              "liquid-glass text-canvas-white/90 hover:text-canvas-white",
+              "liquid-glass text-canvas-white/90 hover:text-canvas-white"
           )}
           style={{ borderRadius: 9999 }}
         >

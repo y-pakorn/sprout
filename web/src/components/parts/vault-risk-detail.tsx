@@ -36,7 +36,7 @@ function VerdictBadge({ v }: { v: RiskVerdict }) {
     <span
       className={cn(
         "inline-flex shrink-0 items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-        v === "pass" && "bg-cash-lime text-midnight-black",
+        v === "pass" && "bg-cash-lime text-canvas-white",
         v === "flag" && "bg-warning text-midnight-black",
         v === "block" && "bg-destructive text-canvas-white",
       )}
@@ -51,7 +51,7 @@ function VerdictIcon({ v }: { v: RiskVerdict }) {
   if (v === "pass") {
     return (
       <ShieldCheck
-        className="size-3.5 text-midnight-black"
+        className="size-3.5 text-canvas-white"
         strokeWidth={2.4}
       />
     );
@@ -99,10 +99,10 @@ export function VaultRiskDetail({
       >
         <VerdictIcon v={verdict} />
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-tight">
-          <span className="text-body-sm font-medium text-midnight-black">
+          <span className="text-body-sm font-medium text-canvas-white">
             {title}
           </span>
-          <span className="truncate text-caption text-subtle-gray">
+          <span className="truncate text-caption text-canvas-white/55">
             {summary}
           </span>
         </div>
@@ -110,7 +110,7 @@ export function VaultRiskDetail({
         {expandable && (
           <ChevronDown
             className={cn(
-              "size-3.5 shrink-0 text-subtle-gray transition-transform duration-200",
+              "size-3.5 shrink-0 text-canvas-white/55 transition-transform duration-200",
               open && "rotate-180",
             )}
             strokeWidth={2.4}
@@ -127,7 +127,7 @@ export function VaultRiskDetail({
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div className="pb-2.5 pl-6 pr-2 text-body-sm text-subtle-gray">
+            <div className="pb-2.5 pl-6 pr-2 text-body-sm text-canvas-white/55">
               {detail && (
                 <div className="prose-sprout space-y-2">
                   <ReactMarkdown
@@ -141,7 +141,7 @@ export function VaultRiskDetail({
                         <li className="my-0.5">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-semibold text-midnight-black">
+                        <strong className="font-semibold text-canvas-white">
                           {children}
                         </strong>
                       ),
@@ -161,7 +161,7 @@ export function VaultRiskDetail({
                     e.stopPropagation();
                     onAskAgent();
                   }}
-                  className="mt-2.5 inline-flex items-center gap-1 bg-canvas-white px-2.5 py-1 text-caption font-medium text-midnight-black transition-colors hover:bg-cash-lime"
+                  className="mt-2.5 inline-flex items-center gap-1 liquid-glass px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-cash-lime"
                   style={{ borderRadius: 9999 }}
                 >
                   Ask Sprout to explain →

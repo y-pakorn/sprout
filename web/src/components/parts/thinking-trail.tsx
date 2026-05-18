@@ -48,7 +48,7 @@ export function ThinkingTrail({ text, streaming }: Props) {
       <button
         type="button"
         onClick={toggle}
-        className="inline-flex items-center gap-2 bg-cloud-gray pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-subtle-gray transition-opacity hover:opacity-70"
+        className="inline-flex items-center gap-2 liquid-glass pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55 transition-opacity hover:opacity-70"
         style={{ borderRadius: 9999 }}
       >
         {streaming ? (
@@ -83,7 +83,7 @@ export function ThinkingTrail({ text, streaming }: Props) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <pre className="whitespace-pre-wrap break-words border-l-2 border-cash-lime/40 bg-cloud-gray/50 px-4 py-3 font-mono text-body-sm leading-relaxed text-subtle-gray">
+            <pre className="whitespace-pre-wrap break-words border-l-2 border-cash-lime/40 liquid-glass/50 px-4 py-3 font-mono text-body-sm leading-relaxed text-canvas-white/55">
               {text || (streaming ? "…" : "")}
             </pre>
           </motion.div>

@@ -89,7 +89,7 @@ export function ErrorBanner({
         title={`Not enough ${symbol}`}
         body={`This plan needs more ${symbol} than your wallet has on hand.`}
       >
-        <dl className="grid grid-cols-3 gap-2 text-caption text-subtle-gray">
+        <dl className="grid grid-cols-3 gap-2 text-caption text-canvas-white/55">
           <Row label="Required" value={`${fmtAmount(required)} ${symbol}`} />
           <Row label="You have" value={`${fmtAmount(available)} ${symbol}`} />
           <Row
@@ -170,11 +170,11 @@ function BannerShell({
           {icon}
         </span>
         <div className="flex-1 space-y-0.5 pt-0.5">
-          <div className="text-body-sm font-semibold leading-tight text-midnight-black">
+          <div className="text-body-sm font-semibold leading-tight text-canvas-white">
             {title}
           </div>
           {body && (
-            <div className="text-body-sm text-subtle-gray">{body}</div>
+            <div className="text-body-sm text-canvas-white/55">{body}</div>
           )}
         </div>
       </div>
@@ -194,16 +194,16 @@ function Row({
 }) {
   return (
     <div
-      className="space-y-0 bg-canvas-white px-3 py-2"
+      className="space-y-0 liquid-glass px-3 py-2"
       style={{ borderRadius: 12 }}
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+      <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
         {label}
       </div>
       <div
         className={cn(
           "text-body-sm font-semibold tabular-nums",
-          emphasized ? "text-midnight-black" : "text-midnight-black",
+          emphasized ? "text-canvas-white" : "text-canvas-white",
         )}
       >
         {value}
@@ -236,7 +236,7 @@ function ActionButton({
         "hover:scale-[1.03] active:scale-[0.97]",
         primary
           ? "bg-cash-lime text-midnight-black"
-          : "bg-canvas-white text-midnight-black",
+          : "liquid-glass text-canvas-white",
       )}
       style={{ borderRadius: 9999 }}
     >

@@ -36,12 +36,10 @@
   /* ─── Typography (DESIGN.md) ───────────────────────────── */
   /* --font-brand from next/font/local (Cash Sans .woff2 files in src/app) */
   /* --font-mono-brand from next/font/google (Sometype Mono)               */
-  --font-sans:
-    var(--font-brand), "CashSans", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono:
-    var(--font-mono-brand), "Sometype Mono", ui-monospace, "SF Mono", Menlo,
-    "Cascadia Code", monospace;
+  --font-sans: var(--font-brand), "CashSans", ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-brand), "Sometype Mono", ui-monospace, "SF Mono",
+    Menlo, "Cascadia Code", monospace;
 
   --text-caption: 12px;
   --leading-caption: 1.5;
@@ -56,7 +54,7 @@
   --text-subhead: 48px;
   --leading-subhead: 1.1;
   --text-hero: clamp(56px, 9vw, 96px);
-  --leading-hero: 1.0;
+  --leading-hero: 1;
   --text-display: clamp(64px, 12vw, 120px);
   --leading-display: 0.95;
 
@@ -75,7 +73,7 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html {
@@ -84,7 +82,11 @@ html {
 }
 
 body {
-  background: var(--color-canvas-white);
+  /* Black bg avoids a white flash before the cinematic shell mounts.
+   * Text color stays dark so workspace surfaces (dialogs, dropdowns,
+   * markdown tables) remain readable — cinematic content explicitly
+   * uses text-canvas-white classes. */
+  background: var(--color-midnight-black);
   color: var(--color-midnight-black);
   font-family: var(--font-sans);
   font-size: var(--text-body);
@@ -134,37 +136,45 @@ select {
 }
 
 /* Liquid-glass surface — frosted glass with a soft gradient hairline.
- * Used by the cinematic idle hero (header pill, content shells). */
+ * Used by all cinematic surfaces (header pill, content shells, cards). */
 .liquid-glass {
   background: rgba(255, 255, 255, 0.06);
   background-blend-mode: luminosity;
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: none;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
   position: relative;
   overflow: hidden;
+}
+/* Nested liquid-glass flattens — no second border, no second blur.
+ * Keeps card-in-card from stacking wireframe outlines. */
+.liquid-glass .liquid-glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+.liquid-glass .liquid-glass::before {
+  display: none;
 }
 .liquid-glass::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.4px;
+  padding: 1px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.45) 0%,
-    rgba(255, 255, 255, 0.15) 20%,
-    rgba(255, 255, 255, 0) 40%,
-    rgba(255, 255, 255, 0) 60%,
-    rgba(255, 255, 255, 0.15) 80%,
-    rgba(255, 255, 255, 0.45) 100%
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.05) 30%,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(255, 255, 255, 0) 70%,
+    rgba(255, 255, 255, 0.05) 90%,
+    rgba(255, 255, 255, 0.18) 100%
   );
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
 }
-

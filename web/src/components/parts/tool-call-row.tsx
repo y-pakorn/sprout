@@ -21,15 +21,15 @@ export function ToolCallRow({ label, status }: Props) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="inline-flex items-center gap-2 bg-cloud-gray px-4 py-2 text-body-sm font-medium text-midnight-black"
+      className="inline-flex items-center gap-2 liquid-glass px-4 py-2 text-body-sm font-medium text-canvas-white"
       style={{ borderRadius: 9999 }}
     >
       <span
         className={cn(
           "inline-flex size-5 items-center justify-center",
-          isDone && "bg-cash-lime text-midnight-black",
+          isDone && "bg-cash-lime text-canvas-white",
           isError && "bg-destructive text-canvas-white",
-          !isDone && !isError && "bg-canvas-white text-subtle-gray",
+          !isDone && !isError && "liquid-glass text-canvas-white/55",
         )}
         style={{ borderRadius: 9999 }}
       >
@@ -43,7 +43,7 @@ export function ToolCallRow({ label, status }: Props) {
       </span>
       <span>{label}</span>
       {isWorking && (
-        <span className="text-subtle-gray">…</span>
+        <span className="text-canvas-white/55">…</span>
       )}
     </motion.div>
   );

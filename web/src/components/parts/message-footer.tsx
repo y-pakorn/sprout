@@ -70,7 +70,7 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.2, delay: 0.1 }}
-      className="mt-1 flex items-center gap-2 text-caption tabular-nums text-hinting-gray"
+      className="mt-1 flex items-center gap-2 text-caption tabular-nums text-canvas-white/40"
     >
       {duration && <span>{duration}</span>}
       {duration && cost && <span aria-hidden>·</span>}
@@ -85,7 +85,7 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
             onClick={onRegenerate}
             title="Regenerate response"
             aria-label="Regenerate response"
-            className="inline-flex size-5 items-center justify-center text-hinting-gray transition-colors hover:text-midnight-black"
+            className="inline-flex size-5 items-center justify-center text-canvas-white/40 transition-colors hover:text-canvas-white"
             style={{ borderRadius: 9999 }}
           >
             <RotateCcw className="size-3.5" strokeWidth={2.2} />

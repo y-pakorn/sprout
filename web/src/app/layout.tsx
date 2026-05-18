@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Sometype_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { CinematicChrome } from "@/components/cinematic-chrome";
 import "./globals.css";
 
 const cashSans = localFont({
@@ -39,7 +40,9 @@ export default function RootLayout({
       className={`${cashSans.variable} ${sometypeMono.variable} h-full`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          <CinematicChrome>{children}</CinematicChrome>
+        </Providers>
       </body>
     </html>
   );
