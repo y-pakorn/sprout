@@ -17,6 +17,8 @@ import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
 import { AgentMessage } from "@/components/agent-message";
 import { ErrorBanner } from "@/components/parts/error-banner";
+import { HeroVideoBg } from "@/components/parts/hero-video-bg";
+import { SiteHeader } from "@/components/site-header";
 import {
   useCoinMap,
   resolveSymbol,
@@ -1722,10 +1724,8 @@ export function Conversation() {
   })();
 
   return (
-    <div
-      className="flex w-full flex-col"
-      style={{ height: "calc(100vh - 56px)" }}
-    >
+    <div className="flex w-full flex-col" style={{ height: "100vh" }}>
+      <SiteHeader variant="solid" />
       <StickToBottom
         className="flex-1 overflow-y-auto"
         resize="smooth"
@@ -1858,22 +1858,31 @@ function IdleHero({
   ready: boolean;
 }) {
   return (
-    <section className="bg-canvas-white">
+    <section className="relative min-h-screen w-full overflow-hidden">
+      {/* Cinematic background video + vignette. Fixed, full-bleed, z-0. */}
+      <HeroVideoBg />
+
+      {/* Glass header overlays the page-level solid header on idle. */}
+      <SiteHeader variant="glass" />
+
+      {/* Foreground content. Vertically centered stack: headline + input
+       *  + example chips, all in one column. */}
       <div
-        className="mx-auto flex w-full max-w-4xl flex-col justify-center gap-8 px-6 py-12"
-        style={{ minHeight: "calc(100vh - 56px - 80px)" }}
+        className="relative z-20 mx-auto flex w-full max-w-3xl flex-col items-center justify-center px-6"
+        style={{ minHeight: "100vh" }}
       >
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", visualDuration: 0.6, bounce: 0.15 }}
-          className="display-tight font-semibold leading-[1.0] text-midnight-black"
-          style={{ fontSize: "clamp(40px, 6vw, 72px)" }}
+          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.15 }}
+          className="display-tight max-w-[1100px] text-center font-medium leading-[1.05] tracking-tight text-canvas-white"
+          style={{
+            fontSize: "clamp(40px, 5.4vw, 72px)",
+            textShadow: "0 2px 24px rgba(0,0,0,0.25)",
+          }}
         >
-          What do you want{" "}
-          <span className="whitespace-nowrap">
-            <span className="text-shimmer-lime">your money</span> to do?
-          </span>
+          <span className="block">Yield without friction.</span>
+          <span className="block">Grow on your terms.</span>
         </motion.h1>
 
         <motion.div
@@ -1881,11 +1890,11 @@ function IdleHero({
           animate={{ opacity: 1, y: 0 }}
           transition={{
             type: "spring",
-            visualDuration: 0.6,
+            visualDuration: 0.7,
             bounce: 0.15,
-            delay: 0.2,
+            delay: 0.3,
           }}
-          className="w-full max-w-2xl space-y-4"
+          className="mt-10 w-full max-w-2xl space-y-4"
         >
           <ChatInput
             value={draft}
@@ -1895,7 +1904,7 @@ function IdleHero({
             disabled={!ready}
             placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
           />
-          <ExamplePrompts onPick={onSubmit} />
+          <ExamplePrompts onPick={onSubmit} tone="glass" />
         </motion.div>
       </div>
     </section>

@@ -42,7 +42,9 @@ function avatarTone(addr: string): string {
   return `hsl(${135 + shift} 100% 42%)`;
 }
 
-export function WalletButton() {
+export function WalletButton({
+  tone = "default",
+}: { tone?: "default" | "glass" } = {}) {
   const account = useCurrentAccount();
   const { data: suins } = useResolveSuiNSName(account?.address ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -62,6 +64,7 @@ export function WalletButton() {
   }, [menuOpen]);
 
   if (!account) {
+    const glass = tone === "glass";
     return (
       <>
         <motion.button
@@ -69,11 +72,18 @@ export function WalletButton() {
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
           transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-          className="inline-flex items-center gap-2 bg-cash-lime px-5 py-2.5 text-body-sm font-semibold text-midnight-black"
+          className={
+            glass
+              ? "liquid-glass inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-canvas-white hover:text-canvas-white"
+              : "inline-flex items-center gap-2 bg-cash-lime px-5 py-2.5 text-body-sm font-semibold text-midnight-black"
+          }
           style={{ borderRadius: 9999 }}
         >
-          <WalletIcon className="size-4" strokeWidth={2.4} />
-          Connect wallet
+          <WalletIcon
+            className={glass ? "size-3.5" : "size-4"}
+            strokeWidth={2.4}
+          />
+          {glass ? "Connect" : "Connect wallet"}
         </motion.button>
         <ConnectDialog
           open={connectOpen}
@@ -93,7 +103,11 @@ export function WalletButton() {
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-        className="inline-flex items-center gap-2 bg-cloud-gray pl-1.5 pr-3 py-1 text-body-sm font-semibold text-midnight-black"
+        className={
+          tone === "glass"
+            ? "liquid-glass inline-flex items-center gap-2 pl-1.5 pr-3 py-1 text-body-sm font-semibold text-canvas-white"
+            : "inline-flex items-center gap-2 bg-cloud-gray pl-1.5 pr-3 py-1 text-body-sm font-semibold text-midnight-black"
+        }
         style={{ borderRadius: 9999 }}
       >
         <span

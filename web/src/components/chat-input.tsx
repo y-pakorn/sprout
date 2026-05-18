@@ -96,7 +96,7 @@ export function ChatInput({
 
   return (
     <div
-      className="flex items-center gap-2 bg-cloud-gray pl-6 pr-2 py-2 transition-colors focus-within:bg-canvas-white focus-within:ring-2 focus-within:ring-cash-lime"
+      className="flex items-center gap-2 bg-cloud-gray pl-6 pr-2 py-2 transition-colors focus-within:bg-canvas-white"
       style={{ borderRadius: 9999 }}
     >
       <div className="relative flex-1">

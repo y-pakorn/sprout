@@ -1,13 +1,11 @@
-import { SiteHeader } from "@/components/site-header";
 import { Conversation } from "@/components/conversation";
 
 export default function Home() {
+  // Conversation owns its own header chrome — solid header in chat mode,
+  // glass overlay in idle (hero) mode. Page is just the canvas.
   return (
-    <div className="flex min-h-full flex-col">
-      <SiteHeader />
-      <main className="flex-1">
-        <Conversation />
-      </main>
-    </div>
+    <main className="min-h-screen">
+      <Conversation />
+    </main>
   );
 }
