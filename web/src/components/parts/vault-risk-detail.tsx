@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronDown, ShieldCheck, AlertTriangle, OctagonX } from "lucide-react";
+import { ChevronDown, Check, AlertTriangle, OctagonX } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
@@ -26,42 +26,20 @@ type Props = {
 };
 
 const VERDICT_LABEL: Record<RiskVerdict, string> = {
-  pass: "Clear",
+  pass: "Cleared",
   flag: "Heads up",
   block: "Blocked",
 };
 
-function VerdictBadge({ v }: { v: RiskVerdict }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-        v === "pass" && "bg-cash-lime text-canvas-white",
-        v === "flag" && "bg-warning text-midnight-black",
-        v === "block" && "bg-destructive text-canvas-white",
-      )}
-      style={{ borderRadius: 9999 }}
-    >
-      {VERDICT_LABEL[v]}
-    </span>
-  );
-}
-
 function VerdictIcon({ v }: { v: RiskVerdict }) {
   if (v === "pass") {
     return (
-      <ShieldCheck
-        className="size-3.5 text-canvas-white"
-        strokeWidth={2.4}
-      />
+      <Check className="size-3.5 text-cash-lime" strokeWidth={3} />
     );
   }
   if (v === "flag") {
     return (
-      <AlertTriangle
-        className="size-3.5 text-warning"
-        strokeWidth={2.4}
-      />
+      <AlertTriangle className="size-3.5 text-warning" strokeWidth={2.4} />
     );
   }
   return (
@@ -87,11 +65,19 @@ export function VaultRiskDetail({
   const expandable = !!detail || !!children;
 
   return (
-    <div className="overflow-hidden">
+    <div
+      className={cn(
+        "overflow-hidden",
+        verdict === "pass" && "opacity-60",
+        verdict === "flag" && "border-l-2 border-warning pl-2",
+        verdict === "block" && "border-l-2 border-destructive pl-2",
+      )}
+    >
       <button
         type="button"
         onClick={() => expandable && setOpen((v) => !v)}
         disabled={!expandable}
+        aria-label={`${VERDICT_LABEL[verdict]}: ${title}`}
         className={cn(
           "flex w-full items-center gap-2.5 py-1.5 text-left",
           expandable && "cursor-pointer",
@@ -106,7 +92,6 @@ export function VaultRiskDetail({
             {summary}
           </span>
         </div>
-        <VerdictBadge v={verdict} />
         {expandable && (
           <ChevronDown
             className={cn(

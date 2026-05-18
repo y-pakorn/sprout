@@ -79,14 +79,25 @@ export function LiveVaultCard({
     ? depositSteps.find((d) => d.vault.id === openVaultId)?.vault ?? null
     : null;
 
-  const risks = buildRisks(cached);
-  const flagged = risks.filter((r) => r.verdict !== "pass").length;
-  const blocking = risks.some((r) => r.verdict === "block");
-  const topIdx = (() => {
-    const b = risks.findIndex((r) => r.verdict === "block");
-    if (b >= 0) return b;
-    return risks.findIndex((r) => r.verdict === "flag");
-  })();
+  const rawRisks = buildRisks(cached);
+  const severityOrder: Record<RiskVerdict, number> = {
+    block: 0,
+    flag: 1,
+    pass: 2,
+  };
+  const risks = [...rawRisks].sort(
+    (a, b) => severityOrder[a.verdict] - severityOrder[b.verdict],
+  );
+  const passCount = risks.filter((r) => r.verdict === "pass").length;
+  const flagCount = risks.filter((r) => r.verdict === "flag").length;
+  const blockCount = risks.filter((r) => r.verdict === "block").length;
+  const blocking = blockCount > 0;
+  const topIdx = risks.findIndex((r) => r.verdict !== "pass");
+  const guardianVerdict = blocking
+    ? "Sprout flagged this — read carefully before signing."
+    : flagCount > 0
+      ? `Sprout cleared ${passCount} check${passCount === 1 ? "" : "s"}. ${flagCount} thing${flagCount === 1 ? "" : "s"} to read before signing.`
+      : `Sprout cleared all ${passCount} checks. Standard for this kind of position.`;
 
   return (
     <motion.div
@@ -162,23 +173,29 @@ export function LiveVaultCard({
       </div>
 
       {/* Guardian */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex size-5 items-center justify-center bg-cash-lime text-midnight-black"
-            style={{ borderRadius: 9 }}
-          >
-            <ShieldCheck className="size-2.5" strokeWidth={2.6} />
-          </span>
-          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
-            Guardian
-          </span>
-          <span className="text-caption font-semibold text-canvas-white">
-            ·{" "}
-            {flagged === 0
-              ? "All clear"
-              : `${flagged} need${flagged === 1 ? "s" : ""} attention`}
-          </span>
+      <div className="space-y-2">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex size-5 items-center justify-center",
+                blocking
+                  ? "bg-destructive text-canvas-white"
+                  : flagCount > 0
+                    ? "bg-warning text-midnight-black"
+                    : "bg-cash-lime text-midnight-black",
+              )}
+              style={{ borderRadius: 9 }}
+            >
+              <ShieldCheck className="size-2.5" strokeWidth={2.6} />
+            </span>
+            <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+              Guardian
+            </span>
+          </div>
+          <p className="text-body-sm leading-snug text-canvas-white">
+            {guardianVerdict}
+          </p>
         </div>
         <div className="divide-y divide-ghost-border/60">
           {risks.map((r, i) => (
