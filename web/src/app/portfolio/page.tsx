@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { SiteHeader } from "@/components/site-header";
-import { LegRow } from "@/components/agent-blocks/leg-row";
+import { LegRow } from "@/components/leg-row";
 import { AssetIcon } from "@/components/asset-icon";
 import { CountUp } from "@/components/count-up";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
