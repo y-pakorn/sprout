@@ -51,6 +51,17 @@ function estimatedGasSui(hops: number): number {
   return Math.max(0.005, Math.min(0.03, hops * 0.006));
 }
 
+/**
+ * Format a price-impact percent for display. Avoid the misleading
+ * "0.000%" that rounding down produces for tiny-but-nonzero impacts —
+ * show "<0.001%" instead so the user knows it's not literally zero.
+ */
+function fmtImpactPct(pct: number): string {
+  if (!Number.isFinite(pct) || pct <= 0) return "0%";
+  if (pct < 0.001) return "<0.001%";
+  return `${pct.toFixed(3)}%`;
+}
+
 const REFRESH_INTERVAL_MS = 5000;
 
 function humanize(amountBase: string, decimals: number): number {
@@ -133,7 +144,7 @@ function evaluateRisks(cached: CachedQuote, slippagePct: number): Risk[] {
       id: "impact",
       label: "Price impact",
       verdict: impactVerdict,
-      summary: `${impactPct.toFixed(3)}% — ${impactVerdict === "block" ? "very high" : impactVerdict === "flag" ? "elevated" : "low"}`,
+      summary: `${fmtImpactPct(impactPct)} — ${impactVerdict === "block" ? "very high" : impactVerdict === "flag" ? "elevated" : "low"}`,
     },
     {
       id: "route",
@@ -333,7 +344,7 @@ export function LiveSwapCard({
         <Stat label="Rate" value={`1 ${fromSymbol} ≈ ${rate.toFixed(6)} ${toSymbol}`} />
         <Stat
           label="Price impact"
-          value={`${impactPct.toFixed(3)}%`}
+          value={fmtImpactPct(impactPct)}
           tone={
             impactPct >= 5 ? "block" : impactPct >= 1 ? "warn" : "default"
           }
