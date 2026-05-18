@@ -1,294 +1,462 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { StickToBottom } from "use-stick-to-bottom";
+import {
+  useCurrentAccount,
+  useSignAndExecuteTransaction,
+} from "@mysten/dapp-kit";
+import type { Transaction } from "@mysten/sui/transactions";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
-import { ThinkingBlock } from "@/components/agent-blocks/thinking-block";
-import { ProposalBlock } from "@/components/agent-blocks/proposal-block";
-import { GuardianBlock } from "@/components/agent-blocks/guardian-block";
-import { ReceiptBlock } from "@/components/agent-blocks/receipt-block";
-import { OverrideDialog } from "@/components/override-dialog";
-import { SigningProgress } from "@/components/signing-progress";
+import { AgentMessage } from "@/components/agent-message";
+import { useCoinMap, resolveSymbol } from "@/lib/client-coins";
+import { quoteCache } from "@/lib/ai/quote-cache";
 import {
-  DEFAULT_INTENT,
-  DEFAULT_TUNE,
-  type IntentInput,
-  type TuneState,
-} from "@/lib/intent";
-import { parseIntent } from "@/lib/parse-intent";
-import { buildMockAllocation } from "@/lib/mock-allocation";
-import { evaluateGuardian } from "@/lib/mock-guardian";
-import { fadeUp, slideInRight, SPRING } from "@/lib/motion";
-
-type Stage =
-  | "idle"
-  | "thinking"
-  | "proposed"
-  | "wallet_pending"
-  | "submitting"
-  | "finalizing"
-  | "confirmed";
-
-const IS_SIGNING_STAGE = (s: Stage): s is "wallet_pending" | "submitting" | "finalizing" =>
-  s === "wallet_pending" || s === "submitting" || s === "finalizing";
-
-function makeDigest() {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-  let out = "";
-  for (let i = 0; i < 44; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}
+  getQuote,
+  buildTx,
+  extractRoute,
+  getTokenPrices,
+  computePriceImpactPct,
+  dexLabel,
+  PARTNER_ADDRESS,
+  PARTNER_COMMISSION_BPS,
+} from "@/lib/bluefin7k";
 
 export function Conversation() {
-  const [stage, setStage] = useState<Stage>("idle");
-  const [draft, setDraft] = useState("");
-  const [userMessage, setUserMessage] = useState<string>("");
-  const [intent, setIntent] = useState<IntentInput>(DEFAULT_INTENT);
-  const [tune, setTune] = useState<TuneState>(DEFAULT_TUNE);
-  const [digest, setDigest] = useState<string>("");
-  const [overrideOpen, setOverrideOpen] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const account = useCurrentAccount();
+  const coinMap = useCoinMap();
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
-  const allocation = useMemo(
-    () => (stage !== "idle" ? buildMockAllocation(intent) : null),
-    [intent, stage],
+  // Active swap-action state (one swap card may be live at a time)
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
+  const [slippagePct, setSlippagePct] = useState(1);
+  const [signing, setSigning] = useState(false);
+  const [executed, setExecuted] = useState(false);
+  const [txDigest, setTxDigest] = useState<string | undefined>();
+  const [signError, setSignError] = useState<string | null>(null);
+
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/chat" }),
+    [],
   );
-  const risks = useMemo(
-    () => (allocation ? evaluateGuardian(intent, allocation) : []),
-    [intent, allocation],
-  );
-  const blocking = risks.some((r) => r.verdict === "block");
 
-  useEffect(() => {
-    if (stage === "thinking" || stage === "confirmed") {
-      endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-  }, [stage]);
+  // Stash addToolResult in a ref so the onToolCall closure always sees
+  // the latest binding (useChat returns a new function per render, but
+  // the callback we pass to useChat captures the *first* render's value).
+  const addToolResultRef = useRef<
+    | ((args: {
+        tool: string;
+        toolCallId: string;
+        output: unknown;
+      }) => Promise<void> | void)
+    | null
+  >(null);
 
-  function submit(text: string) {
-    if (!text.trim()) return;
-    setUserMessage(text);
-    setIntent(parseIntent(text, DEFAULT_INTENT));
-    setDraft("");
-    setStage("thinking");
-    setTimeout(() => setStage("proposed"), 1400);
-  }
+  const { messages, sendMessage, addToolResult, status, error } = useChat({
+    transport,
+    sendAutomaticallyWhen: ({ messages: msgs }) => {
+      const last = msgs[msgs.length - 1];
+      if (!last || last.role !== "assistant") return false;
+      const hasOutput = last.parts.some(
+        (p) =>
+          p.type === "tool-getSwapQuote" &&
+          (p as { state?: string }).state === "output-available",
+      );
+      const hasText = last.parts.some(
+        (p) => p.type === "text" && (p as { text?: string }).text?.trim(),
+      );
+      return hasOutput && !hasText;
+    },
+    /**
+     * onToolCall MUST return quickly. The SDK awaits us, and addToolResult
+     * queues a job on the SDK's executor that's blocked on the streaming
+     * loop — awaiting addToolResult here would deadlock. So we fire-and-
+     * forget the async work; the queued result update lands after the
+     * stream's tool-call step finishes.
+     */
+    onToolCall({ toolCall }) {
+      console.log("[onToolCall] fired", toolCall.toolName, toolCall.toolCallId);
+      if (toolCall.toolName !== "getSwapQuote") return;
+      void runSwapQuote(toolCall, coinMap, addToolResultRef);
+    },
+  });
 
-  function executeConfirm() {
-    setOverrideOpen(false);
-    // Stage 1: hand off to wallet (mock — user sees the wallet popup)
-    setStage("wallet_pending");
-    setTimeout(() => {
-      // Stage 2: user signed, broadcasting
-      setDigest(makeDigest());
-      setStage("submitting");
-      setTimeout(() => {
-        // Stage 3: tx submitted, waiting for finalization
-        setStage("finalizing");
-        setTimeout(() => {
-          // Done
-          setStage("confirmed");
-        }, 1000);
-      }, 1300);
-    }, 1800);
-  }
+  // Keep the ref pointed at the latest addToolResult
+  addToolResultRef.current = addToolResult as unknown as typeof addToolResultRef.current;
 
-  function cancelSigning() {
-    setStage("proposed");
-    setDigest("");
-  }
+  // Background work fired by onToolCall — runs to completion after the
+  // SDK's streaming step finishes, then dispatches addToolResult which
+  // the queued job executor will pick up next.
+  type AddResultFn = (args: {
+    tool: string;
+    toolCallId: string;
+    output: unknown;
+  }) => Promise<void> | void;
 
-  function confirm() {
-    if (blocking) {
-      setOverrideOpen(true);
+  async function runSwapQuote(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    ref: React.RefObject<AddResultFn | null>,
+  ) {
+    const addResult = ref.current;
+    if (!addResult) {
+      console.error("[runSwapQuote] addToolResult ref is null");
       return;
     }
-    executeConfirm();
+    const input = toolCall.input as {
+      fromSymbol: string;
+      toSymbol: string;
+      amount: number;
+    };
+    const { fromSymbol, toSymbol, amount } = input;
+    const tokenIn = resolveSymbol(map, fromSymbol);
+    const tokenOut = resolveSymbol(map, toSymbol);
+    console.log(
+      "[swap] resolve",
+      fromSymbol,
+      "→",
+      tokenIn?.coin_type,
+      "|",
+      toSymbol,
+      "→",
+      tokenOut?.coin_type,
+    );
+
+    if (!tokenIn || !tokenOut) {
+      await addResult({
+        tool: "getSwapQuote",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: `Unknown token symbol${!tokenIn ? `: ${fromSymbol}` : `: ${toSymbol}`}. Try USDC, SUI, USDT, WAL, DEEP, or BUCK.`,
+        },
+      });
+      console.log("[runSwapQuote] error result dispatched");
+      return;
+    }
+
+    try {
+      const amountIn = BigInt(
+        Math.floor(amount * 10 ** tokenIn.decimals),
+      ).toString();
+      // Fetch the swap quote + oracle prices in parallel. SDK's getTokenPrices
+      // returns USD prices per coin_type; we use those as the spot reference.
+      const [fullQuote, prices] = await Promise.all([
+        getQuote({
+          tokenIn: tokenIn.coin_type,
+          tokenOut: tokenOut.coin_type,
+          amountIn,
+        }),
+        getTokenPrices([tokenIn.coin_type, tokenOut.coin_type]),
+      ]);
+      const priceIn = prices[tokenIn.coin_type] ?? 0;
+      const priceOut = prices[tokenOut.coin_type] ?? 0;
+      const impactPct = computePriceImpactPct(
+        fullQuote,
+        priceIn,
+        priceOut,
+        tokenIn.decimals,
+        tokenOut.decimals,
+      );
+
+      quoteCache.set(toolCall.toolCallId, {
+        quote: fullQuote,
+        fromSymbol: fromSymbol.toUpperCase(),
+        toSymbol: toSymbol.toUpperCase(),
+        fromDecimals: tokenIn.decimals,
+        toDecimals: tokenOut.decimals,
+        fromIcon: tokenIn.icon_url,
+        toIcon: tokenOut.icon_url,
+        fromCoinType: tokenIn.coin_type,
+        toCoinType: tokenOut.coin_type,
+        fromVerified: tokenIn.verified,
+        toVerified: tokenOut.verified,
+        fromAmountHuman: amount,
+        spotRate: priceOut > 0 ? priceIn / priceOut : 0,
+        impactPct,
+        fetchedAt: Date.now(),
+      });
+
+      const route = extractRoute(fullQuote);
+      const expectedOutput =
+        Number(fullQuote.returnAmountWithDecimal) / 10 ** tokenOut.decimals;
+
+      const output = {
+        quoteId: toolCall.toolCallId,
+        fromAmount: amount,
+        fromSymbol: fromSymbol.toUpperCase(),
+        toSymbol: toSymbol.toUpperCase(),
+        expectedOutput: Number(expectedOutput.toFixed(6)),
+        priceImpactPct: Number(impactPct.toFixed(3)),
+        hops: route.hopCount,
+        dexes: route.dexes.map(dexLabel),
+        warning: fullQuote.warning || null,
+      };
+      console.log("[runSwapQuote] dispatching addToolResult →", output);
+      await addResult({
+        tool: "getSwapQuote",
+        toolCallId: toolCall.toolCallId,
+        output,
+      });
+      console.log("[runSwapQuote] addToolResult done");
+    } catch (e) {
+      console.error("[runSwapQuote] quote failed", e);
+      await addResult({
+        tool: "getSwapQuote",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Quote failed: ${(e as Error).message}` },
+      });
+    }
   }
 
-  function reset() {
-    setStage("idle");
-    setUserMessage("");
+  // Scroll handled by StickToBottom wrapper below
+
+  async function handleConfirm(toolCallId: string) {
+    setSignError(null);
+    const cached = quoteCache.get(toolCallId);
+    if (!cached) {
+      setSignError("Quote expired. Ask again to re-price.");
+      return;
+    }
+    if (!account) {
+      setSignError("Connect a wallet first.");
+      return;
+    }
+    setActiveQuoteId(toolCallId);
+    setSigning(true);
+    setExecuted(false);
+    setTxDigest(undefined);
+    try {
+      const buildResult = await buildTx({
+        quoteResponse: cached.quote,
+        accountAddress: account.address,
+        slippage: slippagePct / 100, // pct → fractional
+        commission: {
+          partner: PARTNER_ADDRESS,
+          commissionBps: PARTNER_COMMISSION_BPS,
+        },
+      });
+      // Bluefin7K can return either a standard Transaction or a BluefinXTx
+      // (sponsor-routed). MVP only supports the standard path; cast and
+      // surface a runtime error if a BluefinX route slips through.
+      const tx = buildResult.tx as Transaction;
+      const result = await signAndExecute({
+        transaction: tx,
+      });
+      setTxDigest(result.digest);
+      setExecuted(true);
+    } catch (e) {
+      setSignError((e as Error).message || "Wallet rejected");
+    } finally {
+      setSigning(false);
+    }
+  }
+
+  function handleCancel(toolCallId: string) {
+    if (activeQuoteId === toolCallId) {
+      setActiveQuoteId(null);
+      setSigning(false);
+      setExecuted(false);
+      setTxDigest(undefined);
+      setSignError(null);
+    }
+  }
+
+  // Bump-on-refresh forces React to re-render so agent-message re-reads
+  // the (mutated) quoteCache entry.
+  const [, bumpRefresh] = useState(0);
+
+  async function handleRefresh(toolCallId: string) {
+    const cached = quoteCache.get(toolCallId);
+    if (!cached) return;
+    if (signing || executed) return;
+    try {
+      const amountIn = BigInt(
+        Math.floor(cached.fromAmountHuman * 10 ** cached.fromDecimals),
+      ).toString();
+      const [fresh, prices] = await Promise.all([
+        getQuote({
+          tokenIn: cached.fromCoinType,
+          tokenOut: cached.toCoinType,
+          amountIn,
+        }),
+        getTokenPrices([cached.fromCoinType, cached.toCoinType]),
+      ]);
+      const priceIn = prices[cached.fromCoinType] ?? 0;
+      const priceOut = prices[cached.toCoinType] ?? 0;
+      const impactPct = computePriceImpactPct(
+        fresh,
+        priceIn,
+        priceOut,
+        cached.fromDecimals,
+        cached.toDecimals,
+      );
+      quoteCache.set(toolCallId, {
+        ...cached,
+        quote: fresh,
+        spotRate: priceOut > 0 ? priceIn / priceOut : 0,
+        impactPct,
+        fetchedAt: Date.now(),
+      });
+      bumpRefresh((v) => v + 1);
+    } catch (e) {
+      console.error("[refresh] failed", e);
+    }
+  }
+
+  // Build a coinType → icon_url lookup for the route hop chips
+  const iconLookup = useMemo(() => {
+    if (!coinMap) return () => undefined;
+    const byType = new Map<string, string | undefined>();
+    for (const v of Object.values(coinMap)) {
+      byType.set(v.coin_type, v.icon_url);
+    }
+    return (coinType: string) => byType.get(coinType);
+  }, [coinMap]);
+
+  // Draft input
+  const [draft, setDraft] = useState("");
+  function submit(text: string) {
+    if (!text.trim() || !coinMap) return;
+    sendMessage({ text });
     setDraft("");
-    setIntent(DEFAULT_INTENT);
-    setTune(DEFAULT_TUNE);
-    setDigest("");
-    setOverrideOpen(false);
+    // New turn — release prior swap card from "active"
+    setActiveQuoteId(null);
+    setExecuted(false);
+    setSigning(false);
+    setTxDigest(undefined);
+    setSignError(null);
   }
 
-  if (stage === "idle") {
-    return <IdleHero draft={draft} onDraftChange={setDraft} onSubmit={submit} />;
+  if (messages.length === 0) {
+    return (
+      <IdleHero
+        draft={draft}
+        onDraftChange={setDraft}
+        onSubmit={submit}
+        ready={!!coinMap}
+      />
+    );
+  }
+
+  const isStreaming = status === "streaming" || status === "submitted";
+  const lastAssistantIdx = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return i;
+    }
+    return -1;
+  })();
+
+  // Definitive diagnostic of what the messages array currently holds
+  if (typeof window !== "undefined" && messages.length > 0) {
+    const last = messages[messages.length - 1];
+    console.log(
+      "[render] status=",
+      status,
+      "lastRole=",
+      last.role,
+      "parts=",
+      last.parts.map((p) => {
+        const anyP = p as { type: string; state?: string };
+        return `${anyP.type}${anyP.state ? `:${anyP.state}` : ""}`;
+      }),
+    );
   }
 
   return (
-    <section className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8 pb-32">
-      <motion.div
-        variants={slideInRight}
-        initial="initial"
-        animate="animate"
-        className="flex justify-end"
+    <div
+      className="flex w-full flex-col"
+      style={{ height: "calc(100vh - 56px)" }}
+    >
+      <StickToBottom
+        className="flex-1 overflow-y-auto"
+        resize="smooth"
+        initial="smooth"
       >
-        <div
-          className="max-w-[80%] bg-cloud-gray px-5 py-3 text-body text-midnight-black"
-          style={{ borderRadius: 24 }}
-        >
-          {userMessage}
-        </div>
-      </motion.div>
+        <StickToBottom.Content className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8 pb-6">
+          {messages.map((m, i) => (
+            <AgentMessage
+              key={m.id}
+              message={m}
+              isStreaming={isStreaming && i === lastAssistantIdx}
+              swapAction={{
+                activeQuoteId,
+                slippagePct,
+                signing,
+                executed,
+                txDigest,
+                walletConnected: !!account,
+                iconLookup,
+                onSlippageChange: setSlippagePct,
+                onConfirm: handleConfirm,
+                onCancel: handleCancel,
+                onRefresh: handleRefresh,
+              }}
+            />
+          ))}
 
-      <AnimatePresence mode="wait">
-        {stage === "thinking" && (
-          <motion.div
-            key="thinking"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ThinkingBlock />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {(stage === "proposed" || IS_SIGNING_STAGE(stage)) && allocation && (
-        <>
-          {stage === "proposed" && (
-            <>
-              <ProposalBlock
-                intent={intent}
-                allocation={allocation}
-                tune={tune}
-                onIntentChange={setIntent}
-                onTuneChange={setTune}
-              />
-              <GuardianBlock risks={risks} />
-            </>
-          )}
-
-          <AnimatePresence>
-            {IS_SIGNING_STAGE(stage) && (
-              <motion.div
-                key="signing"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ ...SPRING }}
-              >
-                <SigningProgress
-                  stage={stage}
-                  digest={digest || undefined}
-                  gasUsd={allocation.estimatedGasUsd}
-                  onCancel={
-                    stage === "wallet_pending" ? cancelSigning : undefined
-                  }
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {stage === "proposed" && (
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ ...SPRING, delay: 0.4 }}
-            className="sticky bottom-5 z-30"
-          >
-            <div
-              className="flex flex-col gap-3 bg-cloud-gray p-3 shadow-[0_10px_40px_-12px_rgba(0,0,0,0.18)] sm:flex-row sm:items-center sm:justify-between sm:pl-6"
+          {/* Thinking pill — shown after user submits but before first AI token arrives */}
+          {status === "submitted" && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="inline-flex items-center gap-2 self-start bg-cloud-gray px-4 py-2 text-body-sm text-subtle-gray"
               style={{ borderRadius: 9999 }}
             >
-              <div className="text-body-sm sm:pl-2">
-                {blocking ? (
-                  <span className="text-destructive">
-                    <span className="font-semibold">Guardian flagged risk</span> ·
-                    sign anyway?
-                  </span>
-                ) : (
-                  <span className="text-subtle-gray">
-                    {allocation.legs.length}{" "}
-                    {allocation.legs.length === 1 ? "step" : "legs"} · 1 atomic
-                    PTB · ~${allocation.estimatedGasUsd.toFixed(3)} gas
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <motion.button
-                  onClick={reset}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.96 }}
-                  transition={{
-                    type: "spring",
-                    visualDuration: 0.2,
-                    bounce: 0.3,
-                  }}
-                  className="bg-canvas-white px-5 py-2.5 text-body-sm font-medium text-midnight-black"
-                  style={{ borderRadius: 9999 }}
-                >
-                  Start over
-                </motion.button>
-                <motion.button
-                  onClick={confirm}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.96 }}
-                  transition={{
-                    type: "spring",
-                    visualDuration: 0.2,
-                    bounce: 0.3,
-                  }}
-                  className={`px-6 py-2.5 text-body-sm font-semibold ${
-                    blocking
-                      ? "bg-destructive text-canvas-white"
-                      : "bg-cash-lime text-midnight-black"
-                  }`}
-                  style={{ borderRadius: 9999 }}
-                >
-                  {blocking ? "Sign anyway →" : "Confirm & sign →"}
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
+              <motion.span
+                animate={{ scale: [1, 1.4, 1] }}
+                transition={{
+                  duration: 1.1,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+                className="inline-block size-1.5 bg-cash-lime"
+                style={{ borderRadius: 9999 }}
+              />
+              Sprout is thinking…
+            </motion.div>
           )}
-        </>
-      )}
 
-      {stage === "confirmed" && allocation && digest && (
-        <>
-          <ReceiptBlock
-            digest={digest}
-            allocation={allocation}
-            asset={intent.asset}
-            amount={intent.amount}
-          />
-          <motion.div
-            variants={fadeUp}
-            initial="initial"
-            animate="animate"
-            transition={{ ...SPRING, delay: 0.6 }}
-            className="space-y-3 pt-4"
-          >
-            <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
-              What&apos;s next?
+          {signError && (
+            <div
+              className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive"
+              style={{ borderRadius: 18 }}
+            >
+              {signError}
             </div>
-            <ChatInput
-              value={draft}
-              onChange={setDraft}
-              onSubmit={() => submit(draft)}
-              placeholder="Plant another goal…"
-            />
-          </motion.div>
-        </>
-      )}
+          )}
 
-      <div ref={endRef} />
+          {error && (
+            <div
+              className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive"
+              style={{ borderRadius: 18 }}
+            >
+              {error.message}
+            </div>
+          )}
+        </StickToBottom.Content>
+      </StickToBottom>
 
-      <OverrideDialog
-        open={overrideOpen}
-        risks={risks}
-        onCancel={() => setOverrideOpen(false)}
-        onConfirm={executeConfirm}
-      />
-    </section>
+      <div className="shrink-0 border-t border-ghost-border/60 bg-canvas-white">
+        <div className="mx-auto w-full max-w-3xl px-6 py-4">
+          <ChatInput
+            value={draft}
+            onChange={setDraft}
+            onSubmit={() => submit(draft)}
+            disabled={isStreaming}
+            placeholder={
+              isStreaming
+                ? "Sprout is thinking…"
+                : "Tell me a swap or a goal…"
+            }
+          />
+        </div>
+      </div>
+
+    </div>
   );
 }
 
@@ -296,10 +464,12 @@ function IdleHero({
   draft,
   onDraftChange,
   onSubmit,
+  ready,
 }: {
   draft: string;
   onDraftChange: (v: string) => void;
   onSubmit: (text: string) => void;
+  ready: boolean;
 }) {
   return (
     <section className="bg-canvas-white">
@@ -336,7 +506,8 @@ function IdleHero({
             onChange={onDraftChange}
             onSubmit={() => onSubmit(draft)}
             autoFocus
-            placeholder="Tell me a goal…"
+            disabled={!ready}
+            placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
           />
           <ExamplePrompts onPick={onSubmit} />
         </motion.div>
