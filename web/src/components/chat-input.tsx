@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { motion } from "motion/react";
 import { ArrowUp } from "lucide-react";
 import {
@@ -35,6 +35,22 @@ export function ChatInput({
     recentMessages,
   });
 
+  // Hide the ghost text once the input has wrapped beyond one line. The
+  // mirror div wraps based on value+suggestion combined while the
+  // textarea wraps on value alone — they diverge mid-line, leaving an
+  // ugly visual gap. Single-line cases are pixel-perfect and that's
+  // 95% of usage. Re-check whenever the value or suggestion changes.
+  const [isMultiLine, setIsMultiLine] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // scrollHeight > clientHeight ⇒ content has wrapped. clientHeight is
+    // 1-line tall since rows={1} and resize-none.
+    const wrapped = el.scrollHeight > el.clientHeight + 4;
+    setIsMultiLine(wrapped);
+  }, [value, suggestion]);
+  const ghostText = isMultiLine ? "" : suggestion;
+
   function caretAtEnd(): boolean {
     const el = ref.current;
     if (!el) return false;
@@ -60,7 +76,7 @@ export function ChatInput({
       if (value.trim() && !disabled) onSubmit();
       return;
     }
-    if (suggestion && caretAtEnd()) {
+    if (ghostText && caretAtEnd()) {
       if (e.key === "Tab" || e.key === "ArrowRight") {
         e.preventDefault();
         applySuggestion();
@@ -94,8 +110,8 @@ export function ChatInput({
           )}
         >
           <span className="invisible">{value}</span>
-          {suggestion && (
-            <span className="text-hinting-gray">{suggestion}</span>
+          {ghostText && (
+            <span className="text-hinting-gray">{ghostText}</span>
           )}
         </div>
         <textarea

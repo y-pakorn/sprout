@@ -66,15 +66,14 @@ export async function POST(req: Request) {
     model: autoCompleteAiModel,
     system: autoCompletePrompt,
     messages,
-    // owl-alpha is a reasoning model. Without explicitly disabling it,
-    // the entire output budget gets consumed by hidden reasoning tokens
-    // and 0 tokens come back as visible text. Keep a headroom in case
-    // the provider can't be fully forced off reasoning.
-    maxOutputTokens: 256,
+    maxOutputTokens: 64,
+    // Hard guard against reasoning leak — some models think out loud
+    // even with reasoning disabled. Stop at the first newline so any
+    // chain-of-thought rambling gets cut off before it reaches the UI.
+    stopSequences: ["\n", "\n\n", "**", "<thinking>", "User typed", "User wants"],
     providerOptions: {
       openrouter: {
         models: autoCompleteAiModels,
-        // Turn reasoning off — autocomplete needs sub-second latency.
         reasoning: { enabled: false, exclude: true },
       },
     },
