@@ -10,6 +10,7 @@ import { Sparkline } from "@/components/parts/sparkline";
 import { useVaultHistory } from "@/lib/client-vaults";
 import type { SuiVault } from "@/lib/vaults";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
+import { fmtUsdShort, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -20,16 +21,9 @@ type Props = {
   iconLookup?: (coinType: string) => string | undefined;
 };
 
-function fmtUsd(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(2)}K`;
-  return `$${n.toFixed(2)}`;
-}
-
-function fmtPct(n: number): string {
-  if (!Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
+// Local alias — this file uses the K/M abbreviated USD format (TVL,
+// capacity), not the full-precision currency format.
+const fmtUsd = fmtUsdShort;
 
 function deltaPct(a: number, b: number): number {
   if (b === 0) return 0;

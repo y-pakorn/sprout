@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { AlertTriangle, Sparkles } from "lucide-react";
 import type { CoinMap } from "@/lib/client-coins";
 import { canonicalCoinType } from "@/lib/client-coins";
+import { fmtAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /* ─────────────────────────────────────────────────────────
@@ -33,14 +34,6 @@ function parseInsufficientBalance(
     requiredRaw,
     availableRaw,
   };
-}
-
-function fmtAmount(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
 }
 
 function lookupCoin(

@@ -19,6 +19,8 @@ import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import { AssetIcon } from "@/components/asset-icon";
 import type { VaultBalancePosition } from "@/lib/vault-balance";
 import { fetchDeployment } from "@/lib/client-vaults";
+import { appendRedeemCall } from "@/lib/ember-actions";
+import { fmtAmount, fmtUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -35,24 +37,6 @@ type State =
   | { kind: "confirming"; digest: string }
   | { kind: "done"; digest: string }
   | { kind: "error"; message: string };
-
-function fmtAmount(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
-}
-
-function fmtUsd(n: number): string {
-  if (!Number.isFinite(n)) return "$0";
-  const abs = Math.abs(n);
-  if (abs >= 1)
-    return `$${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  if (abs >= 0.01) return `$${abs.toFixed(2)}`;
-  if (abs > 0) return "<$0.01";
-  return "$0.00";
-}
 
 /**
  * Workspace-mode modal for requesting a withdrawal from an Ember vault.
@@ -105,27 +89,19 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
       const deployment = await fetchDeployment();
       const tx = new Transaction();
       tx.setSender(account.address);
-      const raw = BigInt(Math.floor(sharesParsed * 10 ** 6 * 10 ** 0)); // see below
-      // Recompute raw with the correct decimals. Receipt coin decimals
-      // equal the deposit-coin decimals per Ember's design (e.g. 6 for
-      // USDC vaults). The position carries depositSymbol's decimals via
-      // the deposit token; we'll derive from receiptPriceUsd's units —
-      // safer to recompute from BigInt of shares * 10^(known decimals).
-      // We pull the actual decimal count from the position's stored share
-      // count (which was scaled by deposit decimals when computed).
-      // Simpler: use `client.getCoinMetadata` to fetch decimals at sign
-      // time. But that's an async hop; reuse the deposit-decimals proxy:
-      // every Ember receipt coin shares decimals with the deposit coin.
+      // Receipt-coin decimals. Every Ember receipt coin shares decimals
+      // with its deposit coin (e.g. 6 for USDC vaults), but the share
+      // count we have was already scaled — so fetch the canonical
+      // decimals from chain metadata at sign-time. Fall back to 6 if the
+      // RPC drops the metadata.
       const md = await client.getCoinMetadata({
         coinType: v.receiptCoinType,
       });
       const decimals = md?.decimals ?? 6;
-      const rawCorrect = BigInt(Math.floor(sharesParsed * 10 ** decimals));
-      // unused raw left to satisfy TS but throw away
-      void raw;
+      const raw = BigInt(Math.floor(sharesParsed * 10 ** decimals));
       const shareCoin = tx.add(
         coinWithBalance({
-          balance: rawCorrect,
+          balance: raw,
           type: v.receiptCoinType,
         }),
       );
@@ -146,16 +122,18 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
         );
       }
 
-      tx.moveCall({
-        target: `${deployment.packageId}::gateway::redeem_shares`,
-        typeArguments: [v.depositCoinType, v.receiptCoinType],
-        arguments: [
-          tx.object.clock(),
-          tx.object(vaultObjectId),
-          tx.object(deployment.protocolConfigId),
-          shareCoin,
-          tx.pure.option("address", null),
-        ],
+      appendRedeemCall({
+        tx,
+        gateway: {
+          packageId: deployment.packageId,
+          protocolConfigId: deployment.protocolConfigId,
+        },
+        vault: {
+          objectId: vaultObjectId,
+          depositCoinType: v.depositCoinType,
+          receiptCoinType: v.receiptCoinType,
+        },
+        sharesCoinArg: shareCoin,
       });
 
       const signed = await signAndExecute({ transaction: tx });

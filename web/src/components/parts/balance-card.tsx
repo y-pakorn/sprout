@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Sprout } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import type { VaultPosition } from "@/components/parts/wallet-card";
+import { fmtAmount, fmtPct, fmtUsd, fmtPriceUsd } from "@/lib/format";
 
 type Props = {
   symbol: string;
@@ -19,39 +20,6 @@ type Props = {
   /** Lookup so we can render the deposit-token icon for vault positions. */
   depositIconUrl?: string;
 };
-
-function formatAmount(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  if (n === 0) return "0";
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001) return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
-}
-
-function fmtPct(n?: number): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtUsd(n: number): string {
-  if (!Number.isFinite(n)) return "$0";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1) {
-    return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  }
-  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
-  if (abs > 0) return `${sign}<$0.01`;
-  return "$0.00";
-}
-
-function fmtPriceUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "—";
-  if (n >= 1) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  return `$${n.toExponential(2)}`;
-}
 
 /** Compact single-token balance card. Shown after getBalance resolves. */
 export function BalanceCard({
@@ -99,11 +67,11 @@ export function BalanceCard({
             {vaultPosition.vaultName}
           </span>
           <span className="text-body-lg font-semibold leading-none text-canvas-white tabular-nums">
-            {hasVaultValue ? fmtUsd(valueUsd!) : `${formatAmount(balance)} shares`}
+            {hasVaultValue ? fmtUsd(valueUsd!) : `${fmtAmount(balance)} shares`}
           </span>
           {hasVaultValue && (
             <span className="text-caption font-medium tabular-nums text-canvas-white/55">
-              {formatAmount(balance)} shares
+              {fmtAmount(balance)} shares
             </span>
           )}
         </div>
@@ -133,7 +101,7 @@ export function BalanceCard({
           {hasPrice ? ` · ${fmtPriceUsd(priceUsd!)}` : ""}
         </span>
         <span className="text-body-lg font-semibold text-canvas-white tabular-nums">
-          {formatAmount(balance)}
+          {fmtAmount(balance)}
         </span>
         {hasValue && (
           <span className="text-caption font-medium tabular-nums text-canvas-white/55">

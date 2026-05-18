@@ -11,7 +11,7 @@ import {
   canonicalCoinType,
   type CoinMap,
 } from "@/lib/client-coins";
-import { fetchVaults } from "@/lib/client-vaults";
+import { loadVaultReceiptIndex } from "@/lib/vault-receipt-index";
 
 export type TokenHolding = {
   symbol: string;
@@ -37,17 +37,15 @@ export async function fetchWalletHoldings(
 ): Promise<TokenHolding[]> {
   type RawBal = { coinType: string; totalBalance: string };
 
-  const [allBalances, vaults] = await Promise.all([
+  const [allBalances, receiptIndex] = await Promise.all([
     client.getAllBalances({ owner: address }),
-    fetchVaults().catch(() => []),
+    loadVaultReceiptIndex().catch(
+      () => new Map() as Awaited<ReturnType<typeof loadVaultReceiptIndex>>,
+    ),
   ]);
-
-  // Build a set of canonical receipt coin types so we can EXCLUDE them
-  // from holdings (they live in the portfolio's Vault Positions section).
-  const receiptTypes = new Set<string>();
-  for (const v of vaults) {
-    if (v.receiptCoinType) receiptTypes.add(canonicalCoinType(v.receiptCoinType));
-  }
+  // Receipt-token coin types live in vault positions, NOT in plain
+  // holdings. The shared index already canonicalises its keys.
+  const receiptTypes = new Set(receiptIndex.keys());
 
   // Index the known coin map by canonical coin type.
   const byType = new Map<

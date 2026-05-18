@@ -28,6 +28,7 @@ import type {
   ResolvedSplitStep,
 } from "@/lib/ai/action-plan-cache";
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
+import { fmtAmount, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
@@ -50,18 +51,6 @@ type Props = {
   walletConnected: boolean;
 };
 
-function fmtPct(n?: number): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtAmount(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
-}
 
 export function LiveVaultCard({
   cached,

@@ -17,6 +17,7 @@ import type {
   VaultBalanceWithdrawal,
   VaultBalanceHistoryItem,
 } from "@/lib/vault-balance";
+import { fmtAmount, fmtUsd, fmtPct, fmtRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
@@ -26,49 +27,6 @@ type Props = {
   iconLookup: IconLookup;
   onOpenVault?: (vaultId: string) => void;
 };
-
-function fmtAmount(n: number, maxFrac = 4): string {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  if (Math.abs(n) >= 1) {
-    return n.toLocaleString(undefined, { maximumFractionDigits: maxFrac });
-  }
-  if (Math.abs(n) >= 0.0001) {
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  }
-  return n.toExponential(2);
-}
-
-function fmtUsd(n: number): string {
-  if (!Number.isFinite(n)) return "$0";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1) {
-    return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  }
-  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
-  if (abs > 0) return `${sign}<$0.01`;
-  return "$0.00";
-}
-
-function fmtPct(n?: number): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  const sign = n > 0 ? "+" : "";
-  return `${sign}${n.toFixed(2)}%`;
-}
-
-function fmtRelative(ms: number): string {
-  const diff = Date.now() - ms;
-  if (diff < 0) return "soon";
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
 
 type Tab = "positions" | "pending" | "activity";
 

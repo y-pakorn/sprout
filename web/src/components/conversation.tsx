@@ -61,70 +61,19 @@ import {
   type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
 import type { VaultPosition } from "@/components/parts/wallet-card";
+import {
+  loadVaultReceiptIndex,
+  type VaultReceiptEntry,
+} from "@/lib/vault-receipt-index";
+import {
+  appendDepositCall,
+  appendRedeemCall,
+  appendCancelRedeemCall,
+} from "@/lib/ember-actions";
 
-type VaultPositionInfo = {
-  position: VaultPosition;
-  shareDecimals: number;
-};
-
-/**
- * Build a lookup table mapping canonical receipt-coin types to vault
- * metadata. Used by getBalance/getBalances to detect when a wallet token
- * is actually a vault position. Best-effort: if either fetch fails, we
- * return an empty map and balances render as plain tokens.
- */
-async function loadVaultReceiptIndex(): Promise<
-  Map<string, VaultPositionInfo>
-> {
-  const out = new Map<string, VaultPositionInfo>();
-  try {
-    const [vaults, deployment] = await Promise.all([
-      fetchVaults().catch(() => [] as SuiVault[]),
-      fetchDeployment().catch(() => null),
-    ]);
-    for (const v of vaults) {
-      if (!v.receiptCoinType) continue;
-      out.set(canonicalCoinType(v.receiptCoinType), {
-        shareDecimals: v.depositDecimals,
-        position: {
-          vaultId: v.id,
-          vaultName: v.name,
-          depositSymbol: v.depositSymbol,
-          depositCoinType: v.depositCoinType,
-          apyPct: v.apyPct,
-          category: v.category,
-          withdrawalPeriodDays: v.withdrawalPeriodDays,
-          logoUrl: v.logoUrl,
-          receiptPriceUsd: v.receiptCoinPriceUsd,
-        },
-      });
-    }
-    // Fallback: any vaults the list endpoint missed (e.g. hidden) may
-    // still appear in the deployment map. We don't have apy/name from
-    // /vaults/info alone in a usable shape here, so we only fill in
-    // shareDecimals + a generic label.
-    if (deployment) {
-      for (const entry of Object.values(deployment.vaultsByObjectId)) {
-        const canon = canonicalCoinType(entry.receiptCoinType);
-        if (out.has(canon)) continue;
-        out.set(canon, {
-          shareDecimals: entry.depositCoinDecimals,
-          position: {
-            vaultId: entry.receiptCoinType,
-            vaultName: entry.name,
-            depositSymbol:
-              entry.depositCoinType.split("::").pop() ?? "TOKEN",
-            depositCoinType: entry.depositCoinType,
-            apyPct: 0,
-          },
-        });
-      }
-    }
-  } catch {
-    // ignore — empty map = no vault badging, balances still render
-  }
-  return out;
-}
+// Re-export for legacy local type references. `VaultPosition` import above
+// keeps the prop-shape contract with downstream cards stable.
+type VaultPositionInfo = VaultReceiptEntry;
 
 export function Conversation() {
   const account = useCurrentAccount();
@@ -233,7 +182,6 @@ export function Conversation() {
      * stream's tool-call step finishes.
      */
     onToolCall({ toolCall }) {
-      console.log("[onToolCall] fired", toolCall.toolName, toolCall.toolCallId);
       if (toolCall.toolName === "getSwapQuote") {
         void runSwapQuote(toolCall, coinMap, addToolResultRef);
         return;
@@ -318,16 +266,6 @@ export function Conversation() {
     const { fromSymbol, toSymbol, amount } = input;
     const tokenIn = resolveSymbol(map, fromSymbol);
     const tokenOut = resolveSymbol(map, toSymbol);
-    console.log(
-      "[swap] resolve",
-      fromSymbol,
-      "→",
-      tokenIn?.coin_type,
-      "|",
-      toSymbol,
-      "→",
-      tokenOut?.coin_type,
-    );
 
     if (!tokenIn || !tokenOut) {
       await addResult({
@@ -337,7 +275,6 @@ export function Conversation() {
           error: `Unknown token symbol${!tokenIn ? `: ${fromSymbol}` : `: ${toSymbol}`}. Try USDC, SUI, USDT, WAL, DEEP, or BUCK.`,
         },
       });
-      console.log("[runSwapQuote] error result dispatched");
       return;
     }
 
@@ -398,13 +335,11 @@ export function Conversation() {
         dexes: route.dexes.map(dexLabel),
         warning: fullQuote.warning || null,
       };
-      console.log("[runSwapQuote] dispatching addToolResult →", output);
       await addResult({
         tool: "getSwapQuote",
         toolCallId: toolCall.toolCallId,
         output,
       });
-      console.log("[runSwapQuote] addToolResult done");
     } catch (e) {
       console.error("[runSwapQuote] quote failed", e);
       await addResult({
@@ -749,7 +684,6 @@ export function Conversation() {
     toolCall: { toolCallId: string; input: unknown },
     ref: React.RefObject<AddResultFn | null>,
   ) {
-    console.log("[runListVaults] start", toolCall.toolCallId, toolCall.input);
     const addResult = ref.current;
     if (!addResult) {
       console.error("[runListVaults] addResult ref is null");
@@ -760,9 +694,7 @@ export function Conversation() {
       limit?: number;
     };
     try {
-      console.log("[runListVaults] fetchVaults…");
       const all = await fetchVaults();
-      console.log("[runListVaults] got", all.length, "vaults");
       let filtered = all;
       if (depositSymbol) {
         const wanted = depositSymbol.toUpperCase();
@@ -773,7 +705,6 @@ export function Conversation() {
         vaults: top,
         filteredSymbol: depositSymbol?.toUpperCase(),
       });
-      console.log("[runListVaults] dispatching addResult, count=", top.length);
       await addResult({
         tool: "listVaults",
         toolCallId: toolCall.toolCallId,
@@ -792,7 +723,6 @@ export function Conversation() {
           })),
         },
       });
-      console.log("[runListVaults] addResult done");
     } catch (e) {
       console.error("[runListVaults] failed", e);
       await addResult({
@@ -1062,14 +992,18 @@ export function Conversation() {
               `Cancel ${step.id}: sequenceNumber '${step.sequenceNumber}' is not a valid u128.`,
             );
           }
-          tx.moveCall({
-            target: `${deployment.packageId}::gateway::cancel_pending_withdrawal_request`,
-            typeArguments: [v.depositCoinType, receiptCoinType],
-            arguments: [
-              tx.object(v.objectId),
-              tx.object(deployment.protocolConfigId),
-              tx.pure.u128(seqBig),
-            ],
+          appendCancelRedeemCall({
+            tx,
+            gateway: {
+              packageId: deployment.packageId,
+              protocolConfigId: deployment.protocolConfigId,
+            },
+            vault: {
+              objectId: v.objectId,
+              depositCoinType: v.depositCoinType,
+              receiptCoinType,
+            },
+            sequenceNumber: seqBig,
           });
           resolved.push({
             kind: "cancelRedeemFromVault",
@@ -1344,17 +1278,18 @@ export function Conversation() {
               `Deposit ${step.id}: no receipt coin type for vault '${v.name}'.`,
             );
           }
-          tx.moveCall({
-            target: `${deployment.packageId}::gateway::deposit_asset_v2`,
-            typeArguments: [v.depositCoinType, receiptCoinType],
-            arguments: [
-              tx.object(v.objectId),
-              tx.object(deployment.protocolConfigId),
-              origin.arg,
-              tx.pure.u64(0),
-              tx.pure.option("address", null),
-              tx.object.clock(),
-            ],
+          appendDepositCall({
+            tx,
+            gateway: {
+              packageId: deployment.packageId,
+              protocolConfigId: deployment.protocolConfigId,
+            },
+            vault: {
+              objectId: v.objectId,
+              depositCoinType: v.depositCoinType,
+              receiptCoinType,
+            },
+            coinArg: origin.arg,
           });
           resolved.push({
             kind: "deposit",
@@ -1395,16 +1330,18 @@ export function Conversation() {
               `Redeem ${step.id}: source coin (${origin.symbol}) doesn't match vault '${v.name}' receipt token (${v.receiptCoinSymbol ?? "share"}). Use fromSymbol="${v.receiptCoinSymbol ?? "ercUSD"}" for this redemption.`,
             );
           }
-          tx.moveCall({
-            target: `${deployment.packageId}::gateway::redeem_shares`,
-            typeArguments: [v.depositCoinType, receiptCoinType],
-            arguments: [
-              tx.object.clock(),
-              tx.object(v.objectId),
-              tx.object(deployment.protocolConfigId),
-              origin.arg,
-              tx.pure.option("address", null),
-            ],
+          appendRedeemCall({
+            tx,
+            gateway: {
+              packageId: deployment.packageId,
+              protocolConfigId: deployment.protocolConfigId,
+            },
+            vault: {
+              objectId: v.objectId,
+              depositCoinType: v.depositCoinType,
+              receiptCoinType,
+            },
+            sharesCoinArg: origin.arg,
           });
           resolved.push({
             kind: "redeemFromVault",
@@ -1853,22 +1790,6 @@ export function Conversation() {
       return { role, text };
     })
     .filter((m) => m.text.length > 0);
-
-  // Definitive diagnostic of what the messages array currently holds
-  if (typeof window !== "undefined" && messages.length > 0) {
-    const last = messages[messages.length - 1];
-    console.log(
-      "[render] status=",
-      status,
-      "lastRole=",
-      last.role,
-      "parts=",
-      last.parts.map((p) => {
-        const anyP = p as { type: string; state?: string };
-        return `${anyP.type}${anyP.state ? `:${anyP.state}` : ""}`;
-      }),
-    );
-  }
 
   // Find the most recent getSwapQuote toolCallId across all messages.
   // Only that one renders a full LiveSwapCard; earlier ones collapse so

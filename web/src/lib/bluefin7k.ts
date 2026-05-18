@@ -4,7 +4,7 @@ import {
   getQuote,
   buildTx,
   estimateGasFee,
-  getTokenPrices,
+  getTokenPrices as getTokenPricesRaw,
   type QuoteResponse,
 } from "@bluefin-exchange/bluefin7k-aggregator-sdk";
 
@@ -89,7 +89,52 @@ export function computePriceImpactPct(
   return Math.max(0, Math.min(100, impact));
 }
 
-export { getTokenPrices };
+// ─── Token-price cache ──────────────────────────────────────
+// `getTokenPricesRaw` POSTs to the 7K aggregator on every call. Within a
+// single chat session the same coins get re-quoted multiple times (swap
+// preview + getBalance + balance refresh, etc). A short TTL cache cuts
+// that to one network call per ~30s window. Failed fetches are NOT cached
+// so the next caller retries; cache evicts itself when it crosses 200
+// entries (safety against pathological coin churn).
+type PriceMap = Record<string, number>;
+
+const PRICE_TTL_MS = 30_000;
+const MAX_PRICE_ENTRIES = 200;
+type Entry = { value: number; expires: number };
+const priceCache = new Map<string, Entry>();
+
+export async function getTokenPrices(
+  ids: string[],
+  vsCoin?: string,
+): Promise<PriceMap> {
+  if (!ids || ids.length === 0) return {};
+  // Dedupe + drop empty strings so we don't waste a slot on `""`.
+  const unique = Array.from(new Set(ids.filter((id) => !!id)));
+  const now = Date.now();
+  const out: PriceMap = {};
+  const misses: string[] = [];
+  for (const id of unique) {
+    const e = priceCache.get(id);
+    if (e && e.expires > now) {
+      out[id] = e.value;
+    } else {
+      misses.push(id);
+    }
+  }
+  if (misses.length === 0) return out;
+  const fresh = vsCoin
+    ? await getTokenPricesRaw(misses, vsCoin)
+    : await getTokenPricesRaw(misses);
+  // Don't cache zeroes — they typically mean the oracle has no price.
+  for (const [id, value] of Object.entries(fresh)) {
+    out[id] = value;
+    if (Number.isFinite(value) && value > 0) {
+      priceCache.set(id, { value, expires: now + PRICE_TTL_MS });
+    }
+  }
+  if (priceCache.size > MAX_PRICE_ENTRIES) priceCache.clear();
+  return out;
+}
 
 /** Friendly DEX label */
 export function dexLabel(slug: string): string {

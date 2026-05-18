@@ -9,7 +9,6 @@ import type {
   VaultBalanceServerData,
   VaultBalancePosition,
 } from "@/lib/vault-balance";
-import type { SuiVault } from "@/lib/vaults";
 
 /**
  * Client-side build of the full VaultBalance payload:
@@ -35,24 +34,21 @@ export async function fetchVaultBalanceClient(
   }
   const server = (await serverRes.json()) as VaultBalanceServerData;
 
-  // Build a receipt-type index from the vault list.
-  type ReceiptEntry = { vault: SuiVault; receipt: string };
-  const byReceipt = new Map<string, ReceiptEntry>();
+  // Receipt-type → full SuiVault index. Built locally (not via
+  // loadVaultReceiptIndex) because we want the full vault record for
+  // pricing/decimals, which the shared index strips down.
+  const byReceipt = new Map<string, (typeof vaults)[number]>();
   for (const v of vaults) {
     if (!v.receiptCoinType) continue;
-    byReceipt.set(canonicalCoinType(v.receiptCoinType), {
-      vault: v,
-      receipt: v.receiptCoinType,
-    });
+    byReceipt.set(canonicalCoinType(v.receiptCoinType), v);
   }
 
   const positions: VaultBalancePosition[] = [];
   for (const b of allBalances as RawBal[]) {
     if (BigInt(b.totalBalance) <= BigInt(0)) continue;
     const canon = canonicalCoinType(b.coinType);
-    const match = byReceipt.get(canon);
-    if (!match) continue;
-    const v = match.vault;
+    const v = byReceipt.get(canon);
+    if (!v) continue;
     const shareDecimals = v.depositDecimals;
     const shares = Number(b.totalBalance) / 10 ** shareDecimals;
     const receiptPriceUsd = v.receiptCoinPriceUsd ?? 0;

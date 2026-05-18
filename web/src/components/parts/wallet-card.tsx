@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { Sprout } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import { truncateCoinType } from "@/lib/client-coins";
+import { fmtAmount, fmtPct, fmtUsd, fmtPriceUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type VaultPosition = {
@@ -44,41 +45,6 @@ type Props = {
   balances: WalletBalance[];
   iconLookup: IconLookup;
 };
-
-function formatAmount(n: number): string {
-  if (!Number.isFinite(n)) return "0";
-  if (n === 0) return "0";
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (n >= 0.0001) return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
-}
-
-function fmtPct(n?: number): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtUsd(n: number, opts: { compact?: boolean } = {}): string {
-  if (!Number.isFinite(n)) return "$0";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1) {
-    return `${sign}$${abs.toLocaleString(undefined, {
-      maximumFractionDigits: opts.compact ? 0 : 2,
-    })}`;
-  }
-  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
-  if (abs > 0) return `${sign}<$0.01`;
-  return "$0.00";
-}
-
-function fmtPriceUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "—";
-  if (n >= 1) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  return `$${n.toExponential(2)}`;
-}
 
 /**
  * Wallet card listing every non-zero token balance.
@@ -224,10 +190,10 @@ function VaultPositionRow({
       </div>
       <div className="flex flex-col items-end leading-tight">
         <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {hasValue ? fmtUsd(b.valueUsd!) : formatAmount(b.balance)}
+          {hasValue ? fmtUsd(b.valueUsd!) : fmtAmount(b.balance)}
         </span>
         <span className="text-caption tabular-nums text-canvas-white/55">
-          {formatAmount(b.balance)} shares
+          {fmtAmount(b.balance)} shares
         </span>
       </div>
     </motion.li>
@@ -273,10 +239,10 @@ function TokenRow({
       </div>
       <div className="flex flex-col items-end leading-tight">
         <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {hasValue ? fmtUsd(b.valueUsd!) : formatAmount(b.balance)}
+          {hasValue ? fmtUsd(b.valueUsd!) : fmtAmount(b.balance)}
         </span>
         <span className="text-caption tabular-nums text-canvas-white/55">
-          {formatAmount(b.balance)} {b.symbol}
+          {fmtAmount(b.balance)} {b.symbol}
         </span>
       </div>
     </motion.li>

@@ -25,68 +25,21 @@ import { useVaultBalance } from "@/lib/client-vault-balance";
 import { useWalletHoldings, type TokenHolding } from "@/lib/client-wallet";
 import { fetchDeployment } from "@/lib/client-vaults";
 import { truncateCoinType } from "@/lib/client-coins";
+import { appendCancelRedeemCall } from "@/lib/ember-actions";
+import {
+  fmtAmount,
+  fmtUsd,
+  fmtPct,
+  fmtPriceUsd,
+  fmtCountdown,
+  fmtRelative,
+} from "@/lib/format";
 import type {
   VaultBalancePosition,
   VaultBalanceWithdrawal,
   VaultBalanceHistoryItem,
 } from "@/lib/vault-balance";
 import { cn } from "@/lib/utils";
-
-// ─────────────────────────────────────────────────────────
-// Formatters
-// ─────────────────────────────────────────────────────────
-
-function fmtAmount(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "0";
-  if (Math.abs(n) >= 1)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
-  if (Math.abs(n) >= 0.0001)
-    return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-  return n.toExponential(2);
-}
-
-function fmtUsd(n: number): string {
-  if (!Number.isFinite(n)) return "$0";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1)
-    return `${sign}$${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
-  if (abs > 0) return `${sign}<$0.01`;
-  return "$0.00";
-}
-
-function fmtPct(n?: number): string {
-  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(2)}%`;
-}
-
-function fmtCountdown(targetMs: number, nowMs: number): string {
-  const diff = targetMs - nowMs;
-  if (diff <= 0) return "available now";
-  const s = Math.floor(diff / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h`;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${s}s`;
-}
-
-function fmtRelative(ms: number): string {
-  const diff = Date.now() - ms;
-  if (diff < 0) return "soon";
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
 
 // ─────────────────────────────────────────────────────────
 // Page
@@ -402,15 +355,6 @@ function HoldingRow({ h, i }: { h: TokenHolding; i: number }) {
   );
 }
 
-function fmtPriceUsd(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return "—";
-  if (n >= 1)
-    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
-  if (n >= 0.01) return `$${n.toFixed(4)}`;
-  if (n >= 0.0001) return `$${n.toFixed(6)}`;
-  return `$${n.toExponential(2)}`;
-}
-
 function EmptyCard({
   children,
   tone = "default",
@@ -546,14 +490,18 @@ function PendingRow({
       })();
       if (!vaultObjectId)
         throw new Error("No on-chain vault object found.");
-      tx.moveCall({
-        target: `${deployment.packageId}::gateway::cancel_pending_withdrawal_request`,
-        typeArguments: [w.depositCoin.address, w.receiptCoin.address],
-        arguments: [
-          tx.object(vaultObjectId),
-          tx.object(deployment.protocolConfigId),
-          tx.pure.u128(BigInt(w.sequenceNumber)),
-        ],
+      appendCancelRedeemCall({
+        tx,
+        gateway: {
+          packageId: deployment.packageId,
+          protocolConfigId: deployment.protocolConfigId,
+        },
+        vault: {
+          objectId: vaultObjectId,
+          depositCoinType: w.depositCoin.address,
+          receiptCoinType: w.receiptCoin.address,
+        },
+        sequenceNumber: w.sequenceNumber,
       });
       const signed = await signAndExecute({ transaction: tx });
       setCancelling("confirming");
