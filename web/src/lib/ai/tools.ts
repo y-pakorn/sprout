@@ -43,6 +43,11 @@ export const swapTools = {
       "Read ALL non-zero token balances in the connected wallet. Use when the user asks 'what do I have', 'what's in my wallet', 'show my portfolio', or when picking a source token requires seeing what they own. Errors if no wallet is connected.",
     inputSchema: z.object({}),
   }),
+  getVaultBalance: tool({
+    description:
+      "Read the connected wallet's Ember vault balance: current vault positions (with shares, position value in USD, total/unrealized/realized yield), any pending withdrawal requests, and recent vault history (deposits, redeem requests, processed redemptions). Use whenever the user asks 'how are my vaults doing', 'show my vault balance', 'what's my P&L on vaults', 'what vaults am I in', 'pending withdrawals', 'my yield', 'vault history'. Errors if no wallet is connected.",
+    inputSchema: z.object({}),
+  }),
   listVaults: tool({
     description:
       "List Ember Finance vaults on Sui sorted by APY descending. Optionally filter to vaults that accept a specific deposit token. Use this when the user wants to deposit and hasn't named a vault, asks about yields, or wants to compare options.",

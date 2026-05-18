@@ -33,6 +33,11 @@ export type SuiVault = {
    *  balanceChanges in the confirmation flow. */
   receiptCoinType: string;
   receiptCoinSymbol?: string;
+  /** USD price per receipt token, parsed from receiptCoin.priceE9 / 1e9.
+   *  This is Bluefin's own oracle for share value (the 7K aggregator
+   *  silently drops vault receipt coins from its /price endpoint, so
+   *  this is the only reliable source). */
+  receiptCoinPriceUsd?: number;
   apyPct: number; // reportedApyE9 / 1e9 * 100
   tvlUsd: number; // totalDepositsInUsdE9 / 1e9
   totalDepositsRaw: string; // totalDepositsE9 — useful for capacity
@@ -131,6 +136,7 @@ type RawVault = {
         address?: string;
         symbol?: string;
         decimals?: number;
+        priceE9?: string;
       };
     }
   >;
@@ -199,6 +205,9 @@ export async function getSuiVaults(): Promise<SuiVault[]> {
           ? canonicalCoinType(sui.receiptCoin.address)
           : "",
         receiptCoinSymbol: sui.receiptCoin?.symbol,
+        receiptCoinPriceUsd: sui.receiptCoin?.priceE9
+          ? bigToNumDiv(sui.receiptCoin.priceE9, E9)
+          : undefined,
         apyPct,
         tvlUsd,
         totalDepositsRaw: v.totalDepositsE9 ?? "0",

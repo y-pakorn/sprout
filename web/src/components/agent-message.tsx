@@ -11,7 +11,9 @@ import { LiveSwapCard } from "@/components/parts/live-swap-card";
 import { LiveVaultCard } from "@/components/parts/live-vault-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
+import { VaultBalanceCard } from "@/components/parts/vault-balance-card";
 import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
+import type { VaultBalance } from "@/lib/vault-balance";
 import { AssetIcon } from "@/components/asset-icon";
 import {
   MessageFooter,
@@ -323,6 +325,11 @@ export function AgentMessage({
               symbol?: string;
               balance?: number;
               coinType?: string;
+              priceUsd?: number;
+              valueUsd?: number;
+              vaultPosition?: import(
+                "@/components/parts/wallet-card"
+              ).VaultPosition;
             };
             errorText?: string;
           };
@@ -362,6 +369,16 @@ export function AgentMessage({
               iconUrl={
                 p.output?.coinType
                   ? swapAction.iconLookup(p.output.coinType)
+                  : undefined
+              }
+              priceUsd={p.output?.priceUsd}
+              valueUsd={p.output?.valueUsd}
+              vaultPosition={p.output?.vaultPosition}
+              depositIconUrl={
+                p.output?.vaultPosition?.depositCoinType
+                  ? swapAction.iconLookup(
+                      p.output.vaultPosition.depositCoinType,
+                    )
                   : undefined
               }
             />
@@ -413,6 +430,54 @@ export function AgentMessage({
             <WalletCard
               key={key}
               balances={p.output?.balances ?? []}
+              iconLookup={swapAction.iconLookup}
+            />
+          );
+        }
+
+        if (part.type === "tool-getVaultBalance") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string; data?: VaultBalance };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Vault balance read failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Loading vault balance…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          if (!p.output?.data) return null;
+          return (
+            <VaultBalanceCard
+              key={key}
+              data={p.output.data}
               iconLookup={swapAction.iconLookup}
             />
           );

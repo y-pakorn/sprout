@@ -16,6 +16,7 @@ import type { Transaction } from "@mysten/sui/transactions";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
 import { AgentMessage } from "@/components/agent-message";
+import { ErrorBanner } from "@/components/parts/error-banner";
 import {
   useCoinMap,
   resolveSymbol,
@@ -56,6 +57,71 @@ import {
   coinWithBalance,
   type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
+import type { VaultPosition } from "@/components/parts/wallet-card";
+
+type VaultPositionInfo = {
+  position: VaultPosition;
+  shareDecimals: number;
+};
+
+/**
+ * Build a lookup table mapping canonical receipt-coin types to vault
+ * metadata. Used by getBalance/getBalances to detect when a wallet token
+ * is actually a vault position. Best-effort: if either fetch fails, we
+ * return an empty map and balances render as plain tokens.
+ */
+async function loadVaultReceiptIndex(): Promise<
+  Map<string, VaultPositionInfo>
+> {
+  const out = new Map<string, VaultPositionInfo>();
+  try {
+    const [vaults, deployment] = await Promise.all([
+      fetchVaults().catch(() => [] as SuiVault[]),
+      fetchDeployment().catch(() => null),
+    ]);
+    for (const v of vaults) {
+      if (!v.receiptCoinType) continue;
+      out.set(canonicalCoinType(v.receiptCoinType), {
+        shareDecimals: v.depositDecimals,
+        position: {
+          vaultId: v.id,
+          vaultName: v.name,
+          depositSymbol: v.depositSymbol,
+          depositCoinType: v.depositCoinType,
+          apyPct: v.apyPct,
+          category: v.category,
+          withdrawalPeriodDays: v.withdrawalPeriodDays,
+          logoUrl: v.logoUrl,
+          receiptPriceUsd: v.receiptCoinPriceUsd,
+        },
+      });
+    }
+    // Fallback: any vaults the list endpoint missed (e.g. hidden) may
+    // still appear in the deployment map. We don't have apy/name from
+    // /vaults/info alone in a usable shape here, so we only fill in
+    // shareDecimals + a generic label.
+    if (deployment) {
+      for (const entry of Object.values(deployment.vaultsByObjectId)) {
+        const canon = canonicalCoinType(entry.receiptCoinType);
+        if (out.has(canon)) continue;
+        out.set(canon, {
+          shareDecimals: entry.depositCoinDecimals,
+          position: {
+            vaultId: entry.receiptCoinType,
+            vaultName: entry.name,
+            depositSymbol:
+              entry.depositCoinType.split("::").pop() ?? "TOKEN",
+            depositCoinType: entry.depositCoinType,
+            apyPct: 0,
+          },
+        });
+      }
+    }
+  } catch {
+    // ignore — empty map = no vault badging, balances still render
+  }
+  return out;
+}
 
 export function Conversation() {
   const account = useCurrentAccount();
@@ -183,6 +249,15 @@ export function Conversation() {
         void runGetBalances(
           toolCall,
           coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef,
+        );
+        return;
+      }
+      if (toolCall.toolName === "getVaultBalance") {
+        void runGetVaultBalance(
+          toolCall,
           accountRef.current,
           suiClientRef.current,
           addToolResultRef,
@@ -374,15 +449,41 @@ export function Conversation() {
         owner: acct.address,
         coinType: coin.coin_type,
       });
-      const human = Number(res.totalBalance) / 10 ** coin.decimals;
+      // If the caller is asking about a vault receipt token, attach the
+      // vault position metadata so the result renders as a vault card.
+      const vaultByReceipt = await loadVaultReceiptIndex();
+      const vaultMatch = vaultByReceipt.get(canonicalCoinType(coin.coin_type));
+      const decimals = vaultMatch?.shareDecimals ?? coin.decimals;
+      const human = Number(res.totalBalance) / 10 ** decimals;
+      // USD price: vault receipt tokens come from Bluefin's vault list
+      // (the 7K /price endpoint silently drops them — verified). Plain
+      // tokens come from the 7K oracle.
+      let priceUsd: number | undefined;
+      if (vaultMatch?.position.receiptPriceUsd) {
+        priceUsd = vaultMatch.position.receiptPriceUsd;
+      } else {
+        const priceMap = await getTokenPrices([coin.coin_type]).catch(
+          () => ({}) as Record<string, number>,
+        );
+        priceUsd = priceMap[coin.coin_type];
+      }
+      const valueUsd =
+        typeof priceUsd === "number" &&
+        Number.isFinite(priceUsd) &&
+        priceUsd > 0
+          ? Number((human * priceUsd).toFixed(6))
+          : undefined;
       await addResult({
         tool: "getBalance",
         toolCallId: toolCall.toolCallId,
         output: {
           symbol: symbol.toUpperCase(),
           balance: Number(human.toFixed(6)),
-          decimals: coin.decimals,
+          decimals,
           coinType: coin.coin_type,
+          priceUsd,
+          valueUsd,
+          vaultPosition: vaultMatch?.position,
         },
       });
     } catch (e) {
@@ -431,19 +532,32 @@ export function Conversation() {
           });
         }
       }
+      // Map any receipt-coin types to their vault metadata so balances
+      // that are actually Ember vault positions render as such.
+      const vaultByReceipt = await loadVaultReceiptIndex();
       type RawBal = { coinType: string; totalBalance: string };
       type OutBal = {
         symbol: string;
         balance: number;
         coinType: string;
         known: boolean;
+        priceUsd?: number;
+        valueUsd?: number;
+        vaultPosition?: VaultPosition;
+        /** Internal: pre-canonicalized coin type kept for the price lookup,
+         *  removed before forwarding to the agent. */
+        rawCoinType?: string;
       };
       const balances: OutBal[] = (all as RawBal[])
         .filter((b) => BigInt(b.totalBalance) > BigInt(0))
         .map((b) => {
           const canonType = canonicalCoinType(b.coinType);
           const known = byType.get(canonType);
-          const decimals = known?.decimals ?? 9;
+          const vault = vaultByReceipt.get(canonType);
+          // Receipt coins use the vault's stated decimals (or fall back to
+          // the known coin map). Plain coins use known.decimals or 9.
+          const decimals =
+            vault?.shareDecimals ?? known?.decimals ?? 9;
           const human = Number(b.totalBalance) / 10 ** decimals;
           return {
             symbol: known?.symbol ?? b.coinType.split("::").pop() ?? "?",
@@ -451,13 +565,77 @@ export function Conversation() {
             // Use the canonical type so the icon lookup (also canonicalized
             // via the same coin map) hits.
             coinType: canonType,
-            known: !!known,
+            // Vault receipts count as "known" so they don't get the unknown-coin
+            // truncated address treatment.
+            known: !!known || !!vault,
+            vaultPosition: vault?.position,
+            // Preserve the original (non-canonical) coin type as well so we
+            // can ask getTokenPrices with the form the oracle returns prices
+            // for. Sui's full coin types use long hex; the canonical form
+            // (with leading zeros) is what dapp-kit reads, while the SDK
+            // sometimes prefers the short form.
+            rawCoinType: b.coinType,
           };
         })
         .sort((a, b) => {
-          if (a.known !== b.known) return a.known ? -1 : 1;
+          // Vault positions float to the top, then known tokens, then others.
+          const aRank = a.vaultPosition ? 2 : a.known ? 1 : 0;
+          const bRank = b.vaultPosition ? 2 : b.known ? 1 : 0;
+          if (aRank !== bRank) return bRank - aRank;
           return b.balance - a.balance;
         });
+      // Fetch oracle prices in a single batch and attach to each balance.
+      // Try both forms (short + canonical) since the SDK accepts the
+      // short-form keys the user sees in tokens API. Best-effort: any
+      // missing price just renders without a value column.
+      // Query oracle prices for ALL coins. The 7K aggregator's /price
+      // endpoint does NOT return prices for Ember vault receipt tokens
+      // (verified by curling it with ercUSD + USDC — only USDC came
+      // back). For receipt tokens we use the per-share USD price that
+      // Bluefin's vault list already gives us instead.
+      const priceQueryTypes = Array.from(
+        new Set(
+          balances.flatMap((b): string[] =>
+            b.rawCoinType ? [b.coinType, b.rawCoinType] : [b.coinType],
+          ),
+        ),
+      );
+      const priceMap = await getTokenPrices(priceQueryTypes).catch(
+        () => ({}) as Record<string, number>,
+      );
+      for (const b of balances) {
+        // Vault positions: use the canonical share price from the vault
+        // list (Bluefin's own oracle).
+        if (b.vaultPosition?.receiptPriceUsd) {
+          b.priceUsd = b.vaultPosition.receiptPriceUsd;
+          b.valueUsd = Number(
+            (b.balance * b.vaultPosition.receiptPriceUsd).toFixed(6),
+          );
+          continue;
+        }
+        // Plain tokens: 7K oracle.
+        const p =
+          priceMap[b.coinType] ??
+          priceMap[b.rawCoinType ?? ""] ??
+          undefined;
+        if (typeof p === "number" && Number.isFinite(p) && p > 0) {
+          b.priceUsd = p;
+          b.valueUsd = Number((b.balance * p).toFixed(6));
+        }
+      }
+      // Resort by USD value (descending) within each rank group now that
+      // we have prices.
+      balances.sort((a, b) => {
+        const aRank = a.vaultPosition ? 2 : a.known ? 1 : 0;
+        const bRank = b.vaultPosition ? 2 : b.known ? 1 : 0;
+        if (aRank !== bRank) return bRank - aRank;
+        const av = a.valueUsd ?? 0;
+        const bv = b.valueUsd ?? 0;
+        if (av !== bv) return bv - av;
+        return b.balance - a.balance;
+      });
+      // Strip the helper rawCoinType field before sending to the agent.
+      for (const b of balances) delete (b as { rawCoinType?: string }).rawCoinType;
       await addResult({
         tool: "getBalances",
         toolCallId: toolCall.toolCallId,
@@ -468,6 +646,96 @@ export function Conversation() {
         tool: "getBalances",
         toolCallId: toolCall.toolCallId,
         output: { error: `Wallet read failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetVaultBalance(
+    toolCall: { toolCallId: string; input: unknown },
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>,
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    if (!acct) {
+      await addResult({
+        tool: "getVaultBalance",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "Wallet not connected. The user needs to connect a wallet before I can read their vault balance.",
+        },
+      });
+      return;
+    }
+    try {
+      // Fetch in parallel:
+      //  1. server-proxied withdrawals + history
+      //  2. on-chain token balances (active positions = receipt-coin balances)
+      //  3. vault receipt index (vault metadata + canonical share price)
+      const [serverRes, allBalances, vaultByReceipt] = await Promise.all([
+        fetch(`/api/vault-balance/${acct.address}`, { cache: "no-store" }),
+        client.getAllBalances({ owner: acct.address }),
+        loadVaultReceiptIndex(),
+      ]);
+      if (!serverRes.ok) {
+        throw new Error(`vault-balance fetch failed: ${serverRes.status}`);
+      }
+      const server = (await serverRes.json()) as import(
+        "@/lib/vault-balance"
+      ).VaultBalanceServerData;
+      // Derive positions from wallet balances: every non-zero balance
+      // whose coin type is a known vault receipt token is an active
+      // position. Vault metadata + share price come from the receipt
+      // index (vault list), shares come from chain.
+      type RawBal = { coinType: string; totalBalance: string };
+      const positions: import(
+        "@/lib/vault-balance"
+      ).VaultBalancePosition[] = [];
+      for (const b of allBalances as RawBal[]) {
+        if (BigInt(b.totalBalance) <= BigInt(0)) continue;
+        const canon = canonicalCoinType(b.coinType);
+        const match = vaultByReceipt.get(canon);
+        if (!match) continue;
+        const shares = Number(b.totalBalance) / 10 ** match.shareDecimals;
+        const receiptPriceUsd = match.position.receiptPriceUsd ?? 0;
+        const positionValueUsd = Number(
+          (shares * receiptPriceUsd).toFixed(6),
+        );
+        positions.push({
+          vaultId: match.position.vaultId,
+          vaultName: match.position.vaultName,
+          vaultLogoUrl: match.position.logoUrl,
+          depositSymbol: match.position.depositSymbol,
+          depositCoinType: match.position.depositCoinType,
+          apyPct: match.position.apyPct,
+          category: match.position.category,
+          withdrawalPeriodDays: match.position.withdrawalPeriodDays,
+          receiptCoinType: canon,
+          receiptPriceUsd,
+          shares: Number(shares.toFixed(6)),
+          positionValueUsd,
+        });
+      }
+      // Sort biggest position first
+      positions.sort((a, b) => b.positionValueUsd - a.positionValueUsd);
+      const data: import("@/lib/vault-balance").VaultBalance = {
+        ...server,
+        positions,
+      };
+      await addResult({
+        tool: "getVaultBalance",
+        toolCallId: toolCall.toolCallId,
+        output: { data },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getVaultBalance",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: `Vault balance read failed: ${(e as Error).message}`,
+        },
       });
     }
   }
@@ -1535,12 +1803,15 @@ export function Conversation() {
           )}
 
           {signError && (
-            <div
-              className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive"
-              style={{ borderRadius: 18 }}
-            >
-              {signError}
-            </div>
+            <ErrorBanner
+              message={signError}
+              coinMap={coinMap}
+              onAskAgent={(prompt) => {
+                setSignError(null);
+                sendMessage({ text: prompt });
+              }}
+              onDismiss={() => setSignError(null)}
+            />
           )}
 
           {error && (
