@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCoinIndex } from "@/lib/coins";
 
-// Disable Next.js route caching — we want fresh resolution while iterating
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 /**
  * Returns a compact map of {SYMBOL: {coin_type, decimals, icon_url, name, verified}}
  * for verified Sui tokens. Sourced from Bluefin's tokens API via getCoinIndex().
+ *
+ * Cacheable: the verified-token list drifts slowly (new tokens land days
+ * to weeks apart). CDN holds 10 min, serves stale-while-revalidate up to 1h.
  */
 export async function GET() {
   try {
@@ -35,23 +34,19 @@ export async function GET() {
       };
     }
 
-    // Diagnostic — strip once stable
-    console.log(
-      "[api/coins] USDC →",
-      out["USDC"]?.coin_type ?? "(not found)",
-      "  SUI →",
-      out["SUI"]?.coin_type ?? "(not found)",
-    );
-
     return NextResponse.json(out, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "Cache-Control":
+          "public, max-age=60, s-maxage=600, stale-while-revalidate=3600",
       },
     });
   } catch (err) {
     return NextResponse.json(
       { error: (err as Error).message },
-      { status: 500 },
+      {
+        status: 500,
+        headers: { "Cache-Control": "no-store" },
+      },
     );
   }
 }
