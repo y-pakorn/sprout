@@ -22,7 +22,9 @@ import { AssetIcon } from "@/components/asset-icon";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
 import { useVaultBalance } from "@/lib/client-vault-balance";
+import { useWalletHoldings, type TokenHolding } from "@/lib/client-wallet";
 import { fetchDeployment } from "@/lib/client-vaults";
+import { truncateCoinType } from "@/lib/client-coins";
 import type {
   VaultBalancePosition,
   VaultBalanceWithdrawal,
@@ -90,15 +92,15 @@ function fmtRelative(ms: number): string {
 // Page
 // ─────────────────────────────────────────────────────────
 
-type Tab = "positions" | "pending" | "activity";
-
 export function PortfolioView() {
   const account = useCurrentAccount();
-  const { state, refresh } = useVaultBalance();
-  const [tab, setTab] = useState<Tab>("positions");
+  const { state: vaultState, refresh: refreshVaults } = useVaultBalance();
+  const { state: holdingsState, refresh: refreshHoldings } =
+    useWalletHoldings();
   const [openPosition, setOpenPosition] = useState<VaultBalancePosition | null>(
     null,
   );
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   // Tick every 30s for the pending countdowns.
   const [now, setNow] = useState(() => Date.now());
@@ -107,36 +109,53 @@ export function PortfolioView() {
     return () => clearInterval(id);
   }, []);
 
-  const data = state.data;
+  const vaultData = vaultState.data;
+  const holdings = holdingsState.data ?? [];
 
   const totals = useMemo(() => {
-    const positions = data?.positions ?? [];
-    const totalUsd = positions.reduce(
+    const positions = vaultData?.positions ?? [];
+    const positionsUsd = positions.reduce(
       (s, p) => s + p.positionValueUsd,
       0,
     );
-    const totalShares = positions.reduce((s, p) => s + p.shares, 0);
+    const holdingsUsd = holdings.reduce(
+      (s, h) => s + (h.valueUsd ?? 0),
+      0,
+    );
+    const totalUsd = positionsUsd + holdingsUsd;
     const blendedApy =
       positions.length > 0
         ? positions.reduce(
             (s, p) => s + p.apyPct * p.positionValueUsd,
             0,
-          ) / Math.max(1e-9, totalUsd)
+          ) / Math.max(1e-9, positionsUsd)
         : 0;
-    return { totalUsd, totalShares, blendedApy };
-  }, [data]);
+    return { totalUsd, positionsUsd, holdingsUsd, blendedApy };
+  }, [vaultData, holdings]);
 
-  const counts = {
-    positions: data?.positions.length ?? 0,
-    pending:
-      data?.withdrawals.filter((w) => w.status.toLowerCase() === "pending")
-        .length ?? 0,
-    activity: data?.history.filter((h) => h.type !== "Unknown").length ?? 0,
-  };
+  const pending =
+    vaultData?.withdrawals.filter(
+      (w) => w.status.toLowerCase() === "pending",
+    ) ?? [];
+  const activity =
+    vaultData?.history.filter((h) => h.type !== "Unknown") ?? [];
+  const visibleActivity = showAllActivity ? activity : activity.slice(0, 6);
+
+  function refresh() {
+    refreshVaults();
+    refreshHoldings();
+  }
+
+  const loading =
+    vaultState.status === "loading" && !vaultData;
+  const error =
+    vaultState.status === "error" && !vaultData
+      ? vaultState.error
+      : null;
 
   return (
     <CinematicShell mode="dim">
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 pb-24 pt-28">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 pb-24 pt-28">
         {/* ───── Hero — total value ───── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -156,38 +175,41 @@ export function PortfolioView() {
           >
             {fmtUsd(totals.totalUsd)}
           </h1>
-          {totals.blendedApy > 0 && (
-            <p className="text-body-sm text-canvas-white/70">
-              Earning{" "}
-              <span className="font-semibold text-cash-lime">
-                {fmtPct(totals.blendedApy)} APY
-              </span>{" "}
-              · {counts.positions} active position
-              {counts.positions === 1 ? "" : "s"}
-            </p>
-          )}
+          <p className="text-body-sm text-canvas-white/70">
+            {fmtUsd(totals.holdingsUsd)} in wallet ·{" "}
+            <span className="text-canvas-white/90">
+              {fmtUsd(totals.positionsUsd)} earning
+            </span>
+            {totals.blendedApy > 0 && (
+              <>
+                {" "}
+                @{" "}
+                <span className="font-semibold text-cash-lime">
+                  {fmtPct(totals.blendedApy)} APY
+                </span>
+              </>
+            )}
+          </p>
         </motion.div>
 
         {/* ───── States ───── */}
         {!account && (
           <EmptyCard>
             <span className="text-canvas-white">
-              Connect your wallet to see your vault positions.
+              Connect your wallet to see your full portfolio.
             </span>
           </EmptyCard>
         )}
-        {account && state.status === "loading" && !data && (
+        {account && loading && (
           <EmptyCard>
             <Loader2 className="size-4 animate-spin text-canvas-white/70" />
-            <span className="text-canvas-white/70">Loading positions…</span>
+            <span className="text-canvas-white/70">Loading portfolio…</span>
           </EmptyCard>
         )}
-        {account && state.status === "error" && !data && (
+        {account && error && (
           <EmptyCard tone="warn">
             <AlertTriangle className="size-4 text-warning" strokeWidth={2.4} />
-            <span className="text-canvas-white">
-              Couldn't load: {state.error}
-            </span>
+            <span className="text-canvas-white">Couldn't load: {error}</span>
             <button
               type="button"
               onClick={refresh}
@@ -199,94 +221,95 @@ export function PortfolioView() {
           </EmptyCard>
         )}
 
-        {/* ───── Tabs + panes ───── */}
-        {account && data && (
-          <>
-            <div
-              className="mx-auto flex w-full max-w-md items-center gap-0.5 liquid-glass p-1"
-              style={{ borderRadius: 9999 }}
-            >
-              <TabBtn
-                active={tab === "positions"}
-                onClick={() => setTab("positions")}
-                count={counts.positions}
-              >
-                Positions
-              </TabBtn>
-              <TabBtn
-                active={tab === "pending"}
-                onClick={() => setTab("pending")}
-                count={counts.pending}
-              >
-                Pending
-              </TabBtn>
-              <TabBtn
-                active={tab === "activity"}
-                onClick={() => setTab("activity")}
-                count={counts.activity}
-              >
-                Activity
-              </TabBtn>
-            </div>
-
-            <div className="space-y-1.5">
-              {tab === "positions" &&
-                (data.positions.length > 0 ? (
-                  data.positions.map((p, i) => (
-                    <PositionRow
-                      key={p.vaultId}
-                      p={p}
-                      i={i}
-                      onWithdraw={() => setOpenPosition(p)}
-                    />
-                  ))
-                ) : (
-                  <EmptyCard>
-                    <span className="text-canvas-white/55">
-                      No active positions yet. Plant one →
-                    </span>
-                  </EmptyCard>
-                ))}
-
-              {tab === "pending" &&
-                (data.withdrawals.filter(
-                  (w) => w.status.toLowerCase() === "pending",
-                ).length > 0 ? (
-                  data.withdrawals
-                    .filter((w) => w.status.toLowerCase() === "pending")
-                    .map((w, i) => (
-                      <PendingRow
-                        key={w.txDigest}
-                        w={w}
-                        i={i}
-                        now={now}
-                        positions={data.positions}
-                        onCancelled={refresh}
-                      />
-                    ))
-                ) : (
-                  <EmptyCard>
-                    <span className="text-canvas-white/55">
-                      No pending withdrawals.
-                    </span>
-                  </EmptyCard>
-                ))}
-
-              {tab === "activity" &&
-                (data.history.length > 0 ? (
-                  data.history.map((h, i) => (
-                    <ActivityRow key={i} item={h} i={i} />
-                  ))
-                ) : (
-                  <EmptyCard>
-                    <span className="text-canvas-white/55">
-                      No vault activity yet.
-                    </span>
-                  </EmptyCard>
-                ))}
-            </div>
-          </>
+        {/* ───── Vault Positions ───── */}
+        {account && vaultData && vaultData.positions.length > 0 && (
+          <Section
+            title="Vault positions"
+            subtitle="Earning yield"
+            count={vaultData.positions.length}
+          >
+            {vaultData.positions.map((p, i) => (
+              <PositionRow
+                key={p.vaultId}
+                p={p}
+                i={i}
+                onWithdraw={() => setOpenPosition(p)}
+              />
+            ))}
+          </Section>
         )}
+
+        {/* ───── Pending withdrawals ───── */}
+        {account && vaultData && pending.length > 0 && (
+          <Section
+            title="Pending withdrawals"
+            subtitle="Processing after the vault's lockup window"
+            count={pending.length}
+          >
+            {pending.map((w, i) => (
+              <PendingRow
+                key={w.txDigest}
+                w={w}
+                i={i}
+                now={now}
+                positions={vaultData.positions}
+                onCancelled={refresh}
+              />
+            ))}
+          </Section>
+        )}
+
+        {/* ───── Wallet holdings ───── */}
+        {account && holdings.length > 0 && (
+          <Section
+            title="Holdings"
+            subtitle="In your wallet · ready to swap or deploy"
+            count={holdings.length}
+          >
+            {holdings.map((h, i) => (
+              <HoldingRow key={h.coinType} h={h} i={i} />
+            ))}
+          </Section>
+        )}
+
+        {/* ───── Activity ───── */}
+        {account && vaultData && activity.length > 0 && (
+          <Section
+            title="Recent activity"
+            subtitle="Deposits, withdrawals, and processed redemptions"
+            count={activity.length}
+          >
+            {visibleActivity.map((h, i) => (
+              <ActivityRow key={i} item={h} i={i} />
+            ))}
+            {activity.length > 6 && (
+              <button
+                type="button"
+                onClick={() => setShowAllActivity((v) => !v)}
+                className="mt-1 w-full bg-canvas-white/8 px-3 py-2 text-caption font-medium text-canvas-white/70 transition-colors hover:bg-canvas-white/15 hover:text-canvas-white"
+                style={{ borderRadius: 12 }}
+              >
+                {showAllActivity
+                  ? "Show less"
+                  : `Show ${activity.length - 6} more`}
+              </button>
+            )}
+          </Section>
+        )}
+
+        {/* ───── Empty fallback ───── */}
+        {account &&
+          vaultData &&
+          vaultData.positions.length === 0 &&
+          pending.length === 0 &&
+          holdings.length === 0 &&
+          activity.length === 0 && (
+            <EmptyCard>
+              <span className="text-canvas-white/55">
+                Nothing in your garden yet. Plant a seed →
+              </span>
+            </EmptyCard>
+          )}
       </main>
 
       <RedeemDialog
@@ -306,42 +329,86 @@ export function PortfolioView() {
 // Sub-components
 // ─────────────────────────────────────────────────────────
 
-function TabBtn({
-  children,
-  active,
-  onClick,
+function Section({
+  title,
+  subtitle,
   count,
+  children,
 }: {
-  children: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
+  title: string;
+  subtitle?: string;
   count: number;
+  children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex-1 px-4 py-2 text-caption font-semibold transition-colors",
-        active
-          ? "bg-midnight-black text-canvas-white"
-          : "text-canvas-white/55 hover:text-canvas-white",
-      )}
-      style={{ borderRadius: 9999 }}
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-3"
     >
-      {children}
-      {count > 0 && (
-        <span
-          className={cn(
-            "ml-1.5 text-[10px] tabular-nums",
-            active ? "text-canvas-white/70" : "text-canvas-white/40",
+      <div className="flex items-baseline justify-between gap-3 px-1">
+        <div className="space-y-0.5">
+          <h2 className="text-body-lg font-semibold text-canvas-white">
+            {title}{" "}
+            <span className="text-canvas-white/40 tabular-nums">
+              · {count}
+            </span>
+          </h2>
+          {subtitle && (
+            <p className="text-caption text-canvas-white/55">{subtitle}</p>
           )}
-        >
-          {count}
-        </span>
-      )}
-    </button>
+        </div>
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </motion.section>
   );
+}
+
+function HoldingRow({ h, i }: { h: TokenHolding; i: number }) {
+  const hasPrice = typeof h.priceUsd === "number" && h.priceUsd > 0;
+  const hasValue = typeof h.valueUsd === "number";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.03 * i, duration: 0.2 }}
+      className="liquid-glass flex items-center gap-3 px-4 py-3"
+      style={{ borderRadius: 18 }}
+    >
+      <AssetIcon src={h.iconUrl} label={h.symbol} size={40} />
+      <div className="flex min-w-0 flex-1 flex-col leading-tight">
+        <span className="truncate text-body font-semibold text-canvas-white">
+          {h.symbol}
+        </span>
+        <span className="truncate text-caption text-canvas-white/55">
+          {hasPrice && fmtPriceUsd(h.priceUsd!)}
+          {hasPrice && !h.known ? " · " : ""}
+          {!h.known && (
+            <span title={h.coinType}>{truncateCoinType(h.coinType)}</span>
+          )}
+          {!hasPrice && h.known && "No price"}
+        </span>
+      </div>
+      <div className="flex flex-col items-end leading-tight">
+        <span className="text-body font-semibold tabular-nums text-canvas-white">
+          {hasValue ? fmtUsd(h.valueUsd!) : fmtAmount(h.balance)}
+        </span>
+        <span className="text-caption tabular-nums text-canvas-white/55">
+          {fmtAmount(h.balance)} {h.symbol}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+function fmtPriceUsd(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return "—";
+  if (n >= 1)
+    return `$${n.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(6)}`;
+  return `$${n.toExponential(2)}`;
 }
 
 function EmptyCard({
