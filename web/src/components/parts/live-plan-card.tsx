@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Loader2,
   ShieldCheck,
   Check,
   ExternalLink,
-  ChevronRight,
+  ChevronDown,
   ArrowRight,
   Repeat,
   Split,
@@ -28,8 +28,12 @@ import type {
   ResolvedDepositStep,
   ResolvedSwapStep,
   ResolvedSplitStep,
+  ResolvedMergeStep,
   ResolvedRedeemStep,
+  ResolvedCancelRedeemStep,
+  ResolvedStep,
 } from "@/lib/ai/action-plan-cache";
+import { dexLabel } from "@/lib/bluefin7k";
 import { untrustedDexes } from "@/lib/route-trust";
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
 import { fmtAmount, fmtPct } from "@/lib/format";
@@ -39,6 +43,19 @@ import {
   computeBalanceCheck,
   type BalanceCheck,
 } from "@/lib/balance-check";
+
+/* ─────────────────────────────────────────────────────────
+ * ANIMATION STORYBOARD — step row expand
+ *
+ *   click   user taps step row
+ *  +0ms    chevron rotates 0° → 180°
+ *  +0ms    detail panel height 0 → auto, opacity 0 → 1
+ * +180ms   steady expanded state
+ * ───────────────────────────────────────────────────────── */
+const EXPAND = {
+  duration: 0.18,
+  ease: "easeOut" as const,
+};
 
 type IconLookup = (coinType: string) => string | undefined;
 
@@ -249,7 +266,7 @@ export function LivePlanCard({
         )}
       </div>
 
-      {/* Step trail */}
+      {/* Step trail — every row expands to show its kind-specific detail */}
       <motion.ol
         variants={stagger(0.05, 0.1)}
         initial="initial"
@@ -258,7 +275,7 @@ export function LivePlanCard({
       >
         {cached.steps.map((s, i) => (
           <motion.li key={s.id} variants={fadeUp}>
-            <StepRow
+            <ExpandableStep
               step={s}
               idx={i}
               iconLookup={iconLookup}
@@ -268,18 +285,8 @@ export function LivePlanCard({
         ))}
       </motion.ol>
 
-      {/* Stats */}
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Stat
-          label="Total deposit"
-          value={summarizeDeposits(depositSteps)}
-          tone="lime"
-        />
-        <Stat
-          label="Network fee"
-          value={`~${cached.summary.estimatedGasSui.toFixed(4)} SUI`}
-        />
-      </div>
+      {/* Kind-dispatched aggregate stats */}
+      <PlanStats cached={cached} />
 
       {/* Guardian */}
       <div className="space-y-2">
@@ -430,114 +437,162 @@ export function LivePlanCard({
   );
 }
 
-function StepRow({
+/**
+ * Wraps any step row with click-to-expand behavior. The summary line
+ * stays as-is; the detail panel is dispatched per step kind.
+ */
+function ExpandableStep({
   step,
   idx,
   iconLookup,
   onOpenVault,
 }: {
-  step: CachedActionPlan["steps"][number];
+  step: ResolvedStep;
   idx: number;
   iconLookup: IconLookup;
   onOpenVault: (vaultId: string) => void;
 }) {
-  if (step.kind === "swap") {
-    return <SwapStepRow s={step} idx={idx} iconLookup={iconLookup} />;
-  }
-  if (step.kind === "split") {
-    return <SplitStepRow s={step} idx={idx} iconLookup={iconLookup} />;
-  }
-  if (step.kind === "merge") {
-    return <MergeStepRow s={step} idx={idx} iconLookup={iconLookup} />;
-  }
-  if (step.kind === "redeemFromVault") {
-    return <RedeemStepRow s={step} idx={idx} iconLookup={iconLookup} />;
-  }
-  if (step.kind === "cancelRedeemFromVault") {
-    return <CancelStepRow s={step} idx={idx} />;
-  }
-  return (
-    <DepositStepRow
-      s={step}
-      idx={idx}
-      iconLookup={iconLookup}
-      onOpen={onOpenVault}
-    />
-  );
-}
+  const [open, setOpen] = useState(false);
 
-function RedeemStepRow({
-  s,
-  idx,
-  iconLookup,
-}: {
-  s: import("@/lib/ai/action-plan-cache").ResolvedRedeemStep;
-  idx: number;
-  iconLookup: IconLookup;
-}) {
   return (
     <div
-      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
+      className={cn(
+        "liquid-glass overflow-hidden transition-colors",
+        open && "bg-white/[0.08]",
+      )}
       style={{ borderRadius: 14 }}
     >
-      <StepIndex n={idx + 1} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <AssetIcon
-          src={s.vault.logoUrl ?? iconLookup(s.vault.depositCoinType)}
-          label={s.vault.name}
-          size={20}
-        />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {fmtAmount(s.sharesHuman)}
-        </span>
-        <span className="text-caption text-canvas-white/55">
-          {s.receiptSymbol}
-        </span>
-        <ArrowRight
-          className="size-3 shrink-0 text-canvas-white/40"
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
+      >
+        <StepIndex n={idx + 1} lit={step.kind === "deposit"} />
+        <div className="min-w-0 flex-1">
+          <StepSummary step={step} iconLookup={iconLookup} />
+        </div>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-canvas-white/40 transition-transform duration-200",
+            open && "rotate-180 text-canvas-white",
+          )}
           strokeWidth={2.4}
         />
-        <span className="truncate text-body-sm font-semibold text-canvas-white">
-          {s.vault.name}
-        </span>
-      </div>
-      <ActionTag
-        icon={<Repeat className="size-3 -scale-x-100" strokeWidth={2.4} />}
-        label={
-          s.vault.withdrawalPeriodDays
-            ? `Withdraw · ≤${s.vault.withdrawalPeriodDays}d`
-            : "Withdraw"
-        }
-      />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={EXPAND}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-white/10 px-3 py-3">
+              <StepDetail
+                step={step}
+                iconLookup={iconLookup}
+                onOpenVault={onOpenVault}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function CancelStepRow({
-  s,
-  idx,
+/**
+ * Per-kind summary — the one-line content shown in the collapsed row.
+ * Kept lightweight: just enough to tell the user what each step does at
+ * a glance. The detail panel handles depth.
+ */
+function StepSummary({
+  step,
+  iconLookup,
 }: {
-  s: import("@/lib/ai/action-plan-cache").ResolvedCancelRedeemStep;
-  idx: number;
+  step: ResolvedStep;
+  iconLookup: IconLookup;
+}) {
+  if (step.kind === "swap") return <SwapSummary s={step} iconLookup={iconLookup} />;
+  if (step.kind === "split") return <SplitSummary s={step} iconLookup={iconLookup} />;
+  if (step.kind === "merge") return <MergeSummary s={step} iconLookup={iconLookup} />;
+  if (step.kind === "deposit") return <DepositSummary s={step} iconLookup={iconLookup} />;
+  if (step.kind === "redeemFromVault") return <RedeemSummary s={step} iconLookup={iconLookup} />;
+  return <CancelSummary s={step} />;
+}
+
+function StepDetail({
+  step,
+  iconLookup,
+  onOpenVault,
+}: {
+  step: ResolvedStep;
+  iconLookup: IconLookup;
+  onOpenVault: (vaultId: string) => void;
+}) {
+  if (step.kind === "swap") return <SwapDetail s={step} iconLookup={iconLookup} />;
+  if (step.kind === "split") return <SplitDetail s={step} />;
+  if (step.kind === "merge") return <MergeDetail s={step} />;
+  if (step.kind === "deposit")
+    return <DepositDetail s={step} onOpenVault={onOpenVault} />;
+  if (step.kind === "redeemFromVault") return <RedeemDetail s={step} />;
+  return <CancelDetail s={step} />;
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Per-kind summary rows — collapsed view (one-line content)
+ * ───────────────────────────────────────────────────────── */
+
+function RedeemSummary({
+  s,
+  iconLookup,
+}: {
+  s: ResolvedRedeemStep;
+  iconLookup: IconLookup;
 }) {
   return (
-    <div
-      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
-      style={{ borderRadius: 14 }}
-    >
-      <StepIndex n={idx + 1} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="truncate text-body-sm font-semibold text-canvas-white">
-          Cancel withdrawal · {s.vault.name}
-        </span>
-        <span className="text-caption text-canvas-white/55">
-          req #{s.sequenceNumber}
-        </span>
-      </div>
-      <ActionTag
-        icon={<X className="size-3" strokeWidth={2.4} />}
-        label="Cancel"
+    <div className="flex flex-wrap items-center gap-1.5">
+      <AssetIcon
+        src={s.vault.logoUrl ?? iconLookup(s.vault.depositCoinType)}
+        label={s.vault.name}
+        size={20}
       />
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        {fmtAmount(s.sharesHuman)}
+      </span>
+      <span className="text-caption text-canvas-white/55">{s.receiptSymbol}</span>
+      <ArrowRight
+        className="size-3 shrink-0 text-canvas-white/40"
+        strokeWidth={2.4}
+      />
+      <span className="truncate text-body-sm font-medium text-canvas-white">
+        {s.vault.name}
+      </span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <Repeat className="size-3 -scale-x-100" strokeWidth={2.4} />
+        {s.vault.withdrawalPeriodDays
+          ? `≤${s.vault.withdrawalPeriodDays}d`
+          : "Withdraw"}
+      </span>
+    </div>
+  );
+}
+
+function CancelSummary({ s }: { s: ResolvedCancelRedeemStep }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="truncate text-body-sm font-semibold text-canvas-white">
+        Cancel withdrawal · {s.vault.name}
+      </span>
+      <span className="text-caption text-canvas-white/55">
+        req #{s.sequenceNumber}
+      </span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <X className="size-3" strokeWidth={2.4} />
+        Cancel
+      </span>
     </div>
   );
 }
@@ -558,73 +613,48 @@ function StepIndex({ n, lit }: { n: number; lit?: boolean }) {
   );
 }
 
-function ActionTag({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/40">
-      {icon}
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function MergeStepRow({
+function MergeSummary({
   s,
-  idx,
   iconLookup,
 }: {
-  s: import("@/lib/ai/action-plan-cache").ResolvedMergeStep;
-  idx: number;
+  s: ResolvedMergeStep;
   iconLookup: IconLookup;
 }) {
   return (
-    <div
-      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
-      style={{ borderRadius: 14 }}
-    >
-      <StepIndex n={idx + 1} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="flex flex-wrap items-center gap-1">
-          {s.sources.map((src, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center liquid-glass px-1.5 py-0 text-caption tabular-nums text-canvas-white"
-              style={{ borderRadius: 9999 }}
-            >
-              {fmtAmount(src.human)}
-            </span>
-          ))}
-        </span>
-        <ArrowRight
-          className="size-3 shrink-0 text-canvas-white/40"
-          strokeWidth={2.4}
-        />
-        <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {fmtAmount(s.totalHuman)}
-        </span>
-        <span className="text-caption text-canvas-white/55">{s.symbol}</span>
-      </div>
-      <ActionTag
-        icon={<Merge className="size-3" strokeWidth={2.4} />}
-        label="Merge"
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="flex flex-wrap items-center gap-1">
+        {s.sources.map((src, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center bg-white/[0.08] px-1.5 py-0 text-caption tabular-nums text-canvas-white"
+            style={{ borderRadius: 9999 }}
+          >
+            {fmtAmount(src.human)}
+          </span>
+        ))}
+      </span>
+      <ArrowRight
+        className="size-3 shrink-0 text-canvas-white/40"
+        strokeWidth={2.4}
       />
+      <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        {fmtAmount(s.totalHuman)}
+      </span>
+      <span className="text-caption text-canvas-white/55">{s.symbol}</span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <Merge className="size-3" strokeWidth={2.4} />
+        Merge
+      </span>
     </div>
   );
 }
 
-function SwapStepRow({
+function SwapSummary({
   s,
-  idx,
   iconLookup,
 }: {
   s: ResolvedSwapStep;
-  idx: number;
   iconLookup: IconLookup;
 }) {
   const impact =
@@ -634,115 +664,90 @@ function SwapStepRow({
         : `${s.impactPct.toFixed(3)}%`
       : null;
   return (
-    <div
-      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
-      style={{ borderRadius: 14 }}
-    >
-      <StepIndex n={idx + 1} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <AssetIcon
-          src={iconLookup(s.fromCoinType)}
-          label={s.fromSymbol}
-          size={20}
-        />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {fmtAmount(s.fromAmountHuman)}
-        </span>
-        <span className="text-caption text-canvas-white/55">{s.fromSymbol}</span>
-        <ArrowRight
-          className="size-3 shrink-0 text-canvas-white/40"
-          strokeWidth={2.4}
-        />
-        <AssetIcon
-          src={iconLookup(s.toCoinType)}
-          label={s.toSymbol}
-          size={20}
-        />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          ≈ {fmtAmount(s.toAmountHuman)}
-        </span>
-        <span className="text-caption text-canvas-white/55">{s.toSymbol}</span>
-      </div>
-      <ActionTag
-        icon={<Repeat className="size-3" strokeWidth={2.4} />}
-        label={impact ? `Swap · ${impact}` : "Swap"}
+    <div className="flex flex-wrap items-center gap-1.5">
+      <AssetIcon
+        src={iconLookup(s.fromCoinType)}
+        label={s.fromSymbol}
+        size={20}
       />
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        {fmtAmount(s.fromAmountHuman)}
+      </span>
+      <span className="text-caption text-canvas-white/55">{s.fromSymbol}</span>
+      <ArrowRight
+        className="size-3 shrink-0 text-canvas-white/40"
+        strokeWidth={2.4}
+      />
+      <AssetIcon
+        src={iconLookup(s.toCoinType)}
+        label={s.toSymbol}
+        size={20}
+      />
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        ≈ {fmtAmount(s.toAmountHuman)}
+      </span>
+      <span className="text-caption text-canvas-white/55">{s.toSymbol}</span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <Repeat className="size-3" strokeWidth={2.4} />
+        {impact ? `Swap · ${impact}` : "Swap"}
+      </span>
     </div>
   );
 }
 
-function SplitStepRow({
+function SplitSummary({
   s,
-  idx,
   iconLookup,
 }: {
   s: ResolvedSplitStep;
-  idx: number;
   iconLookup: IconLookup;
 }) {
   return (
-    <div
-      className="flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5"
-      style={{ borderRadius: 14 }}
-    >
-      <StepIndex n={idx + 1} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <AssetIcon
-          src={iconLookup(s.sourceCoinType)}
-          label={s.sourceSymbol}
-          size={20}
-        />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
-          {fmtAmount(s.totalHuman)}
-        </span>
-        <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
-        <ArrowRight
-          className="size-3 shrink-0 text-canvas-white/40"
-          strokeWidth={2.4}
-        />
-        <span className="flex flex-wrap items-center gap-1">
-          {s.portions.map((p, i) => (
-            <span
-              key={i}
-              className="inline-flex items-center liquid-glass px-2 py-0 text-caption font-semibold tabular-nums text-canvas-white"
-              style={{ borderRadius: 9999 }}
-            >
-              {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
-            </span>
-          ))}
-        </span>
-      </div>
-      <ActionTag
-        icon={<Split className="size-3" strokeWidth={2.4} />}
-        label="Split"
+    <div className="flex flex-wrap items-center gap-1.5">
+      <AssetIcon
+        src={iconLookup(s.sourceCoinType)}
+        label={s.sourceSymbol}
+        size={20}
       />
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        {fmtAmount(s.totalHuman)}
+      </span>
+      <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
+      <ArrowRight
+        className="size-3 shrink-0 text-canvas-white/40"
+        strokeWidth={2.4}
+      />
+      <span className="flex flex-wrap items-center gap-1">
+        {s.portions.map((p, i) => (
+          <span
+            key={i}
+            className="inline-flex items-center bg-white/[0.08] px-2 py-0 text-caption font-semibold tabular-nums text-canvas-white"
+            style={{ borderRadius: 9999 }}
+          >
+            {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
+          </span>
+        ))}
+      </span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <Split className="size-3" strokeWidth={2.4} />
+        Split
+      </span>
     </div>
   );
 }
 
-function DepositStepRow({
+function DepositSummary({
   s,
-  idx,
   iconLookup,
-  onOpen,
 }: {
   s: ResolvedDepositStep;
-  idx: number;
   iconLookup: IconLookup;
-  onOpen: (vaultId: string) => void;
 }) {
   const lockup = s.vault.withdrawalPeriodDays
     ? `${s.vault.withdrawalPeriodDays}d lockup`
     : null;
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(s.vault.id)}
-      className="group flex w-full items-center gap-2.5 liquid-glass px-3 py-2.5 text-left transition-colors hover:bg-cash-lime/10"
-      style={{ borderRadius: 14 }}
-    >
-      <StepIndex n={idx + 1} lit />
-
+    <div className="flex w-full items-center gap-2.5">
       <div className="flex shrink-0 items-center gap-1.5">
         <AssetIcon
           src={iconLookup(s.sourceCoinType)}
@@ -754,12 +759,10 @@ function DepositStepRow({
         </span>
         <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
       </div>
-
       <ArrowRight
         className="size-3 shrink-0 text-canvas-white/40"
         strokeWidth={2.4}
       />
-
       <div className="min-w-0 flex-1">
         <div className="truncate text-body-sm font-semibold leading-tight text-canvas-white">
           {s.vault.name}
@@ -769,22 +772,15 @@ function DepositStepRow({
           {lockup ? ` · ${lockup}` : ""}
         </div>
       </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <div className="text-right leading-tight">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
-            APY
-          </div>
-          <div className="text-body-sm font-semibold tabular-nums text-canvas-white">
-            {fmtPct(s.vault.apyPct)}
-          </div>
+      <div className="text-right leading-tight">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+          APY
         </div>
-        <ChevronRight
-          className="size-4 text-canvas-white/40 transition-transform group-hover:translate-x-0.5 group-hover:text-canvas-white"
-          strokeWidth={2.4}
-        />
+        <div className="text-body-sm font-semibold tabular-nums text-canvas-white">
+          {fmtPct(s.vault.apyPct)}
+        </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -1291,4 +1287,521 @@ function shortfallButtonLabel(check: BalanceCheck): string {
     return `Need ${fmtAmount(inputs[0].deficit)} more ${inputs[0].symbol}`;
   }
   return "Insufficient balance";
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Per-kind expanded detail panels
+ * ───────────────────────────────────────────────────────── */
+
+function DetailGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-body-sm">
+      {children}
+    </div>
+  );
+}
+
+function DetailKV({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}) {
+  return (
+    <>
+      <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "text-right text-canvas-white",
+          mono && "font-mono tabular-nums",
+        )}
+      >
+        {value}
+      </span>
+    </>
+  );
+}
+
+function fmtImpact(pct: number | undefined): string {
+  if (pct === undefined || pct <= 0) return "0%";
+  if (pct < 0.001) return "<0.001%";
+  return `${pct.toFixed(3)}%`;
+}
+
+function SwapDetail({
+  s,
+  iconLookup,
+}: {
+  s: ResolvedSwapStep;
+  iconLookup: IconLookup;
+}) {
+  const rate =
+    s.fromAmountHuman > 0 ? s.toAmountHuman / s.fromAmountHuman : 0;
+  return (
+    <div className="space-y-3">
+      <DetailGrid>
+        <DetailKV
+          label="Effective rate"
+          value={
+            <>
+              1 {s.fromSymbol} ≈ {rate.toFixed(6)} {s.toSymbol}
+            </>
+          }
+          mono
+        />
+        <DetailKV label="Price impact" value={fmtImpact(s.impactPct)} mono />
+        <DetailKV
+          label="Slippage cap"
+          value={<>{s.slippagePct}%</>}
+          mono
+        />
+        <DetailKV
+          label="Min received"
+          value={
+            <>
+              {fmtAmount(s.toAmountHuman * (1 - s.slippagePct / 100))}{" "}
+              {s.toSymbol}
+            </>
+          }
+          mono
+        />
+      </DetailGrid>
+      <RouteBreakdown s={s} iconLookup={iconLookup} />
+    </div>
+  );
+}
+
+/**
+ * Route breakdown for a swap — per-route share% + DEX chain for each hop.
+ * Data sourced from s.quote.routes[].hops[].pool.type with share derived
+ * from tokenInAmount when the SDK doesn't provide it directly.
+ */
+function RouteBreakdown({
+  s,
+  iconLookup,
+}: {
+  s: ResolvedSwapStep;
+  iconLookup: IconLookup;
+}) {
+  const routes = s.quote.routes ?? [];
+  const totalIn = routes.reduce(
+    (acc, r) => acc + (Number(r.tokenInAmount) || 0),
+    0,
+  );
+  const withShares = routes.map((r) => {
+    const declared = typeof r.share === "number" ? r.share : null;
+    const derived = totalIn > 0 ? Number(r.tokenInAmount) / totalIn : 0;
+    return { ...r, _share: declared ?? derived };
+  });
+  const sorted = [...withShares].sort((a, b) => b._share - a._share);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+          Route
+        </span>
+        <span className="text-caption text-canvas-white/55">
+          {sorted.length === 0
+            ? "1 direct route"
+            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {sorted.length === 0 ? (
+          <div className="text-body-sm text-canvas-white/55">
+            Direct {s.fromSymbol} → {s.toSymbol} swap on Bluefin7K.
+          </div>
+        ) : (
+          sorted.map((route, i) => (
+            <SplitRow key={i} route={route} iconLookup={iconLookup} />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function symbolFromType(coinType: string): string {
+  const parts = coinType.split("::");
+  return parts[parts.length - 1] || "?";
+}
+
+function SplitRow({
+  route,
+  iconLookup,
+}: {
+  route: {
+    _share: number;
+    hops: Array<{
+      pool?: { type?: string };
+      tokenIn?: string;
+      tokenOut?: string;
+    }>;
+  };
+  iconLookup: IconLookup;
+}) {
+  const pct = Math.round(route._share * 100);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span
+        className="inline-flex shrink-0 items-center bg-cash-lime/20 px-2 py-0.5 font-mono text-caption font-semibold tabular-nums text-canvas-white"
+        style={{ borderRadius: 9999, minWidth: 40, justifyContent: "center" }}
+      >
+        {pct}%
+      </span>
+      {route.hops.map((hop, i) => {
+        const type = hop.pool?.type;
+        const inIcon = hop.tokenIn ? iconLookup(hop.tokenIn) : undefined;
+        const outIcon = hop.tokenOut ? iconLookup(hop.tokenOut) : undefined;
+        const inSym = hop.tokenIn ? symbolFromType(hop.tokenIn) : "?";
+        const outSym = hop.tokenOut ? symbolFromType(hop.tokenOut) : "?";
+        return (
+          <Fragment key={i}>
+            {i > 0 && (
+              <ArrowRight
+                className="size-3 shrink-0 text-canvas-white/55"
+                strokeWidth={2.4}
+              />
+            )}
+            <span
+              className="inline-flex shrink-0 items-center gap-1.5 bg-white/[0.08] py-0.5 pl-1 pr-2.5 text-body-sm font-medium text-canvas-white"
+              style={{ borderRadius: 9999 }}
+              title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
+            >
+              <span className="inline-flex -space-x-1">
+                <AssetIcon src={inIcon} label={inSym} size={16} />
+                <AssetIcon src={outIcon} label={outSym} size={16} />
+              </span>
+              {type ? dexLabel(type) : "unknown"}
+            </span>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function DepositDetail({
+  s,
+  onOpenVault,
+}: {
+  s: ResolvedDepositStep;
+  onOpenVault: (vaultId: string) => void;
+}) {
+  const v = s.vault;
+  const lendApy = v.apyBreakdown.lendingApyPct;
+  const rewardApy = v.apyBreakdown.rewardApyPct;
+  const totalApy = lendApy + rewardApy;
+  const lendShare = totalApy > 0 ? lendApy / totalApy : 0;
+  return (
+    <div className="space-y-3">
+      <DetailGrid>
+        <DetailKV label="Vault" value={v.name} />
+        <DetailKV label="Category" value={v.category} />
+        <DetailKV
+          label="APY breakdown"
+          value={
+            <>
+              {fmtPct(lendApy)} yield + {fmtPct(rewardApy)} rewards
+            </>
+          }
+          mono
+        />
+        <DetailKV label="Headline APY" value={fmtPct(v.apyPct)} mono />
+        {v.tvlUsd !== undefined && (
+          <DetailKV
+            label="TVL"
+            value={<>${Math.round(v.tvlUsd).toLocaleString()}</>}
+            mono
+          />
+        )}
+        <DetailKV
+          label="Withdrawal"
+          value={
+            v.withdrawalPeriodDays
+              ? `≤${v.withdrawalPeriodDays}d lockup`
+              : "Settles soon"
+          }
+        />
+      </DetailGrid>
+      {lendShare < 0.5 && totalApy > 0 && (
+        <div className="text-caption text-canvas-white/55">
+          More than half of headline APY is reward emissions — variable, not
+          durable yield.
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenVault(v.id);
+        }}
+        className="inline-flex items-center gap-1 bg-white/[0.08] px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-white/[0.14]"
+        style={{ borderRadius: 9999 }}
+      >
+        Full vault info
+        <ExternalLink className="size-3" strokeWidth={2.4} />
+      </button>
+    </div>
+  );
+}
+
+function SplitDetail({ s }: { s: ResolvedSplitStep }) {
+  return (
+    <div className="space-y-2">
+      <DetailGrid>
+        <DetailKV
+          label="Source"
+          value={
+            <>
+              {fmtAmount(s.totalHuman)} {s.sourceSymbol}
+            </>
+          }
+          mono
+        />
+        <DetailKV
+          label="Portions"
+          value={<>{s.portions.length}-way split</>}
+        />
+      </DetailGrid>
+      <div className="space-y-1">
+        {s.portions.map((p, i) => (
+          <div key={i} className="flex items-center justify-between text-body-sm">
+            <span className="text-canvas-white/55">Portion {i + 1}</span>
+            <span className="font-mono tabular-nums text-canvas-white">
+              {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}% · {fmtAmount(p.human)} {s.sourceSymbol}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MergeDetail({ s }: { s: ResolvedMergeStep }) {
+  return (
+    <div className="space-y-2">
+      <DetailGrid>
+        <DetailKV
+          label="Total"
+          value={
+            <>
+              {fmtAmount(s.totalHuman)} {s.symbol}
+            </>
+          }
+          mono
+        />
+        <DetailKV
+          label="Sources"
+          value={<>{s.sources.length} contributors</>}
+        />
+      </DetailGrid>
+      <div className="space-y-1">
+        {s.sources.map((src, i) => (
+          <div key={i} className="flex items-center justify-between text-body-sm">
+            <span className="text-canvas-white/55">{src.label}</span>
+            <span className="font-mono tabular-nums text-canvas-white">
+              {fmtAmount(src.human)} {s.symbol}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
+  const v = s.vault;
+  return (
+    <DetailGrid>
+      <DetailKV label="Vault" value={v.name} />
+      <DetailKV
+        label="Burning"
+        value={
+          <>
+            {fmtAmount(s.sharesHuman)} {s.receiptSymbol}
+          </>
+        }
+        mono
+      />
+      <DetailKV
+        label="Settlement"
+        value={
+          v.withdrawalPeriodDays
+            ? `Up to ${v.withdrawalPeriodDays} days`
+            : "Soon (no fixed lockup)"
+        }
+      />
+      <DetailKV
+        label="Note"
+        value={<>Funds arrive after the operator unwinds — not in this tx.</>}
+      />
+    </DetailGrid>
+  );
+}
+
+function CancelDetail({ s }: { s: ResolvedCancelRedeemStep }) {
+  return (
+    <DetailGrid>
+      <DetailKV label="Vault" value={s.vault.name} />
+      <DetailKV
+        label="Request #"
+        value={<span className="font-mono">{s.sequenceNumber}</span>}
+      />
+      <DetailKV
+        label="Effect"
+        value={<>Shares return to your wallet on confirmation.</>}
+      />
+    </DetailGrid>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Aggregate stats — picks tiles based on which step kinds
+ * are present. Solo swap looks different from a deposit plan
+ * looks different from a redeem.
+ * ───────────────────────────────────────────────────────── */
+
+type StatTile = {
+  id: string;
+  label: string;
+  value: string;
+  tone?: "default" | "lime";
+};
+
+function PlanStats({ cached }: { cached: CachedActionPlan }) {
+  const tiles = computeStatTiles(cached);
+  const cols =
+    tiles.length >= 4 ? "sm:grid-cols-4"
+    : tiles.length === 3 ? "sm:grid-cols-3"
+    : "sm:grid-cols-2";
+  return (
+    <div className={cn("grid gap-2", cols)}>
+      {tiles.map((tile) => (
+        <Stat
+          key={tile.id}
+          label={tile.label}
+          value={tile.value}
+          tone={tile.tone}
+        />
+      ))}
+    </div>
+  );
+}
+
+function computeStatTiles(cached: CachedActionPlan): StatTile[] {
+  const { swapCount, depositCount, redeemCount, cancelCount } = cached.summary;
+  const swaps = cached.steps.filter(
+    (s): s is ResolvedSwapStep => s.kind === "swap",
+  );
+  const deposits = cached.steps.filter(
+    (s): s is ResolvedDepositStep => s.kind === "deposit",
+  );
+  const redeems = cached.steps.filter(
+    (s): s is ResolvedRedeemStep => s.kind === "redeemFromVault",
+  );
+  const gas = cached.summary.estimatedGasSui;
+  const gasTile: StatTile = {
+    id: "gas",
+    label: "Network fee",
+    value: `~${gas.toFixed(4)} SUI`,
+  };
+
+  // Deposit-driven plans (with or without an upstream swap)
+  if (depositCount > 0) {
+    return [
+      {
+        id: "deposit",
+        label: depositCount === 1 ? "Deposit" : "Total deposit",
+        value: summarizeDeposits(deposits),
+        tone: "lime",
+      },
+      {
+        id: "apy",
+        label: "Blended APY",
+        value: fmtPct(cached.summary.blendedApyPct),
+      },
+      gasTile,
+    ];
+  }
+
+  // Solo redeem
+  if (redeemCount > 0) {
+    const maxLock = Math.max(
+      ...redeems.map((r) => r.vault.withdrawalPeriodDays ?? 0),
+    );
+    return [
+      {
+        id: "shares",
+        label: redeemCount === 1 ? "Burning" : "Total redeem",
+        value: summarizeRedeems(redeems),
+      },
+      {
+        id: "settle",
+        label: "Settlement",
+        value: maxLock > 0 ? `≤${maxLock} days` : "Soon",
+      },
+      gasTile,
+    ];
+  }
+
+  // Pure cancel
+  if (cancelCount > 0 && swapCount === 0) {
+    return [
+      {
+        id: "cancels",
+        label: "Cancellations",
+        value: `${cancelCount}`,
+      },
+      gasTile,
+    ];
+  }
+
+  // Solo or chained swaps without follow-on deposit
+  if (swapCount > 0) {
+    const s = swaps[0];
+    const rate =
+      s.fromAmountHuman > 0 ? s.toAmountHuman / s.fromAmountHuman : 0;
+    const maxImpact = Math.max(0, ...swaps.map((sw) => sw.impactPct ?? 0));
+    return [
+      {
+        id: "rate",
+        label: swapCount === 1 ? "Effective rate" : "Best leg rate",
+        value: `1 ${s.fromSymbol} ≈ ${rate.toFixed(6)} ${s.toSymbol}`,
+      },
+      {
+        id: "impact",
+        label: "Price impact",
+        value: fmtImpact(maxImpact),
+      },
+      gasTile,
+    ];
+  }
+
+  // Empty / unknown — should be unreachable
+  return [gasTile];
+}
+
+function summarizeRedeems(redeems: ResolvedRedeemStep[]): string {
+  if (redeems.length === 0) return "—";
+  if (redeems.length === 1) {
+    const r = redeems[0];
+    return `${fmtAmount(r.sharesHuman)} ${r.receiptSymbol}`;
+  }
+  const byToken = new Map<string, number>();
+  for (const r of redeems) {
+    byToken.set(
+      r.receiptSymbol,
+      (byToken.get(r.receiptSymbol) ?? 0) + r.sharesHuman,
+    );
+  }
+  return Array.from(byToken.entries())
+    .map(([sym, total]) => `${fmtAmount(total)} ${sym}`)
+    .join(" + ");
 }
