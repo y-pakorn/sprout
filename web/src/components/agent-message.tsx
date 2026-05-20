@@ -514,12 +514,10 @@ export function AgentMessage({
           const isLatestPlan =
             planAction.latestPlanId === p.toolCallId;
           if (!isLatestPlan && !isActivePlan) {
-            const depCount = cached.summary.depositCount;
-            const swCount = cached.summary.swapCount;
             return (
               <ToolCallRow
                 key={key}
-                label={`Earlier plan · ${swCount} swap${swCount === 1 ? "" : "s"} + ${depCount} deposit${depCount === 1 ? "" : "s"} · superseded`}
+                label={`Earlier plan · ${formatPlanSummary(cached.summary)} · superseded`}
                 status="output-available"
               />
             );
@@ -694,4 +692,37 @@ function VaultListCard({
       />
     </motion.div>
   );
+}
+
+/**
+ * One-line summary of a plan's shape for the superseded pill copy.
+ * Drops zero-count step kinds and pluralizes naturally so a solo swap
+ * reads "1 swap" and a redeem-only plan reads "1 redeem".
+ */
+function formatPlanSummary(summary: {
+  swapCount: number;
+  depositCount: number;
+  redeemCount: number;
+  cancelCount: number;
+}): string {
+  const parts: string[] = [];
+  if (summary.swapCount > 0) {
+    parts.push(`${summary.swapCount} swap${summary.swapCount === 1 ? "" : "s"}`);
+  }
+  if (summary.depositCount > 0) {
+    parts.push(
+      `${summary.depositCount} deposit${summary.depositCount === 1 ? "" : "s"}`,
+    );
+  }
+  if (summary.redeemCount > 0) {
+    parts.push(
+      `${summary.redeemCount} redeem${summary.redeemCount === 1 ? "" : "s"}`,
+    );
+  }
+  if (summary.cancelCount > 0) {
+    parts.push(
+      `${summary.cancelCount} cancel${summary.cancelCount === 1 ? "" : "s"}`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" + ") : "empty plan";
 }
