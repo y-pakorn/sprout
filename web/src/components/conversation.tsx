@@ -1224,10 +1224,11 @@ export function Conversation() {
             }
           }
           const splitArgs = portionsRaw.map((p) => tx.pure.u64(p));
-          const splitOuts = tx.splitCoins(origin.arg, splitArgs);
-          for (let i = 0; i < splitOuts.length; i++) {
+          // @mysten/sui v2 splitCoins returns a Result (indexable), not an array.
+          const splitResult = tx.splitCoins(origin.arg, splitArgs);
+          for (let i = 0; i < portionsRaw.length; i++) {
             handles.set(`${step.id}.${i}`, {
-              arg: splitOuts[i] as unknown as TransactionObjectArgument,
+              arg: splitResult[i] as unknown as TransactionObjectArgument,
               symbol: origin.symbol,
               coinType: origin.coinType,
               decimals: origin.decimals,
