@@ -29,7 +29,6 @@ import {
   fetchDeployment,
 } from "@/lib/client-vaults";
 import type { SuiVault } from "@/lib/vaults";
-import { quoteCache } from "@/lib/ai/quote-cache";
 import {
   actionPlanCache,
   vaultsListCache,
@@ -88,22 +87,12 @@ export function Conversation() {
   const suiClientRef = useRef(suiClient);
   suiClientRef.current = suiClient;
 
-  // Active swap-action state (one swap card may be live at a time).
-  // Flow: idle → signing (wallet popup) → confirming (waiting for finality)
-  //   → executed:success | executed:failure
-  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
+  // Slippage state — applies to any swap step inside an executePlan plan.
+  // Used to rebuild the plan when the user adjusts the cap on the card.
   const [slippagePct, setSlippagePct] = useState(1);
-  const [signing, setSigning] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [executed, setExecuted] = useState(false);
-  const [txDigest, setTxDigest] = useState<string | undefined>();
-  const [txStatus, setTxStatus] = useState<"success" | "failure" | undefined>();
-  const [txError, setTxError] = useState<string | undefined>();
-  const [gasUsedSui, setGasUsedSui] = useState<number | undefined>();
-  const [receivedAmount, setReceivedAmount] = useState<number | undefined>();
   const [signError, setSignError] = useState<string | null>(null);
 
-  // Active vault-deposit state (mirrors the swap state machine).
+  // Active plan-deposit state (one plan card may be live at a time).
   const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
   const [depositSigning, setDepositSigning] = useState(false);
   const [depositConfirming, setDepositConfirming] = useState(false);
@@ -182,10 +171,6 @@ export function Conversation() {
      * stream's tool-call step finishes.
      */
     onToolCall({ toolCall }) {
-      if (toolCall.toolName === "getSwapQuote") {
-        void runSwapQuote(toolCall, coinMap, addToolResultRef);
-        return;
-      }
       if (toolCall.toolName === "getBalance") {
         void runGetBalance(
           toolCall,
@@ -247,108 +232,6 @@ export function Conversation() {
     toolCallId: string;
     output: unknown;
   }) => Promise<void> | void;
-
-  async function runSwapQuote(
-    toolCall: { toolCallId: string; input: unknown },
-    map: typeof coinMap,
-    ref: React.RefObject<AddResultFn | null>,
-  ) {
-    const addResult = ref.current;
-    if (!addResult) {
-      console.error("[runSwapQuote] addToolResult ref is null");
-      return;
-    }
-    const input = toolCall.input as {
-      fromSymbol: string;
-      toSymbol: string;
-      amount: number;
-    };
-    const { fromSymbol, toSymbol, amount } = input;
-    const tokenIn = resolveSymbol(map, fromSymbol);
-    const tokenOut = resolveSymbol(map, toSymbol);
-
-    if (!tokenIn || !tokenOut) {
-      await addResult({
-        tool: "getSwapQuote",
-        toolCallId: toolCall.toolCallId,
-        output: {
-          error: `Unknown token symbol${!tokenIn ? `: ${fromSymbol}` : `: ${toSymbol}`}. Try USDC, SUI, USDT, WAL, DEEP, or BUCK.`,
-        },
-      });
-      return;
-    }
-
-    try {
-      const amountIn = BigInt(
-        Math.floor(amount * 10 ** tokenIn.decimals),
-      ).toString();
-      // Fetch the swap quote + oracle prices in parallel. SDK's getTokenPrices
-      // returns USD prices per coin_type; we use those as the spot reference.
-      const [fullQuote, prices] = await Promise.all([
-        getQuote({
-          tokenIn: tokenIn.coin_type,
-          tokenOut: tokenOut.coin_type,
-          amountIn,
-        }),
-        getTokenPrices([tokenIn.coin_type, tokenOut.coin_type]),
-      ]);
-      const priceIn = prices[tokenIn.coin_type] ?? 0;
-      const priceOut = prices[tokenOut.coin_type] ?? 0;
-      const impactPct = computePriceImpactPct(
-        fullQuote,
-        priceIn,
-        priceOut,
-        tokenIn.decimals,
-        tokenOut.decimals,
-      );
-
-      quoteCache.set(toolCall.toolCallId, {
-        quote: fullQuote,
-        fromSymbol: fromSymbol.toUpperCase(),
-        toSymbol: toSymbol.toUpperCase(),
-        fromDecimals: tokenIn.decimals,
-        toDecimals: tokenOut.decimals,
-        fromIcon: tokenIn.icon_url,
-        toIcon: tokenOut.icon_url,
-        fromCoinType: tokenIn.coin_type,
-        toCoinType: tokenOut.coin_type,
-        fromVerified: tokenIn.verified,
-        toVerified: tokenOut.verified,
-        fromAmountHuman: amount,
-        spotRate: priceOut > 0 ? priceIn / priceOut : 0,
-        impactPct,
-        fetchedAt: Date.now(),
-      });
-
-      const route = extractRoute(fullQuote);
-      const expectedOutput =
-        Number(fullQuote.returnAmountWithDecimal) / 10 ** tokenOut.decimals;
-
-      const output = {
-        quoteId: toolCall.toolCallId,
-        fromAmount: amount,
-        fromSymbol: fromSymbol.toUpperCase(),
-        toSymbol: toSymbol.toUpperCase(),
-        expectedOutput: Number(expectedOutput.toFixed(6)),
-        priceImpactPct: Number(impactPct.toFixed(3)),
-        hops: route.hopCount,
-        dexes: route.dexes.map(dexLabel),
-        warning: fullQuote.warning || null,
-      };
-      await addResult({
-        tool: "getSwapQuote",
-        toolCallId: toolCall.toolCallId,
-        output,
-      });
-    } catch (e) {
-      console.error("[runSwapQuote] quote failed", e);
-      await addResult({
-        tool: "getSwapQuote",
-        toolCallId: toolCall.toolCallId,
-        output: { error: `Quote failed: ${(e as Error).message}` },
-      });
-    }
-  }
 
   async function runGetBalance(
     toolCall: { toolCallId: string; input: unknown },
@@ -1462,127 +1345,6 @@ export function Conversation() {
 
   // Scroll handled by StickToBottom wrapper below
 
-  async function handleConfirm(toolCallId: string) {
-    setSignError(null);
-    setTxError(undefined);
-    setTxStatus(undefined);
-    setGasUsedSui(undefined);
-    setReceivedAmount(undefined);
-    const cached = quoteCache.get(toolCallId);
-    if (!cached) {
-      setSignError("Quote expired. Ask again to re-price.");
-      return;
-    }
-    if (!account) {
-      setSignError("Connect a wallet first.");
-      return;
-    }
-    setActiveQuoteId(toolCallId);
-    setSigning(true);
-    setConfirming(false);
-    setExecuted(false);
-    setTxDigest(undefined);
-    try {
-      const buildResult = await buildTx({
-        quoteResponse: cached.quote,
-        accountAddress: account.address,
-        slippage: slippagePct / 100, // pct → fractional
-        commission: {
-          partner: PARTNER_ADDRESS,
-          commissionBps: PARTNER_COMMISSION_BPS,
-        },
-      });
-      // Bluefin7K can return either a standard Transaction or a BluefinXTx
-      // (sponsor-routed). MVP only supports the standard path; cast and
-      // surface a runtime error if a BluefinX route slips through.
-      const tx = buildResult.tx as Transaction;
-      const signed = await signAndExecute({ transaction: tx });
-      // Wallet signed + submitted — but the tx isn't final on chain yet.
-      setSigning(false);
-      setConfirming(true);
-      setTxDigest(signed.digest);
-
-      // Poll the fullnode until the tx is included + executed. waitFor-
-      // Transaction returns the effects/events/balanceChanges when ready
-      // so we can parse the real outcome (success vs failure, gas used,
-      // received amount) rather than just trusting the submit response.
-      try {
-        const finalized = await suiClient.waitForTransaction({
-          digest: signed.digest,
-          options: {
-            showEffects: true,
-            showBalanceChanges: true,
-          },
-          timeout: 30_000,
-        });
-        const status = finalized.effects?.status?.status;
-        if (status === "success") {
-          setTxStatus("success");
-          // Gas — convert MIST → SUI. computationCost + storageCost - storageRebate.
-          const gas = finalized.effects?.gasUsed;
-          if (gas) {
-            const mist =
-              BigInt(gas.computationCost) +
-              BigInt(gas.storageCost) -
-              BigInt(gas.storageRebate);
-            setGasUsedSui(Number(mist) / 1e9);
-          }
-          // Received amount — positive balance change of the destination
-          // coin type for the signing address.
-          const change = finalized.balanceChanges?.find((b) => {
-            const owner = b.owner as { AddressOwner?: string };
-            return (
-              owner?.AddressOwner === account.address &&
-              b.coinType === cached.toCoinType &&
-              BigInt(b.amount) > BigInt(0)
-            );
-          });
-          if (change) {
-            setReceivedAmount(
-              Number(BigInt(change.amount)) / 10 ** cached.toDecimals,
-            );
-          }
-        } else {
-          setTxStatus("failure");
-          setTxError(
-            finalized.effects?.status?.error ||
-              "Transaction failed on chain.",
-          );
-        }
-      } catch (waitErr) {
-        // Wait failed (timeout, network) — tx still went out, mark as
-        // unknown so the UI can show the digest but no confirmation.
-        console.warn("[waitForTransaction] failed", waitErr);
-        setTxStatus("failure");
-        setTxError(
-          `Couldn't confirm on chain: ${(waitErr as Error).message}. The tx may still be processing.`,
-        );
-      } finally {
-        setConfirming(false);
-        setExecuted(true);
-      }
-    } catch (e) {
-      setSignError((e as Error).message || "Wallet rejected");
-      setSigning(false);
-      setConfirming(false);
-    }
-  }
-
-  function handleCancel(toolCallId: string) {
-    if (activeQuoteId === toolCallId) {
-      setActiveQuoteId(null);
-      setSigning(false);
-      setConfirming(false);
-      setExecuted(false);
-      setTxDigest(undefined);
-      setTxStatus(undefined);
-      setTxError(undefined);
-      setGasUsedSui(undefined);
-      setReceivedAmount(undefined);
-      setSignError(null);
-    }
-  }
-
   async function handleConfirmDeposit(toolCallId: string) {
     setSignError(null);
     setDepositTxError(undefined);
@@ -1694,48 +1456,6 @@ export function Conversation() {
     }
   }
 
-  // Bump-on-refresh forces React to re-render so agent-message re-reads
-  // the (mutated) quoteCache entry.
-  const [, bumpRefresh] = useState(0);
-
-  async function handleRefresh(toolCallId: string) {
-    const cached = quoteCache.get(toolCallId);
-    if (!cached) return;
-    if (signing || executed) return;
-    try {
-      const amountIn = BigInt(
-        Math.floor(cached.fromAmountHuman * 10 ** cached.fromDecimals),
-      ).toString();
-      const [fresh, prices] = await Promise.all([
-        getQuote({
-          tokenIn: cached.fromCoinType,
-          tokenOut: cached.toCoinType,
-          amountIn,
-        }),
-        getTokenPrices([cached.fromCoinType, cached.toCoinType]),
-      ]);
-      const priceIn = prices[cached.fromCoinType] ?? 0;
-      const priceOut = prices[cached.toCoinType] ?? 0;
-      const impactPct = computePriceImpactPct(
-        fresh,
-        priceIn,
-        priceOut,
-        cached.fromDecimals,
-        cached.toDecimals,
-      );
-      quoteCache.set(toolCallId, {
-        ...cached,
-        quote: fresh,
-        spotRate: priceOut > 0 ? priceIn / priceOut : 0,
-        impactPct,
-        fetchedAt: Date.now(),
-      });
-      bumpRefresh((v) => v + 1);
-    } catch (e) {
-      console.error("[refresh] failed", e);
-    }
-  }
-
   // Build a coinType → icon_url lookup for the route hop chips
   const iconLookup = useMemo(() => {
     if (!coinMap) return () => undefined;
@@ -1752,11 +1472,6 @@ export function Conversation() {
     if (!text.trim() || !coinMap) return;
     sendMessage({ text });
     setDraft("");
-    // New turn — release prior swap card from "active"
-    setActiveQuoteId(null);
-    setExecuted(false);
-    setSigning(false);
-    setTxDigest(undefined);
     setSignError(null);
   }
 
@@ -1797,22 +1512,6 @@ export function Conversation() {
     })
     .filter((m) => m.text.length > 0);
 
-  // Find the most recent getSwapQuote toolCallId across all messages.
-  // Only that one renders a full LiveSwapCard; earlier ones collapse so
-  // the conversation doesn't accumulate stale quote panels.
-  const latestSwapQuoteToolCallId = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      for (let j = msg.parts.length - 1; j >= 0; j--) {
-        const part = msg.parts[j] as { type: string; toolCallId?: string };
-        if (part.type === "tool-getSwapQuote" && part.toolCallId) {
-          return part.toolCallId;
-        }
-      }
-    }
-    return null;
-  })();
-
   const latestDepositToolCallId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -1843,25 +1542,6 @@ export function Conversation() {
                 isStreaming={isStreaming && isLastAssistant}
                 canRegenerate={isLastAssistant && !isStreaming}
                 onRegenerate={() => regenerate()}
-                swapAction={{
-                  activeQuoteId,
-                  latestQuoteId: latestSwapQuoteToolCallId,
-                  slippagePct,
-                  signing,
-                  confirming,
-                  executed,
-                  txDigest,
-                  txStatus,
-                  txError,
-                  gasUsedSui,
-                  receivedAmount,
-                  walletConnected: !!account,
-                  iconLookup,
-                  onSlippageChange: setSlippagePct,
-                  onConfirm: handleConfirm,
-                  onCancel: handleCancel,
-                  onRefresh: handleRefresh,
-                }}
                 depositAction={{
                   activeDepositId,
                   latestDepositId: latestDepositToolCallId,

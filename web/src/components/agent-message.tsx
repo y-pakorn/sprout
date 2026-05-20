@@ -7,7 +7,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
-import { LiveSwapCard } from "@/components/parts/live-swap-card";
 import { LiveVaultCard } from "@/components/parts/live-vault-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
@@ -19,7 +18,6 @@ import {
   MessageFooter,
   type MessageMeta,
 } from "@/components/parts/message-footer";
-import { quoteCache } from "@/lib/ai/quote-cache";
 import {
   actionPlanCache,
   vaultsListCache,
@@ -28,29 +26,6 @@ import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
-
-type SwapActionState = {
-  /** The active getSwapQuote toolCallId to show actions on (may be null) */
-  activeQuoteId: string | null;
-  /** The most-recent getSwapQuote toolCallId across the whole conversation.
-   *  Older quotes that aren't the active one collapse to a "superseded" pill. */
-  latestQuoteId: string | null;
-  slippagePct: number;
-  signing: boolean;
-  confirming: boolean;
-  executed: boolean;
-  txDigest?: string;
-  txStatus?: "success" | "failure";
-  txError?: string;
-  gasUsedSui?: number;
-  receivedAmount?: number;
-  walletConnected: boolean;
-  iconLookup: IconLookup;
-  onSlippageChange: (pct: number) => void;
-  onConfirm: (toolCallId: string) => void;
-  onCancel: (toolCallId: string) => void;
-  onRefresh: (toolCallId: string) => Promise<void>;
-};
 
 export type DepositActionState = {
   activeDepositId: string | null;
@@ -73,7 +48,6 @@ export type DepositActionState = {
 type Props = {
   message: UIMessage;
   isStreaming: boolean;
-  swapAction: SwapActionState;
   depositAction: DepositActionState;
   /** True only for the last assistant message — controls regenerate visibility. */
   canRegenerate?: boolean;
@@ -83,7 +57,6 @@ type Props = {
 export function AgentMessage({
   message,
   isStreaming,
-  swapAction,
   depositAction,
   canRegenerate = false,
   onRegenerate,
@@ -211,100 +184,6 @@ export function AgentMessage({
           );
         }
 
-        if (part.type === "tool-getSwapQuote") {
-          const p = part as unknown as {
-            toolCallId: string;
-            state:
-              | "input-streaming"
-              | "input-available"
-              | "output-available"
-              | "output-error";
-            input?: { fromSymbol?: string; toSymbol?: string; amount?: number };
-            output?: {
-              error?: string;
-              fromSymbol?: string;
-              toSymbol?: string;
-              expectedOutput?: number;
-            };
-            errorText?: string;
-          };
-          if (p.state === "output-error") {
-            return (
-              <ToolCallRow
-                key={key}
-                label={`Quote failed: ${p.errorText ?? "unknown error"}`}
-                status="output-error"
-              />
-            );
-          }
-
-          if (p.state !== "output-available") {
-            const lbl =
-              p.input?.fromSymbol && p.input?.toSymbol
-                ? `Pricing ${p.input.fromSymbol} → ${p.input.toSymbol}…`
-                : "Pricing route…";
-            return <ToolCallRow key={key} label={lbl} status={p.state} />;
-          }
-
-          // output-available — render the live card from cached full quote
-          const cached = quoteCache.get(p.toolCallId);
-          if (!cached) {
-            // Output came back but cache miss (e.g. page reload before sign)
-            if (p.output?.error) {
-              return (
-                <ToolCallRow
-                  key={key}
-                  label={p.output.error}
-                  status="output-error"
-                />
-              );
-            }
-            return (
-              <ToolCallRow
-                key={key}
-                label="Quote expired — ask me again to re-price"
-                status="output-error"
-              />
-            );
-          }
-
-          const isActive = swapAction.activeQuoteId === p.toolCallId;
-          const isLatest = swapAction.latestQuoteId === p.toolCallId;
-          // If a newer quote has been requested and this one isn't
-          // currently mid-sign/executed, collapse to a one-line summary
-          // so the conversation doesn't accumulate stale swap panels.
-          if (!isLatest && !isActive) {
-            return (
-              <ToolCallRow
-                key={key}
-                label={`Earlier quote · ${cached.fromAmountHuman} ${cached.fromSymbol} → ${cached.toSymbol} · superseded`}
-                status="output-available"
-              />
-            );
-          }
-          return (
-            <LiveSwapCard
-              key={key}
-              cached={cached}
-              slippagePct={swapAction.slippagePct}
-              onSlippageChange={swapAction.onSlippageChange}
-              onConfirm={() => swapAction.onConfirm(p.toolCallId)}
-              onCancel={() => swapAction.onCancel(p.toolCallId)}
-              onRefresh={() => swapAction.onRefresh(p.toolCallId)}
-              iconLookup={swapAction.iconLookup}
-              signing={isActive && swapAction.signing}
-              confirming={isActive && swapAction.confirming}
-              executed={isActive && swapAction.executed}
-              txDigest={isActive ? swapAction.txDigest : undefined}
-              txStatus={isActive ? swapAction.txStatus : undefined}
-              txError={isActive ? swapAction.txError : undefined}
-              gasUsedSui={isActive ? swapAction.gasUsedSui : undefined}
-              receivedAmount={isActive ? swapAction.receivedAmount : undefined}
-              walletConnected={swapAction.walletConnected}
-            />
-          );
-        }
-
         if (part.type === "tool-getBalance") {
           const p = part as unknown as {
             toolCallId: string;
@@ -362,7 +241,7 @@ export function AgentMessage({
               balance={p.output?.balance ?? 0}
               iconUrl={
                 p.output?.coinType
-                  ? swapAction.iconLookup(p.output.coinType)
+                  ? depositAction.iconLookup(p.output.coinType)
                   : undefined
               }
               priceUsd={p.output?.priceUsd}
@@ -370,7 +249,7 @@ export function AgentMessage({
               vaultPosition={p.output?.vaultPosition}
               depositIconUrl={
                 p.output?.vaultPosition?.depositCoinType
-                  ? swapAction.iconLookup(
+                  ? depositAction.iconLookup(
                       p.output.vaultPosition.depositCoinType,
                     )
                   : undefined
@@ -424,7 +303,7 @@ export function AgentMessage({
             <WalletCard
               key={key}
               balances={p.output?.balances ?? []}
-              iconLookup={swapAction.iconLookup}
+              iconLookup={depositAction.iconLookup}
             />
           );
         }
@@ -472,7 +351,7 @@ export function AgentMessage({
             <VaultBalanceCard
               key={key}
               data={p.output.data}
-              iconLookup={swapAction.iconLookup}
+              iconLookup={depositAction.iconLookup}
             />
           );
         }
@@ -565,7 +444,7 @@ export function AgentMessage({
               key={key}
               vaults={vaults}
               filteredSymbol={list?.filteredSymbol}
-              iconLookup={swapAction.iconLookup}
+              iconLookup={depositAction.iconLookup}
             />
           );
         }

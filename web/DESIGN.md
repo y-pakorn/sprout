@@ -181,7 +181,7 @@ Pill chips. Two tones:
 
 ### Cards (parts/*.tsx)
 
-All major cards (`live-vault-card`, `vault-balance-card`, `wallet-card`, `balance-card`, `live-swap-card`) use `.liquid-glass` outer shell with inner rows on `.liquid-glass` at 18px radius. Text white primary, white/55 secondary, lime accent for APY/yield positive.
+All major cards (`live-vault-card`, `vault-balance-card`, `wallet-card`, `balance-card`) use `.liquid-glass` outer shell with inner rows on `.liquid-glass` at 18px radius. Text white primary, white/55 secondary, lime accent for APY/yield positive.
 
 ### Agent message (`web/src/components/agent-message.tsx`)
 
