@@ -1253,12 +1253,40 @@ export function Conversation() {
           ? depositSteps.reduce((s, d) => s + d.vault.apyPct, 0) /
             depositSteps.length
           : 0;
-      const estimatedGasSui =
+
+      // Real gas estimate via dryRun. The heuristic below is a fallback —
+      // useful when dryRun fails (e.g. simulated insufficient balance,
+      // network blip) but otherwise the on-chain number is dramatically
+      // more accurate than the per-step weights.
+      const heuristicGasSui =
         0.012 +
         0.004 * depositSteps.length +
         0.006 * swapSteps.length +
         0.004 * redeemSteps.length +
         0.003 * cancelSteps.length;
+      let estimatedGasSui = heuristicGasSui;
+      try {
+        const client = suiClientRef.current;
+        const bytes = await tx.build({ client });
+        const dryRun = await client.dryRunTransactionBlock({
+          transactionBlock: bytes,
+        });
+        const gas = dryRun.effects?.gasUsed;
+        if (gas) {
+          const mist =
+            BigInt(gas.computationCost) +
+            BigInt(gas.storageCost) -
+            BigInt(gas.storageRebate);
+          // Floor at 0 — a net rebate would otherwise render as negative.
+          const sui = Math.max(0, Number(mist) / 1e9);
+          if (sui > 0 && Number.isFinite(sui)) estimatedGasSui = sui;
+        }
+      } catch (e) {
+        console.warn(
+          "[runExecutePlan] gas dryRun failed; falling back to heuristic",
+          e,
+        );
+      }
 
       const cached: CachedActionPlan = {
         tx,
