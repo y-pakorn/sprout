@@ -299,7 +299,7 @@ export function LiveSwapCard({
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-3 liquid-glass p-4"
+      className="space-y-3 liquid-glass p-4 text-canvas-white"
       style={{ borderRadius: 20 }}
     >
       <div className="flex items-center justify-between gap-3">

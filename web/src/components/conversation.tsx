@@ -1877,25 +1877,38 @@ export function Conversation() {
             );
           })}
 
-          {/* Thinking pill — shown after user submits but before first AI token arrives */}
+          {/* Thinking pill — staggered glowing dot wave, no text */}
           {status === "submitted" && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="liquid-glass inline-flex items-center gap-2 self-start px-4 py-2 text-body-sm text-canvas-white/85"
+              className="liquid-glass inline-flex items-center gap-1.5 self-start px-4 py-2.5"
               style={{ borderRadius: 9999 }}
+              role="status"
+              aria-label="Sprout is thinking"
             >
-              <motion.span
-                animate={{ scale: [1, 1.4, 1] }}
-                transition={{
-                  duration: 1.1,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="inline-block size-1.5 bg-cash-lime"
-                style={{ borderRadius: 9999 }}
-              />
-              Sprout is thinking…
+              {[0, 0.15, 0.3].map((delay) => (
+                <motion.span
+                  key={delay}
+                  className="inline-block size-1.5 bg-cash-lime"
+                  style={{ borderRadius: 9999 }}
+                  animate={{
+                    scale: [0.6, 1, 0.6],
+                    y: [0, -3, 0],
+                    boxShadow: [
+                      "0 0 0px rgba(0, 213, 79, 0)",
+                      "0 0 12px rgba(0, 213, 79, 0.7)",
+                      "0 0 0px rgba(0, 213, 79, 0)",
+                    ],
+                  }}
+                  transition={{
+                    duration: 1.2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay,
+                  }}
+                />
+              ))}
             </motion.div>
           )}
 
