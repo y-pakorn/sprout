@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
-import { LiveVaultCard } from "@/components/parts/live-vault-card";
+import { LivePlanCard } from "@/components/parts/live-plan-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
 import { VaultBalanceCard } from "@/components/parts/vault-balance-card";
@@ -27,9 +27,9 @@ import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
 
-export type DepositActionState = {
-  activeDepositId: string | null;
-  latestDepositId: string | null;
+export type PlanActionState = {
+  activePlanId: string | null;
+  latestPlanId: string | null;
   /** Slippage cap shared by every swap step in any plan with swaps. */
   slippagePct: number;
   signing: boolean;
@@ -54,7 +54,7 @@ export type DepositActionState = {
 type Props = {
   message: UIMessage;
   isStreaming: boolean;
-  depositAction: DepositActionState;
+  planAction: PlanActionState;
   /** True only for the last assistant message — controls regenerate visibility. */
   canRegenerate?: boolean;
   onRegenerate?: () => void;
@@ -63,7 +63,7 @@ type Props = {
 export function AgentMessage({
   message,
   isStreaming,
-  depositAction,
+  planAction,
   canRegenerate = false,
   onRegenerate,
 }: Props) {
@@ -247,7 +247,7 @@ export function AgentMessage({
               balance={p.output?.balance ?? 0}
               iconUrl={
                 p.output?.coinType
-                  ? depositAction.iconLookup(p.output.coinType)
+                  ? planAction.iconLookup(p.output.coinType)
                   : undefined
               }
               priceUsd={p.output?.priceUsd}
@@ -255,7 +255,7 @@ export function AgentMessage({
               vaultPosition={p.output?.vaultPosition}
               depositIconUrl={
                 p.output?.vaultPosition?.depositCoinType
-                  ? depositAction.iconLookup(
+                  ? planAction.iconLookup(
                       p.output.vaultPosition.depositCoinType,
                     )
                   : undefined
@@ -309,7 +309,7 @@ export function AgentMessage({
             <WalletCard
               key={key}
               balances={p.output?.balances ?? []}
-              iconLookup={depositAction.iconLookup}
+              iconLookup={planAction.iconLookup}
             />
           );
         }
@@ -357,7 +357,7 @@ export function AgentMessage({
             <VaultBalanceCard
               key={key}
               data={p.output.data}
-              iconLookup={depositAction.iconLookup}
+              iconLookup={planAction.iconLookup}
             />
           );
         }
@@ -450,7 +450,7 @@ export function AgentMessage({
               key={key}
               vaults={vaults}
               filteredSymbol={list?.filteredSymbol}
-              iconLookup={depositAction.iconLookup}
+              iconLookup={planAction.iconLookup}
             />
           );
         }
@@ -509,11 +509,11 @@ export function AgentMessage({
               />
             );
           }
-          const isActiveDep =
-            depositAction.activeDepositId === p.toolCallId;
-          const isLatestDep =
-            depositAction.latestDepositId === p.toolCallId;
-          if (!isLatestDep && !isActiveDep) {
+          const isActivePlan =
+            planAction.activePlanId === p.toolCallId;
+          const isLatestPlan =
+            planAction.latestPlanId === p.toolCallId;
+          if (!isLatestPlan && !isActivePlan) {
             const depCount = cached.summary.depositCount;
             const swCount = cached.summary.swapCount;
             return (
@@ -525,26 +525,26 @@ export function AgentMessage({
             );
           }
           return (
-            <LiveVaultCard
+            <LivePlanCard
               key={key}
               cached={cached}
-              iconLookup={depositAction.iconLookup}
-              slippagePct={depositAction.slippagePct}
-              onSlippageChange={depositAction.onSlippageChange}
-              onRefresh={() => depositAction.onRefresh(p.toolCallId)}
-              onConfirm={() => depositAction.onConfirm(p.toolCallId)}
-              onCancel={() => depositAction.onCancel(p.toolCallId)}
-              signing={isActiveDep && depositAction.signing}
-              confirming={isActiveDep && depositAction.confirming}
-              executed={isActiveDep && depositAction.executed}
-              txDigest={isActiveDep ? depositAction.txDigest : undefined}
-              txStatus={isActiveDep ? depositAction.txStatus : undefined}
-              txError={isActiveDep ? depositAction.txError : undefined}
-              gasUsedSui={isActiveDep ? depositAction.gasUsedSui : undefined}
+              iconLookup={planAction.iconLookup}
+              slippagePct={planAction.slippagePct}
+              onSlippageChange={planAction.onSlippageChange}
+              onRefresh={() => planAction.onRefresh(p.toolCallId)}
+              onConfirm={() => planAction.onConfirm(p.toolCallId)}
+              onCancel={() => planAction.onCancel(p.toolCallId)}
+              signing={isActivePlan && planAction.signing}
+              confirming={isActivePlan && planAction.confirming}
+              executed={isActivePlan && planAction.executed}
+              txDigest={isActivePlan ? planAction.txDigest : undefined}
+              txStatus={isActivePlan ? planAction.txStatus : undefined}
+              txError={isActivePlan ? planAction.txError : undefined}
+              gasUsedSui={isActivePlan ? planAction.gasUsedSui : undefined}
               receivedShares={
-                isActiveDep ? depositAction.receivedShares : undefined
+                isActivePlan ? planAction.receivedShares : undefined
               }
-              walletConnected={depositAction.walletConnected}
+              walletConnected={planAction.walletConnected}
             />
           );
         }

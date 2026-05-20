@@ -94,18 +94,18 @@ export function Conversation() {
   const [signError, setSignError] = useState<string | null>(null);
 
   // Active plan-deposit state (one plan card may be live at a time).
-  const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
-  const [depositSigning, setDepositSigning] = useState(false);
-  const [depositConfirming, setDepositConfirming] = useState(false);
-  const [depositExecuted, setDepositExecuted] = useState(false);
-  const [depositTxDigest, setDepositTxDigest] = useState<string | undefined>();
-  const [depositTxStatus, setDepositTxStatus] = useState<
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [planSigning, setPlanSigning] = useState(false);
+  const [planConfirming, setPlanConfirming] = useState(false);
+  const [planExecuted, setPlanExecuted] = useState(false);
+  const [planTxDigest, setPlanTxDigest] = useState<string | undefined>();
+  const [planTxStatus, setPlanTxStatus] = useState<
     "success" | "failure" | undefined
   >();
-  const [depositTxError, setDepositTxError] = useState<string | undefined>();
-  const [depositGasSui, setDepositGasSui] = useState<number | undefined>();
+  const [planTxError, setPlanTxError] = useState<string | undefined>();
+  const [planGasSui, setPlanGasSui] = useState<number | undefined>();
   /** Per-vault shares received (in human units), indexed by allocation order. */
-  const [depositReceivedShares, setDepositReceivedShares] = useState<
+  const [planReceivedShares, setPlanReceivedShares] = useState<
     number[] | undefined
   >();
 
@@ -1343,7 +1343,7 @@ export function Conversation() {
   async function handlePlanRefresh(toolCallId: string) {
     const cached = actionPlanCache.get(toolCallId);
     if (!cached) return;
-    if (depositSigning || depositConfirming || depositExecuted) return;
+    if (planSigning || planConfirming || planExecuted) return;
     await runExecutePlan(
       { toolCallId, input: { steps: cached.originalInput } },
       coinMap,
@@ -1356,18 +1356,18 @@ export function Conversation() {
 
   function handleSlippageChange(pct: number) {
     setSlippagePct(pct);
-    if (!latestDepositToolCallId) return;
-    const cached = actionPlanCache.get(latestDepositToolCallId);
+    if (!latestPlanToolCallId) return;
+    const cached = actionPlanCache.get(latestPlanToolCallId);
     if (!cached || cached.summary.swapCount === 0) return;
-    void handlePlanRefresh(latestDepositToolCallId);
+    void handlePlanRefresh(latestPlanToolCallId);
   }
 
-  async function handleConfirmDeposit(toolCallId: string) {
+  async function handleConfirmPlan(toolCallId: string) {
     setSignError(null);
-    setDepositTxError(undefined);
-    setDepositTxStatus(undefined);
-    setDepositGasSui(undefined);
-    setDepositReceivedShares(undefined);
+    setPlanTxError(undefined);
+    setPlanTxStatus(undefined);
+    setPlanGasSui(undefined);
+    setPlanReceivedShares(undefined);
     const cached = actionPlanCache.get(toolCallId);
     if (!cached) {
       setSignError("Plan expired. Ask again to re-build.");
@@ -1378,18 +1378,18 @@ export function Conversation() {
       setSignError("Connect a wallet first.");
       return;
     }
-    setActiveDepositId(toolCallId);
-    setDepositSigning(true);
-    setDepositConfirming(false);
-    setDepositExecuted(false);
-    setDepositTxDigest(undefined);
+    setActivePlanId(toolCallId);
+    setPlanSigning(true);
+    setPlanConfirming(false);
+    setPlanExecuted(false);
+    setPlanTxDigest(undefined);
     try {
       const signed = await signAndExecute({
         transaction: cached.tx as unknown as Transaction,
       });
-      setDepositSigning(false);
-      setDepositConfirming(true);
-      setDepositTxDigest(signed.digest);
+      setPlanSigning(false);
+      setPlanConfirming(true);
+      setPlanTxDigest(signed.digest);
 
       try {
         const finalized = await suiClientRef.current.waitForTransaction({
@@ -1399,14 +1399,14 @@ export function Conversation() {
         });
         const status = finalized.effects?.status?.status;
         if (status === "success") {
-          setDepositTxStatus("success");
+          setPlanTxStatus("success");
           const gas = finalized.effects?.gasUsed;
           if (gas) {
             const mist =
               BigInt(gas.computationCost) +
               BigInt(gas.storageCost) -
               BigInt(gas.storageRebate);
-            setDepositGasSui(Number(mist) / 1e9);
+            setPlanGasSui(Number(mist) / 1e9);
           }
           // Per-deposit received shares: positive balanceChange for
           // the user where the coinType matches each deposit step's
@@ -1433,42 +1433,42 @@ export function Conversation() {
               Number(BigInt(change.amount)) / 10 ** d.vault.depositDecimals
             );
           });
-          setDepositReceivedShares(sharesPerDeposit);
+          setPlanReceivedShares(sharesPerDeposit);
         } else {
-          setDepositTxStatus("failure");
-          setDepositTxError(
+          setPlanTxStatus("failure");
+          setPlanTxError(
             finalized.effects?.status?.error ||
               "Deposit failed on chain.",
           );
         }
       } catch (waitErr) {
         console.warn("[depositConfirm] waitForTransaction failed", waitErr);
-        setDepositTxStatus("failure");
-        setDepositTxError(
+        setPlanTxStatus("failure");
+        setPlanTxError(
           `Couldn't confirm on chain: ${(waitErr as Error).message}. The tx may still be processing.`,
         );
       } finally {
-        setDepositConfirming(false);
-        setDepositExecuted(true);
+        setPlanConfirming(false);
+        setPlanExecuted(true);
       }
     } catch (e) {
       setSignError((e as Error).message || "Wallet rejected");
-      setDepositSigning(false);
-      setDepositConfirming(false);
+      setPlanSigning(false);
+      setPlanConfirming(false);
     }
   }
 
-  function handleCancelDeposit(toolCallId: string) {
-    if (activeDepositId === toolCallId) {
-      setActiveDepositId(null);
-      setDepositSigning(false);
-      setDepositConfirming(false);
-      setDepositExecuted(false);
-      setDepositTxDigest(undefined);
-      setDepositTxStatus(undefined);
-      setDepositTxError(undefined);
-      setDepositGasSui(undefined);
-      setDepositReceivedShares(undefined);
+  function handleCancelPlan(toolCallId: string) {
+    if (activePlanId === toolCallId) {
+      setActivePlanId(null);
+      setPlanSigning(false);
+      setPlanConfirming(false);
+      setPlanExecuted(false);
+      setPlanTxDigest(undefined);
+      setPlanTxStatus(undefined);
+      setPlanTxError(undefined);
+      setPlanGasSui(undefined);
+      setPlanReceivedShares(undefined);
       setSignError(null);
     }
   }
@@ -1529,7 +1529,7 @@ export function Conversation() {
     })
     .filter((m) => m.text.length > 0);
 
-  const latestDepositToolCallId = (() => {
+  const latestPlanToolCallId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       for (let j = msg.parts.length - 1; j >= 0; j--) {
@@ -1559,22 +1559,22 @@ export function Conversation() {
                 isStreaming={isStreaming && isLastAssistant}
                 canRegenerate={isLastAssistant && !isStreaming}
                 onRegenerate={() => regenerate()}
-                depositAction={{
-                  activeDepositId,
-                  latestDepositId: latestDepositToolCallId,
+                planAction={{
+                  activePlanId,
+                  latestPlanId: latestPlanToolCallId,
                   slippagePct,
-                  signing: depositSigning,
-                  confirming: depositConfirming,
-                  executed: depositExecuted,
-                  txDigest: depositTxDigest,
-                  txStatus: depositTxStatus,
-                  txError: depositTxError,
-                  gasUsedSui: depositGasSui,
-                  receivedShares: depositReceivedShares,
+                  signing: planSigning,
+                  confirming: planConfirming,
+                  executed: planExecuted,
+                  txDigest: planTxDigest,
+                  txStatus: planTxStatus,
+                  txError: planTxError,
+                  gasUsedSui: planGasSui,
+                  receivedShares: planReceivedShares,
                   walletConnected: !!account,
                   iconLookup,
-                  onConfirm: handleConfirmDeposit,
-                  onCancel: handleCancelDeposit,
+                  onConfirm: handleConfirmPlan,
+                  onCancel: handleCancelPlan,
                   onSlippageChange: handleSlippageChange,
                   onRefresh: handlePlanRefresh,
                 }}

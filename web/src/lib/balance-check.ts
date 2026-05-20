@@ -207,7 +207,7 @@ export function computeBalanceCheckFromRequirements(
 }
 
 /**
- * Convenience wrapper for plan-shaped inputs (LiveVaultCard's `cached.steps`).
+ * Convenience wrapper for plan-shaped inputs (LivePlanCard's `cached.steps`).
  */
 export function computeBalanceCheck(
   steps: ResolvedStep[],

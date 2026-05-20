@@ -65,7 +65,7 @@ type Props = {
 };
 
 
-export function LiveVaultCard({
+export function LivePlanCard({
   cached,
   iconLookup,
   onConfirm,
