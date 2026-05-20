@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import {
   Loader2,
@@ -15,6 +15,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { AssetIcon } from "@/components/asset-icon";
 import {
   VaultRiskDetail,
@@ -57,6 +58,10 @@ type Props = {
   /** Per-deposit-step received shares (human units), indexed by deposit order. */
   receivedShares?: number[];
   walletConnected: boolean;
+  /** Optional — only used for plans with ≥1 swap step. */
+  slippagePct?: number;
+  onSlippageChange?: (pct: number) => void;
+  onRefresh?: () => Promise<void>;
 };
 
 
@@ -75,6 +80,9 @@ export function LiveVaultCard({
   gasUsedSui,
   receivedShares,
   walletConnected,
+  slippagePct,
+  onSlippageChange,
+  onRefresh,
 }: Props) {
   const [openVaultId, setOpenVaultId] = useState<string | null>(null);
   const depositSteps = cached.steps.filter(
@@ -82,6 +90,44 @@ export function LiveVaultCard({
   );
   const swapSteps = cached.steps.filter(
     (s): s is ResolvedSwapStep => s.kind === "swap",
+  );
+  const hasSwapSteps = swapSteps.length > 0;
+
+  // Auto-refresh swap pricing every 5s while idle. Plans without swap
+  // steps don't need this — the only volatile inputs are quotes.
+  const REFRESH_INTERVAL_MS = 5000;
+  const [refreshing, setRefreshing] = useState(false);
+  const inFlight = useRef(false);
+  const refresh = async () => {
+    if (!onRefresh) return;
+    if (signing || confirming || executed || inFlight.current) return;
+    inFlight.current = true;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      inFlight.current = false;
+      setRefreshing(false);
+    }
+  };
+  useEffect(() => {
+    if (!hasSwapSteps || !onRefresh) return;
+    if (signing || confirming || executed) return;
+    const id = setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSwapSteps, signing, confirming, executed]);
+
+  // 1-second tick for the "Updated Xs ago" label.
+  const [, tickAge] = useState(0);
+  useEffect(() => {
+    if (!hasSwapSteps) return;
+    const id = setInterval(() => tickAge((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [hasSwapSteps]);
+  const ageSec = Math.max(
+    0,
+    Math.floor((Date.now() - cached.fetchedAt) / 1000),
   );
   const openVault = openVaultId
     ? depositSteps.find((d) => d.vault.id === openVaultId)?.vault ?? null
@@ -170,6 +216,26 @@ export function LiveVaultCard({
               </>
             )}
           </span>
+          {hasSwapSteps && onRefresh && (
+            <span className="flex items-center gap-1 text-caption text-canvas-white/55">
+              <motion.span
+                animate={{ rotate: refreshing ? 360 : 0 }}
+                transition={
+                  refreshing
+                    ? { duration: 0.8, repeat: Infinity, ease: "linear" }
+                    : { duration: 0 }
+                }
+                className="inline-flex"
+              >
+                <RefreshCw className="size-3" strokeWidth={2.4} />
+              </motion.span>
+              {refreshing
+                ? "Refreshing…"
+                : ageSec < 2
+                  ? "Just updated"
+                  : `Updated ${ageSec}s ago`}
+            </span>
+          )}
         </div>
         {depositSteps.length > 0 && (
           <div className="flex items-baseline gap-1.5">
@@ -259,7 +325,44 @@ export function LiveVaultCard({
 
       {/* Action row */}
       {!executed && !confirming && (
-        <div className="flex flex-wrap items-center justify-end gap-1.5 border-t border-ghost-border/60 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border/60 pt-3">
+          {hasSwapSteps && onSlippageChange ? (
+            <div className="flex items-center gap-2">
+              <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+                Slippage
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {SLIPPAGE_OPTIONS.map((opt) => {
+                  const active = slippagePct === opt;
+                  return (
+                    <motion.button
+                      key={opt}
+                      type="button"
+                      onClick={() => onSlippageChange(opt)}
+                      whileHover={{ scale: 1.04 }}
+                      whileTap={{ scale: 0.96 }}
+                      transition={{
+                        type: "spring",
+                        visualDuration: 0.2,
+                        bounce: 0.3,
+                      }}
+                      disabled={signing || confirming}
+                      className={cn(
+                        "px-2.5 py-1 text-caption font-semibold text-canvas-white disabled:opacity-50",
+                        active ? "bg-cash-lime !text-midnight-black" : "liquid-glass",
+                      )}
+                      style={{ borderRadius: 9999 }}
+                    >
+                      {opt}%
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-1.5">
           <motion.button
             onClick={onCancel}
             whileHover={{ scale: 1.04 }}
@@ -300,6 +403,7 @@ export function LiveVaultCard({
                     ? "Sign anyway →"
                     : "Confirm & sign →"}
           </motion.button>
+          </div>
         </div>
       )}
 

@@ -30,6 +30,8 @@ type IconLookup = (coinType: string) => string | undefined;
 export type DepositActionState = {
   activeDepositId: string | null;
   latestDepositId: string | null;
+  /** Slippage cap shared by every swap step in any plan with swaps. */
+  slippagePct: number;
   signing: boolean;
   confirming: boolean;
   executed: boolean;
@@ -43,6 +45,10 @@ export type DepositActionState = {
   iconLookup: IconLookup;
   onConfirm: (toolCallId: string) => void;
   onCancel: (toolCallId: string) => void;
+  /** Re-build the plan with the current slippage. Used by the slippage pills
+   *  and the 5s auto-refresh widget on plans that contain swap steps. */
+  onSlippageChange: (pct: number) => void;
+  onRefresh: (toolCallId: string) => Promise<void>;
 };
 
 type Props = {
@@ -523,6 +529,9 @@ export function AgentMessage({
               key={key}
               cached={cached}
               iconLookup={depositAction.iconLookup}
+              slippagePct={depositAction.slippagePct}
+              onSlippageChange={depositAction.onSlippageChange}
+              onRefresh={() => depositAction.onRefresh(p.toolCallId)}
               onConfirm={() => depositAction.onConfirm(p.toolCallId)}
               onCancel={() => depositAction.onCancel(p.toolCallId)}
               signing={isActiveDep && depositAction.signing}

@@ -106,9 +106,34 @@ export type ResolvedStep =
   | ResolvedRedeemStep
   | ResolvedCancelRedeemStep;
 
+/** Raw step shape the agent emits via executePlan. Stashed on the cache
+ *  so the slippage-rebuild flow can re-run the whole plan. */
+export type RawStep = {
+  kind:
+    | "swap"
+    | "split"
+    | "merge"
+    | "deposit"
+    | "redeemFromVault"
+    | "cancelRedeemFromVault";
+  id: string;
+  fromHandle?: string;
+  fromHandles?: string[];
+  fromSymbol?: string;
+  fromAmount?: number;
+  toSymbol?: string;
+  slippagePct?: number;
+  portionsBps?: number[];
+  vaultId?: string;
+  sequenceNumber?: string;
+};
+
 export type CachedActionPlan = {
   tx: Transaction;
   steps: ResolvedStep[];
+  /** Source-of-truth step list the agent emitted. Used to rebuild the
+   *  plan when the user adjusts slippage. */
+  originalInput: RawStep[];
   /** Human summary used by the renderer header. */
   summary: {
     swapCount: number;

@@ -39,6 +39,7 @@ import {
   type ResolvedDepositStep,
   type ResolvedRedeemStep,
   type ResolvedCancelRedeemStep,
+  type RawStep,
 } from "@/lib/ai/action-plan-cache";
 import {
   getGlossary,
@@ -639,40 +640,26 @@ export function Conversation() {
     vaultList: SuiVault[] | null,
     acct: ReturnType<typeof useCurrentAccount>,
     ref: React.RefObject<AddResultFn | null>,
+    /** When true, skip the addResult dispatch — used by handlePlanRefresh
+     *  which only needs the cache update + bumpRefresh. */
+    silent = false,
   ) {
     const addResult = ref.current;
     if (!addResult) return;
     if (!acct) {
-      await addResult({
-        tool: "executePlan",
-        toolCallId: toolCall.toolCallId,
-        output: {
-          error:
-            "Wallet not connected. The user needs to connect a wallet before I can build a transaction plan.",
-        },
-      });
+      if (!silent) {
+        await addResult({
+          tool: "executePlan",
+          toolCallId: toolCall.toolCallId,
+          output: {
+            error:
+              "Wallet not connected. The user needs to connect a wallet before I can build a transaction plan.",
+          },
+        });
+      }
       return;
     }
 
-    type RawStep = {
-      kind:
-        | "swap"
-        | "split"
-        | "merge"
-        | "deposit"
-        | "redeemFromVault"
-        | "cancelRedeemFromVault";
-      id: string;
-      fromHandle?: string;
-      fromHandles?: string[];
-      fromSymbol?: string;
-      fromAmount?: number;
-      toSymbol?: string;
-      slippagePct?: number;
-      portionsBps?: number[];
-      vaultId?: string;
-      sequenceNumber?: string;
-    };
     const { steps } = toolCall.input as { steps: RawStep[] };
 
     try {
@@ -1276,6 +1263,7 @@ export function Conversation() {
       const cached: CachedActionPlan = {
         tx,
         steps: resolved,
+        originalInput: steps,
         summary: {
           swapCount: swapSteps.length,
           splitCount: splitSteps.length,
@@ -1289,6 +1277,10 @@ export function Conversation() {
         fetchedAt: Date.now(),
       };
       actionPlanCache.set(toolCall.toolCallId, cached);
+      if (silent) {
+        bumpRefresh((v) => v + 1);
+        return;
+      }
 
       // Minimal summary back to the model — keeps prompt tokens tight.
       const output = {
@@ -1334,6 +1326,7 @@ export function Conversation() {
       });
     } catch (e) {
       console.error("[runExecutePlan] failed", e);
+      if (silent) return;
       await addResult({
         tool: "executePlan",
         toolCallId: toolCall.toolCallId,
@@ -1343,7 +1336,31 @@ export function Conversation() {
   }
 
 
-  // Scroll handled by StickToBottom wrapper below
+  // Bump-on-refresh forces React to re-render so AgentMessage re-reads
+  // the (mutated) actionPlanCache entry after a slippage-driven rebuild.
+  const [, bumpRefresh] = useState(0);
+
+  async function handlePlanRefresh(toolCallId: string) {
+    const cached = actionPlanCache.get(toolCallId);
+    if (!cached) return;
+    if (depositSigning || depositConfirming || depositExecuted) return;
+    await runExecutePlan(
+      { toolCallId, input: { steps: cached.originalInput } },
+      coinMap,
+      vaultsRef.current,
+      accountRef.current,
+      addToolResultRef,
+      true, // silent — don't dispatch addResult; just refresh the cache
+    );
+  }
+
+  function handleSlippageChange(pct: number) {
+    setSlippagePct(pct);
+    if (!latestDepositToolCallId) return;
+    const cached = actionPlanCache.get(latestDepositToolCallId);
+    if (!cached || cached.summary.swapCount === 0) return;
+    void handlePlanRefresh(latestDepositToolCallId);
+  }
 
   async function handleConfirmDeposit(toolCallId: string) {
     setSignError(null);
@@ -1545,6 +1562,7 @@ export function Conversation() {
                 depositAction={{
                   activeDepositId,
                   latestDepositId: latestDepositToolCallId,
+                  slippagePct,
                   signing: depositSigning,
                   confirming: depositConfirming,
                   executed: depositExecuted,
@@ -1557,6 +1575,8 @@ export function Conversation() {
                   iconLookup,
                   onConfirm: handleConfirmDeposit,
                   onCancel: handleCancelDeposit,
+                  onSlippageChange: handleSlippageChange,
+                  onRefresh: handlePlanRefresh,
                 }}
               />
             );
