@@ -31,6 +31,13 @@ export type ResolvedSwapStep = {
   dexes: string[];
   impactPct?: number;
   quote: QuoteResponse;
+  /** Coin-list verified flags for the Guardian token-verification risk row.
+   *  Optional because chained-handle origins (e.g. split outputs, receipt
+   *  tokens) may not resolve through the standard coin map. */
+  fromVerified?: boolean;
+  toVerified?: boolean;
+  fromIcon?: string;
+  toIcon?: string;
 };
 
 export type ResolvedSplitStep = {

@@ -1179,6 +1179,7 @@ export function Conversation() {
             decimals: outCoin.decimals,
             expectedHuman: toHuman,
           });
+          const fromCoinMeta = resolveSymbol(map, origin.symbol);
           resolved.push({
             kind: "swap",
             id: step.id,
@@ -1195,6 +1196,10 @@ export function Conversation() {
             dexes: route.dexes.map(dexLabel),
             impactPct,
             quote,
+            fromVerified: fromCoinMeta?.verified ?? false,
+            toVerified: outCoin.verified,
+            fromIcon: fromCoinMeta?.icon_url,
+            toIcon: outCoin.icon_url,
           });
         } else if (step.kind === "split") {
           if (!step.portionsBps || step.portionsBps.length < 2) {

@@ -27,7 +27,9 @@ import type {
   ResolvedDepositStep,
   ResolvedSwapStep,
   ResolvedSplitStep,
+  ResolvedRedeemStep,
 } from "@/lib/ai/action-plan-cache";
+import { untrustedDexes } from "@/lib/route-trust";
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
 import { fmtAmount, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -747,123 +749,17 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
   const swaps = cached.steps.filter(
     (s): s is ResolvedSwapStep => s.kind === "swap",
   );
+  const splits = cached.steps.filter(
+    (s): s is ResolvedSplitStep => s.kind === "split",
+  );
+  const redeems = cached.steps.filter(
+    (s): s is ResolvedRedeemStep => s.kind === "redeemFromVault",
+  );
 
-  if (deposits.length > 0) {
-    out.push({
-      id: "protocol",
-      title: "Protocol risk",
-      summary: "Ember smart contracts + FordeFi MPC custody",
-      verdict: "flag",
-      detail: getGlossary("protocol-risk"),
-      askPrompt:
-        "What are the protocol risks of depositing to an Ember vault on Sui?",
-    });
-
-    const isLP = deposits.some((d) => {
-      const c = d.vault.category.toLowerCase();
-      return c.includes("liquidity") || c.includes("concentrated") || c.includes("amm");
-    });
-    const categoryCounts = new Map<string, number>();
-    for (const d of deposits) {
-      categoryCounts.set(
-        d.vault.category,
-        (categoryCounts.get(d.vault.category) ?? 0) + 1,
-      );
-    }
-    const categorySummary = Array.from(categoryCounts.entries())
-      .map(([c, n]) => (n > 1 ? `${c} ×${n}` : c))
-      .join(" · ");
-    out.push({
-      id: "strategy",
-      title: "Strategy risk",
-      summary: categorySummary,
-      verdict: isLP ? "flag" : "pass",
-      detail: isLP
-        ? getGlossary("concentrated-liquidity") +
-          "\n\n" +
-          getGlossary("impermanent-loss")
-        : "These vaults don't take LP positions, so impermanent loss doesn't apply. Yield comes from the operator's stated activity (lending, trading) — open each vault's details for the strategy description.",
-      askPrompt: isLP
-        ? "What's impermanent loss and how does it affect these vaults?"
-        : "What do these vault strategies actually do, and how can they lose money?",
-    });
-
-    const totalApy = deposits.reduce(
-      (s, d) =>
-        s +
-        d.vault.apyBreakdown.lendingApyPct +
-        d.vault.apyBreakdown.rewardApyPct,
-      0,
-    );
-    const rewardApy = deposits.reduce(
-      (s, d) => s + d.vault.apyBreakdown.rewardApyPct,
-      0,
-    );
-    const rewardShare = totalApy > 0 ? rewardApy / totalApy : 0;
-    const rewardHeavy = rewardShare > 0.5;
-    out.push({
-      id: "apy",
-      title: "APY composition",
-      summary:
-        rewardShare > 0
-          ? `${(rewardShare * 100).toFixed(0)}% of APY is reward emissions`
-          : "100% from deposit yield",
-      verdict: rewardHeavy ? "flag" : "pass",
-      detail:
-        getGlossary("apy-composition") +
-        (rewardHeavy
-          ? "\n\n**For this plan:** more than half the headline APY comes from reward token emissions across the chosen vaults. If emissions drop or the reward token loses value, realized yield drops with it."
-          : "\n\n**For this plan:** most yield is from strategy gains — closer to durable yield."),
-      askPrompt: "Why is the APY for these vaults so high?",
-    });
-
-    const maxLockDays = Math.max(
-      ...deposits.map((d) => d.vault.withdrawalPeriodDays ?? 0),
-    );
-    if (maxLockDays > 0) {
-      out.push({
-        id: "lockup",
-        title: "Withdrawal lockup",
-        summary: `Up to ${maxLockDays}-day delay on withdrawal`,
-        verdict: "flag",
-        detail: getGlossary("withdrawal-lockup"),
-        askPrompt: "What happens if I want to withdraw early from these vaults?",
-      });
-    }
-
-    out.push({
-      id: "variable-apy",
-      title: "Variable APY",
-      summary: "Headline APY is a 30-day average, not a promise",
-      verdict: "flag",
-      detail: getGlossary("variable-apy"),
-      askPrompt: "Will I actually earn this APY?",
-    });
-  }
-
-  if (swaps.length > 0) {
-    const maxImpact = Math.max(
-      0,
-      ...swaps.map((s) => s.impactPct ?? 0),
-    );
-    let v: RiskVerdict = "pass";
-    if (maxImpact >= 5) v = "block";
-    else if (maxImpact >= 1) v = "flag";
-    out.push({
-      id: "swap-impact",
-      title: `Swap leg${swaps.length > 1 ? "s" : ""} · price impact`,
-      summary:
-        swaps.length === 1
-          ? `${(swaps[0].impactPct ?? 0).toFixed(3)}% impact across ${swaps[0].hops} hop(s) on ${swaps[0].dexes.join(" + ")}`
-          : `${swaps.length} swaps · max ${maxImpact.toFixed(3)}% impact`,
-      verdict: v,
-      detail:
-        getGlossary("price-impact") +
-        "\n\n**For this plan:** impact is computed against oracle USD prices, not the SDK's optimistic estimate.",
-      askPrompt:
-        "What's price impact and is the swap leg going to cost me?",
-    });
-  }
+  out.push(...swapRisks(swaps));
+  out.push(...depositRisks(deposits));
+  out.push(...splitRisks(splits));
+  out.push(...redeemRisks(redeems, deposits.length > 0));
 
   const gas = cached.summary.estimatedGasSui;
   let gasV: RiskVerdict = "pass";
@@ -879,6 +775,254 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
   });
 
   return out;
+}
+
+function swapRisks(swaps: ResolvedSwapStep[]): GuardianRow[] {
+  if (swaps.length === 0) return [];
+  const out: GuardianRow[] = [];
+
+  const unverifiedSymbols = new Set<string>();
+  for (const s of swaps) {
+    if (s.fromVerified === false) unverifiedSymbols.add(s.fromSymbol);
+    if (s.toVerified === false) unverifiedSymbols.add(s.toSymbol);
+  }
+  out.push({
+    id: "swap-token-verification",
+    title: "Token verification",
+    summary:
+      unverifiedSymbols.size === 0
+        ? `All swap tokens verified${
+            swaps.length === 1
+              ? ` (${swaps[0].fromSymbol} & ${swaps[0].toSymbol})`
+              : ""
+          }`
+        : `Unverified: ${Array.from(unverifiedSymbols).join(", ")}`,
+    verdict: unverifiedSymbols.size === 0 ? "pass" : "flag",
+    detail:
+      "Sui's coin list flags tokens whose deployer + metadata have been verified by the ecosystem. Unverified coins can still trade, but they're more likely to be lookalike scams, have hidden admin powers, or get rugged. Treat unverified swap legs with extra skepticism.",
+    askPrompt: "Why does token verification matter for swap safety?",
+  });
+
+  const maxImpact = Math.max(0, ...swaps.map((s) => s.impactPct ?? 0));
+  let impactV: RiskVerdict = "pass";
+  if (maxImpact >= 5) impactV = "block";
+  else if (maxImpact >= 1) impactV = "flag";
+  out.push({
+    id: "swap-impact",
+    title: "Price impact",
+    summary:
+      swaps.length === 1
+        ? swaps[0].impactPct !== undefined && swaps[0].impactPct > 0
+          ? swaps[0].impactPct < 0.001
+            ? `<0.001% across ${swaps[0].hops} hop(s) on ${swaps[0].dexes.join(" + ")}`
+            : `${swaps[0].impactPct.toFixed(3)}% across ${swaps[0].hops} hop(s) on ${swaps[0].dexes.join(" + ")}`
+          : `0% across ${swaps[0].hops} hop(s)`
+        : `${swaps.length} swaps · max ${maxImpact.toFixed(3)}% impact`,
+    verdict: impactV,
+    detail:
+      getGlossary("price-impact") +
+      "\n\n**For this plan:** impact is computed against oracle USD prices, not the SDK's optimistic estimate.",
+    askPrompt: "What's price impact and is the swap leg going to cost me?",
+  });
+
+  const allDexes = swaps.flatMap((s) => s.dexes);
+  const untrusted = untrustedDexes(allDexes);
+  out.push({
+    id: "swap-route-trust",
+    title: "Route trust",
+    summary:
+      untrusted.length > 0
+        ? `Includes unfamiliar venue${untrusted.length === 1 ? "" : "s"}: ${Array.from(new Set(untrusted)).join(", ")}`
+        : `Routed via ${Array.from(new Set(allDexes)).join(" + ") || "single DEX"}`,
+    verdict: untrusted.length > 0 ? "flag" : "pass",
+    detail:
+      getGlossary("bluefin7k-aggregator") +
+      "\n\n**For this plan:** Sprout only auto-trusts established Sui venues (Cetus, Bluefin, Kriya, Aftermath, Turbos, FlowX, DeepBook). Anything else flags here so you can decide.",
+    askPrompt: "Which DEXes is this swap routed through, and are they safe?",
+  });
+
+  const tightLegs = swaps.filter(
+    (s) => s.impactPct !== undefined && s.slippagePct < s.impactPct,
+  );
+  out.push({
+    id: "swap-slippage",
+    title: "Slippage cap",
+    summary:
+      tightLegs.length > 0
+        ? `${tightLegs.length === 1 ? "1 leg" : `${tightLegs.length} legs`} cap is tighter than current impact — may revert`
+        : swaps.length === 1
+          ? `${swaps[0].slippagePct}% cap leaves headroom vs ${(swaps[0].impactPct ?? 0).toFixed(3)}% impact`
+          : `${swaps.map((s) => `${s.slippagePct}%`).join(", ")} caps`,
+    verdict: tightLegs.length > 0 ? "flag" : "pass",
+    detail: getGlossary("slippage"),
+    askPrompt: "How do I pick a safe slippage tolerance?",
+  });
+
+  return out;
+}
+
+function depositRisks(deposits: ResolvedDepositStep[]): GuardianRow[] {
+  if (deposits.length === 0) return [];
+  const out: GuardianRow[] = [];
+
+  out.push({
+    id: "protocol",
+    title: "Protocol risk",
+    summary: "Ember smart contracts + FordeFi MPC custody",
+    verdict: "flag",
+    detail: getGlossary("protocol-risk"),
+    askPrompt:
+      "What are the protocol risks of depositing to an Ember vault on Sui?",
+  });
+
+  const isLP = deposits.some((d) => {
+    const c = d.vault.category.toLowerCase();
+    return (
+      c.includes("liquidity") ||
+      c.includes("concentrated") ||
+      c.includes("amm")
+    );
+  });
+  const categoryCounts = new Map<string, number>();
+  for (const d of deposits) {
+    categoryCounts.set(
+      d.vault.category,
+      (categoryCounts.get(d.vault.category) ?? 0) + 1,
+    );
+  }
+  const categorySummary = Array.from(categoryCounts.entries())
+    .map(([c, n]) => (n > 1 ? `${c} ×${n}` : c))
+    .join(" · ");
+  out.push({
+    id: "strategy",
+    title: "Strategy risk",
+    summary: categorySummary,
+    verdict: isLP ? "flag" : "pass",
+    detail: isLP
+      ? getGlossary("concentrated-liquidity") +
+        "\n\n" +
+        getGlossary("impermanent-loss")
+      : "These vaults don't take LP positions, so impermanent loss doesn't apply. Yield comes from the operator's stated activity (lending, trading) — open each vault's details for the strategy description.",
+    askPrompt: isLP
+      ? "What's impermanent loss and how does it affect these vaults?"
+      : "What do these vault strategies actually do, and how can they lose money?",
+  });
+
+  const totalApy = deposits.reduce(
+    (s, d) =>
+      s +
+      d.vault.apyBreakdown.lendingApyPct +
+      d.vault.apyBreakdown.rewardApyPct,
+    0,
+  );
+  const rewardApy = deposits.reduce(
+    (s, d) => s + d.vault.apyBreakdown.rewardApyPct,
+    0,
+  );
+  const rewardShare = totalApy > 0 ? rewardApy / totalApy : 0;
+  const rewardHeavy = rewardShare > 0.5;
+  out.push({
+    id: "apy",
+    title: "APY composition",
+    summary:
+      rewardShare > 0
+        ? `${(rewardShare * 100).toFixed(0)}% of APY is reward emissions`
+        : "100% from deposit yield",
+    verdict: rewardHeavy ? "flag" : "pass",
+    detail:
+      getGlossary("apy-composition") +
+      (rewardHeavy
+        ? "\n\n**For this plan:** more than half the headline APY comes from reward token emissions across the chosen vaults. If emissions drop or the reward token loses value, realized yield drops with it."
+        : "\n\n**For this plan:** most yield is from strategy gains — closer to durable yield."),
+    askPrompt: "Why is the APY for these vaults so high?",
+  });
+
+  const maxLockDays = Math.max(
+    ...deposits.map((d) => d.vault.withdrawalPeriodDays ?? 0),
+  );
+  if (maxLockDays > 0) {
+    out.push({
+      id: "lockup",
+      title: "Withdrawal lockup",
+      summary: `Up to ${maxLockDays}-day delay on withdrawal`,
+      verdict: "flag",
+      detail: getGlossary("withdrawal-lockup"),
+      askPrompt: "What happens if I want to withdraw early from these vaults?",
+    });
+  }
+
+  out.push({
+    id: "variable-apy",
+    title: "Variable APY",
+    summary: "Headline APY is a 30-day average, not a promise",
+    verdict: "flag",
+    detail: getGlossary("variable-apy"),
+    askPrompt: "Will I actually earn this APY?",
+  });
+
+  return out;
+}
+
+function splitRisks(splits: ResolvedSplitStep[]): GuardianRow[] {
+  if (splits.length === 0) return [];
+  const out: GuardianRow[] = [];
+
+  for (const s of splits) {
+    if (s.portions.length < 3) continue; // 2-way splits are rarely "concentrated"
+    const bpsArr = s.portions.map((p) => p.bps);
+    const maxBps = Math.max(...bpsArr);
+    const concentrated = maxBps >= 7000;
+    out.push({
+      id: `split-allocation-${s.id}`,
+      title: "Allocation balance",
+      summary: concentrated
+        ? `One portion holds ${(maxBps / 100).toFixed(0)}% of the split — concentration risk`
+        : `${s.portions.length}-way split (max portion ${(maxBps / 100).toFixed(0)}%)`,
+      verdict: concentrated ? "flag" : "pass",
+      detail:
+        "Splitting your principal across multiple vaults reduces single-vault risk, but a heavily weighted split brings most of the risk back to the dominant leg. If the largest portion ≥ 70%, the diversification benefit is mostly cosmetic — consider rebalancing or accepting that the dominant vault drives outcomes.",
+      askPrompt: "How should I think about splitting deposits across vaults?",
+    });
+  }
+
+  return out;
+}
+
+function redeemRisks(
+  redeems: ResolvedRedeemStep[],
+  hasDeposits: boolean,
+): GuardianRow[] {
+  if (redeems.length === 0) return [];
+  // If this plan also deposits, the deposit's existing "Withdrawal lockup"
+  // row already covers the timing concern — don't double-up.
+  if (hasDeposits) return [];
+
+  const maxLockDays = Math.max(
+    ...redeems.map((r) => r.vault.withdrawalPeriodDays ?? 0),
+  );
+  if (maxLockDays === 0) {
+    return [
+      {
+        id: "redeem-timing",
+        title: "Withdrawal timing",
+        summary: "Withdrawals settle as soon as the operator unwinds",
+        verdict: "pass",
+        detail:
+          "These vaults don't enforce a fixed lockup; redeem requests settle on the next operator unwind cycle (usually under a day, often within hours). The strategy can still lose money between request and settlement.",
+        askPrompt: "When will my withdrawal actually settle?",
+      },
+    ];
+  }
+  return [
+    {
+      id: "redeem-timing",
+      title: "Withdrawal timing",
+      summary: `Up to ${maxLockDays}-day settlement window`,
+      verdict: "flag",
+      detail: getGlossary("withdrawal-lockup"),
+      askPrompt: "When will my withdrawal actually settle?",
+    },
+  ];
 }
 
 function PlanReceipt({
