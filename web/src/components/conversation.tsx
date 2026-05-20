@@ -1254,10 +1254,11 @@ export function Conversation() {
             depositSteps.length
           : 0;
 
-      // Real gas estimate via dryRun. The heuristic below is a fallback —
-      // useful when dryRun fails (e.g. simulated insufficient balance,
-      // network blip) but otherwise the on-chain number is dramatically
-      // more accurate than the per-step weights.
+      // Real gas estimate via dryRun. Heuristic below is the fallback when
+      // dryRun fails (simulated insufficient balance, network blip, etc.).
+      // Skipped on silent rebuilds — gas varies negligibly with slippage
+      // and an extra tx.build() round-trip increases the chance of racing
+      // 7K's SDK on rapid slippage changes.
       const heuristicGasSui =
         0.012 +
         0.004 * depositSteps.length +
@@ -1265,27 +1266,36 @@ export function Conversation() {
         0.004 * redeemSteps.length +
         0.003 * cancelSteps.length;
       let estimatedGasSui = heuristicGasSui;
-      try {
-        const client = suiClientRef.current;
-        const bytes = await tx.build({ client });
-        const dryRun = await client.dryRunTransactionBlock({
-          transactionBlock: bytes,
-        });
-        const gas = dryRun.effects?.gasUsed;
-        if (gas) {
-          const mist =
-            BigInt(gas.computationCost) +
-            BigInt(gas.storageCost) -
-            BigInt(gas.storageRebate);
-          // Floor at 0 — a net rebate would otherwise render as negative.
-          const sui = Math.max(0, Number(mist) / 1e9);
-          if (sui > 0 && Number.isFinite(sui)) estimatedGasSui = sui;
+      if (!silent) {
+        try {
+          const client = suiClientRef.current;
+          const bytes = await tx.build({ client });
+          const dryRun = await client.dryRunTransactionBlock({
+            transactionBlock: bytes,
+          });
+          const gas = dryRun.effects?.gasUsed;
+          if (gas) {
+            const mist =
+              BigInt(gas.computationCost) +
+              BigInt(gas.storageCost) -
+              BigInt(gas.storageRebate);
+            // Floor at 0 — a net rebate would otherwise render as negative.
+            const sui = Math.max(0, Number(mist) / 1e9);
+            if (sui > 0 && Number.isFinite(sui)) estimatedGasSui = sui;
+          }
+        } catch (e) {
+          console.warn(
+            "[runExecutePlan] gas dryRun failed; falling back to heuristic",
+            e,
+          );
         }
-      } catch (e) {
-        console.warn(
-          "[runExecutePlan] gas dryRun failed; falling back to heuristic",
-          e,
-        );
+      } else {
+        // Preserve the previously-computed real gas if we have one — the
+        // heuristic is otherwise a step backward on rebuild.
+        const prev = actionPlanCache.get(toolCall.toolCallId);
+        if (prev && prev.summary.estimatedGasSui > 0) {
+          estimatedGasSui = prev.summary.estimatedGasSui;
+        }
       }
 
       const cached: CachedActionPlan = {
@@ -1368,18 +1378,32 @@ export function Conversation() {
   // the (mutated) actionPlanCache entry after a slippage-driven rebuild.
   const [, bumpRefresh] = useState(0);
 
+  // Guards against concurrent silent rebuilds (slippage click while
+  // the 5s auto-refresh is in flight, or rapid slippage clicks). 7K's
+  // buildTx is not safe to call in parallel — concurrent calls produce
+  // the "readUint8 is not a function" symptom by corrupting internal
+  // SDK state. We drop overlapping requests; the next 5s poll picks
+  // up the latest slippage anyway.
+  const planRefreshInFlight = useRef(false);
+
   async function handlePlanRefresh(toolCallId: string) {
+    if (planRefreshInFlight.current) return;
     const cached = actionPlanCache.get(toolCallId);
     if (!cached) return;
     if (planSigning || planConfirming || planExecuted) return;
-    await runExecutePlan(
-      { toolCallId, input: { steps: cached.originalInput } },
-      coinMap,
-      vaultsRef.current,
-      accountRef.current,
-      addToolResultRef,
-      true, // silent — don't dispatch addResult; just refresh the cache
-    );
+    planRefreshInFlight.current = true;
+    try {
+      await runExecutePlan(
+        { toolCallId, input: { steps: cached.originalInput } },
+        coinMap,
+        vaultsRef.current,
+        accountRef.current,
+        addToolResultRef,
+        true, // silent — don't dispatch addResult; just refresh the cache
+      );
+    } finally {
+      planRefreshInFlight.current = false;
+    }
   }
 
   function handleSlippageChange(pct: number) {

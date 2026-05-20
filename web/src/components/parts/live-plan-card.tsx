@@ -456,16 +456,13 @@ function ExpandableStep({
 
   return (
     <div
-      className={cn(
-        "liquid-glass overflow-hidden transition-colors",
-        open && "bg-white/[0.08]",
-      )}
+      className="liquid-glass overflow-hidden"
       style={{ borderRadius: 14 }}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
+        className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
       >
         <StepIndex n={idx + 1} lit={step.kind === "deposit"} />
         <div className="min-w-0 flex-1">
@@ -489,16 +486,101 @@ function ExpandableStep({
             transition={EXPAND}
             className="overflow-hidden"
           >
-            <div className="border-t border-white/10 px-3 py-3">
-              <StepDetail
-                step={step}
-                iconLookup={iconLookup}
-                onOpenVault={onOpenVault}
-              />
+            {/* Inset recess — visually a "drawer" under the summary row */}
+            <div className="px-2 pb-2">
+              <div
+                className="border border-white/[0.06] bg-black/25 px-3.5 py-3"
+                style={{ borderRadius: 12 }}
+              >
+                <StepDetail
+                  step={step}
+                  iconLookup={iconLookup}
+                  onOpenVault={onOpenVault}
+                />
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+ * Detail-panel primitives — hero + meta chips pattern
+ * ───────────────────────────────────────────────────────── */
+
+/** A compact stat chip: label on top, value below, inset background. */
+function DetailChip({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "default" | "warn" | "block";
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-w-[6.5rem] flex-col gap-0.5 px-2.5 py-1.5",
+        tone === "warn" && "bg-warning/15 ring-1 ring-warning/30",
+        tone === "block" && "bg-destructive/15 ring-1 ring-destructive/30",
+        tone === "default" && "bg-white/[0.06]",
+      )}
+      style={{ borderRadius: 10 }}
+    >
+      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+        {label}
+      </span>
+      <span className="font-mono text-body-sm font-semibold tabular-nums text-canvas-white">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** A hero stat for the top of a detail panel — bigger, bolder label + value. */
+function DetailHero({
+  label,
+  value,
+  trailing,
+}: {
+  label: string;
+  value: React.ReactNode;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-end justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+          {label}
+        </div>
+        <div className="truncate font-mono text-body-lg font-semibold tabular-nums leading-tight text-canvas-white">
+          {value}
+        </div>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+/** Section label + optional right-aligned meta, used to separate clusters. */
+function DetailSectionLabel({
+  label,
+  meta,
+}: {
+  label: string;
+  meta?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+        {label}
+      </span>
+      {meta && (
+        <span className="text-caption text-canvas-white/55">{meta}</span>
+      )}
     </div>
   );
 }
@@ -1293,40 +1375,6 @@ function shortfallButtonLabel(check: BalanceCheck): string {
  * Per-kind expanded detail panels
  * ───────────────────────────────────────────────────────── */
 
-function DetailGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-body-sm">
-      {children}
-    </div>
-  );
-}
-
-function DetailKV({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: React.ReactNode;
-  mono?: boolean;
-}) {
-  return (
-    <>
-      <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
-        {label}
-      </span>
-      <span
-        className={cn(
-          "text-right text-canvas-white",
-          mono && "font-mono tabular-nums",
-        )}
-      >
-        {value}
-      </span>
-    </>
-  );
-}
-
 function fmtImpact(pct: number | undefined): string {
   if (pct === undefined || pct <= 0) return "0%";
   if (pct < 0.001) return "<0.001%";
@@ -1342,35 +1390,35 @@ function SwapDetail({
 }) {
   const rate =
     s.fromAmountHuman > 0 ? s.toAmountHuman / s.fromAmountHuman : 0;
+  const minReceived = s.toAmountHuman * (1 - s.slippagePct / 100);
+  const impactPct = s.impactPct ?? 0;
+  const impactTone: "default" | "warn" | "block" =
+    impactPct >= 5 ? "block" : impactPct >= 1 ? "warn" : "default";
+
   return (
-    <div className="space-y-3">
-      <DetailGrid>
-        <DetailKV
-          label="Effective rate"
-          value={
-            <>
-              1 {s.fromSymbol} ≈ {rate.toFixed(6)} {s.toSymbol}
-            </>
-          }
-          mono
-        />
-        <DetailKV label="Price impact" value={fmtImpact(s.impactPct)} mono />
-        <DetailKV
-          label="Slippage cap"
-          value={<>{s.slippagePct}%</>}
-          mono
-        />
-        <DetailKV
+    <div className="space-y-4">
+      <DetailHero
+        label="Effective rate"
+        value={
+          <>
+            1 {s.fromSymbol} ≈ {rate.toFixed(6)} {s.toSymbol}
+          </>
+        }
+        trailing={
+          <DetailChip
+            label="Impact"
+            value={fmtImpact(s.impactPct)}
+            tone={impactTone}
+          />
+        }
+      />
+      <div className="flex flex-wrap gap-2">
+        <DetailChip label="Slippage cap" value={`${s.slippagePct}%`} />
+        <DetailChip
           label="Min received"
-          value={
-            <>
-              {fmtAmount(s.toAmountHuman * (1 - s.slippagePct / 100))}{" "}
-              {s.toSymbol}
-            </>
-          }
-          mono
+          value={`${fmtAmount(minReceived)} ${s.toSymbol}`}
         />
-      </DetailGrid>
+      </div>
       <RouteBreakdown s={s} iconLookup={iconLookup} />
     </div>
   );
@@ -1401,25 +1449,28 @@ function RouteBreakdown({
   const sorted = [...withShares].sort((a, b) => b._share - a._share);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
-          Route
-        </span>
-        <span className="text-caption text-canvas-white/55">
-          {sorted.length === 0
+    <div className="space-y-2 border-t border-white/[0.06] pt-3">
+      <DetailSectionLabel
+        label="Route"
+        meta={
+          sorted.length === 0
             ? "1 direct route"
-            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
-        </span>
-      </div>
-      <div className="space-y-1.5">
+            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`
+        }
+      />
+      <div className="space-y-1">
         {sorted.length === 0 ? (
           <div className="text-body-sm text-canvas-white/55">
             Direct {s.fromSymbol} → {s.toSymbol} swap on Bluefin7K.
           </div>
         ) : (
           sorted.map((route, i) => (
-            <SplitRow key={i} route={route} iconLookup={iconLookup} />
+            <SplitRow
+              key={i}
+              route={route}
+              iconLookup={iconLookup}
+              dominant={i === 0}
+            />
           ))
         )}
       </div>
@@ -1435,6 +1486,7 @@ function symbolFromType(coinType: string): string {
 function SplitRow({
   route,
   iconLookup,
+  dominant,
 }: {
   route: {
     _share: number;
@@ -1445,13 +1497,19 @@ function SplitRow({
     }>;
   };
   iconLookup: IconLookup;
+  dominant?: boolean;
 }) {
   const pct = Math.round(route._share * 100);
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span
-        className="inline-flex shrink-0 items-center bg-cash-lime/20 px-2 py-0.5 font-mono text-caption font-semibold tabular-nums text-canvas-white"
-        style={{ borderRadius: 9999, minWidth: 40, justifyContent: "center" }}
+        className={cn(
+          "inline-flex shrink-0 items-center px-2 py-0.5 font-mono text-caption font-semibold tabular-nums",
+          dominant
+            ? "bg-cash-lime text-midnight-black"
+            : "bg-white/[0.08] text-canvas-white",
+        )}
+        style={{ borderRadius: 9999, minWidth: 42, justifyContent: "center" }}
       >
         {pct}%
       </span>
@@ -1465,18 +1523,22 @@ function SplitRow({
           <Fragment key={i}>
             {i > 0 && (
               <ArrowRight
-                className="size-3 shrink-0 text-canvas-white/55"
+                className="size-3 shrink-0 text-canvas-white/40"
                 strokeWidth={2.4}
               />
             )}
             <span
-              className="inline-flex shrink-0 items-center gap-1.5 bg-white/[0.08] py-0.5 pl-1 pr-2.5 text-body-sm font-medium text-canvas-white"
+              className="inline-flex shrink-0 items-center gap-1.5 border border-white/[0.06] bg-white/[0.05] py-1 pl-1.5 pr-2.5 text-body-sm font-medium text-canvas-white"
               style={{ borderRadius: 9999 }}
               title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
             >
-              <span className="inline-flex -space-x-1">
-                <AssetIcon src={inIcon} label={inSym} size={16} />
-                <AssetIcon src={outIcon} label={outSym} size={16} />
+              <span className="inline-flex items-center">
+                <AssetIcon src={inIcon} label={inSym} size={14} />
+                <ArrowRight
+                  className="mx-0.5 size-2.5 text-canvas-white/40"
+                  strokeWidth={2.4}
+                />
+                <AssetIcon src={outIcon} label={outSym} size={14} />
               </span>
               {type ? dexLabel(type) : "unknown"}
             </span>
@@ -1498,42 +1560,50 @@ function DepositDetail({
   const lendApy = v.apyBreakdown.lendingApyPct;
   const rewardApy = v.apyBreakdown.rewardApyPct;
   const totalApy = lendApy + rewardApy;
-  const lendShare = totalApy > 0 ? lendApy / totalApy : 0;
+  const rewardShare = totalApy > 0 ? rewardApy / totalApy : 0;
+  const rewardHeavy = rewardShare > 0.5;
+
   return (
-    <div className="space-y-3">
-      <DetailGrid>
-        <DetailKV label="Vault" value={v.name} />
-        <DetailKV label="Category" value={v.category} />
-        <DetailKV
-          label="APY breakdown"
-          value={
-            <>
-              {fmtPct(lendApy)} yield + {fmtPct(rewardApy)} rewards
-            </>
-          }
-          mono
-        />
-        <DetailKV label="Headline APY" value={fmtPct(v.apyPct)} mono />
+    <div className="space-y-4">
+      <DetailHero
+        label={`APY · ${v.category}`}
+        value={fmtPct(v.apyPct)}
+        trailing={
+          <span className="text-caption text-canvas-white/55">
+            30-day avg
+          </span>
+        }
+      />
+      <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
+      <div className="flex flex-wrap gap-2">
         {v.tvlUsd !== undefined && (
-          <DetailKV
+          <DetailChip
             label="TVL"
-            value={<>${Math.round(v.tvlUsd).toLocaleString()}</>}
-            mono
+            value={`$${Math.round(v.tvlUsd).toLocaleString()}`}
           />
         )}
-        <DetailKV
+        <DetailChip
           label="Withdrawal"
           value={
             v.withdrawalPeriodDays
-              ? `≤${v.withdrawalPeriodDays}d lockup`
-              : "Settles soon"
+              ? `≤${v.withdrawalPeriodDays}d`
+              : "Soon"
           }
+          tone={v.withdrawalPeriodDays ? "warn" : "default"}
         />
-      </DetailGrid>
-      {lendShare < 0.5 && totalApy > 0 && (
-        <div className="text-caption text-canvas-white/55">
-          More than half of headline APY is reward emissions — variable, not
-          durable yield.
+        <DetailChip
+          label="Strategy"
+          value={v.name}
+        />
+      </div>
+      {rewardHeavy && (
+        <div
+          className="flex items-start gap-2 border border-warning/30 bg-warning/10 px-2.5 py-2 text-caption text-canvas-white/80"
+          style={{ borderRadius: 10 }}
+        >
+          <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-warning" />
+          {Math.round(rewardShare * 100)}% of headline APY is reward emissions
+          — variable, not durable yield.
         </div>
       )}
       <button
@@ -1552,33 +1622,101 @@ function DepositDetail({
   );
 }
 
-function SplitDetail({ s }: { s: ResolvedSplitStep }) {
+/**
+ * Visual APY composition bar — yield (lime) + rewards (white/40) stacked.
+ * Communicates the "durable vs emissions" mix at a glance.
+ */
+function ApyComposition({
+  lendApy,
+  rewardApy,
+}: {
+  lendApy: number;
+  rewardApy: number;
+}) {
+  const total = lendApy + rewardApy;
+  if (total <= 0) return null;
+  const yieldShare = (lendApy / total) * 100;
   return (
     <div className="space-y-2">
-      <DetailGrid>
-        <DetailKV
-          label="Source"
-          value={
-            <>
-              {fmtAmount(s.totalHuman)} {s.sourceSymbol}
-            </>
-          }
-          mono
-        />
-        <DetailKV
-          label="Portions"
-          value={<>{s.portions.length}-way split</>}
-        />
-      </DetailGrid>
-      <div className="space-y-1">
-        {s.portions.map((p, i) => (
-          <div key={i} className="flex items-center justify-between text-body-sm">
-            <span className="text-canvas-white/55">Portion {i + 1}</span>
-            <span className="font-mono tabular-nums text-canvas-white">
-              {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}% · {fmtAmount(p.human)} {s.sourceSymbol}
-            </span>
-          </div>
-        ))}
+      <div
+        className="h-1.5 w-full overflow-hidden bg-white/[0.06]"
+        style={{ borderRadius: 9999 }}
+      >
+        <div className="flex h-full">
+          <div
+            className="bg-cash-lime"
+            style={{ width: `${yieldShare}%` }}
+          />
+          <div
+            className="bg-white/40"
+            style={{ width: `${100 - yieldShare}%` }}
+          />
+        </div>
+      </div>
+      <div className="flex items-baseline gap-4 text-caption">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block size-2 rounded-full bg-cash-lime" />
+          <span className="text-canvas-white/55">Yield</span>
+          <span className="font-mono tabular-nums text-canvas-white">
+            {fmtPct(lendApy)}
+          </span>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block size-2 rounded-full bg-white/40" />
+          <span className="text-canvas-white/55">Rewards</span>
+          <span className="font-mono tabular-nums text-canvas-white">
+            {fmtPct(rewardApy)}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SplitDetail({ s }: { s: ResolvedSplitStep }) {
+  return (
+    <div className="space-y-3">
+      <DetailHero
+        label="Source"
+        value={
+          <>
+            {fmtAmount(s.totalHuman)} {s.sourceSymbol}
+          </>
+        }
+        trailing={
+          <DetailChip
+            label="Portions"
+            value={`${s.portions.length}-way`}
+          />
+        }
+      />
+      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+        <DetailSectionLabel label="Allocation" />
+        <div className="space-y-1.5">
+          {s.portions.map((p, i) => {
+            const pct = (p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2);
+            const widthPct = p.bps / 100;
+            return (
+              <div key={i} className="space-y-1">
+                <div className="flex items-baseline justify-between text-body-sm">
+                  <span className="text-canvas-white/55">Portion {i + 1}</span>
+                  <span className="font-mono tabular-nums text-canvas-white">
+                    {pct}% · {fmtAmount(p.human)} {s.sourceSymbol}
+                  </span>
+                </div>
+                <div
+                  className="h-1 w-full overflow-hidden bg-white/[0.06]"
+                  style={{ borderRadius: 9999 }}
+                >
+                  <div
+                    className="h-full bg-cash-lime/70"
+                    style={{ width: `${widthPct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1586,31 +1724,36 @@ function SplitDetail({ s }: { s: ResolvedSplitStep }) {
 
 function MergeDetail({ s }: { s: ResolvedMergeStep }) {
   return (
-    <div className="space-y-2">
-      <DetailGrid>
-        <DetailKV
-          label="Total"
-          value={
-            <>
-              {fmtAmount(s.totalHuman)} {s.symbol}
-            </>
-          }
-          mono
-        />
-        <DetailKV
-          label="Sources"
-          value={<>{s.sources.length} contributors</>}
-        />
-      </DetailGrid>
-      <div className="space-y-1">
-        {s.sources.map((src, i) => (
-          <div key={i} className="flex items-center justify-between text-body-sm">
-            <span className="text-canvas-white/55">{src.label}</span>
-            <span className="font-mono tabular-nums text-canvas-white">
-              {fmtAmount(src.human)} {s.symbol}
-            </span>
-          </div>
-        ))}
+    <div className="space-y-3">
+      <DetailHero
+        label="Combined"
+        value={
+          <>
+            {fmtAmount(s.totalHuman)} {s.symbol}
+          </>
+        }
+        trailing={
+          <DetailChip
+            label="Sources"
+            value={`${s.sources.length}`}
+          />
+        }
+      />
+      <div className="space-y-2 border-t border-white/[0.06] pt-3">
+        <DetailSectionLabel label="Contributors" />
+        <div className="space-y-1">
+          {s.sources.map((src, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between text-body-sm"
+            >
+              <span className="text-canvas-white/55">{src.label}</span>
+              <span className="font-mono tabular-nums text-canvas-white">
+                {fmtAmount(src.human)} {s.symbol}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1619,46 +1762,47 @@ function MergeDetail({ s }: { s: ResolvedMergeStep }) {
 function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
   const v = s.vault;
   return (
-    <DetailGrid>
-      <DetailKV label="Vault" value={v.name} />
-      <DetailKV
-        label="Burning"
+    <div className="space-y-3">
+      <DetailHero
+        label={`Redeem · ${v.name}`}
         value={
           <>
             {fmtAmount(s.sharesHuman)} {s.receiptSymbol}
           </>
         }
-        mono
-      />
-      <DetailKV
-        label="Settlement"
-        value={
-          v.withdrawalPeriodDays
-            ? `Up to ${v.withdrawalPeriodDays} days`
-            : "Soon (no fixed lockup)"
+        trailing={
+          <DetailChip
+            label="Settles in"
+            value={
+              v.withdrawalPeriodDays
+                ? `≤${v.withdrawalPeriodDays}d`
+                : "Soon"
+            }
+            tone={v.withdrawalPeriodDays ? "warn" : "default"}
+          />
         }
       />
-      <DetailKV
-        label="Note"
-        value={<>Funds arrive after the operator unwinds — not in this tx.</>}
-      />
-    </DetailGrid>
+      <div
+        className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-canvas-white/80"
+        style={{ borderRadius: 10 }}
+      >
+        Funds arrive after the operator unwinds — not in this transaction.
+      </div>
+    </div>
   );
 }
 
 function CancelDetail({ s }: { s: ResolvedCancelRedeemStep }) {
   return (
-    <DetailGrid>
-      <DetailKV label="Vault" value={s.vault.name} />
-      <DetailKV
-        label="Request #"
-        value={<span className="font-mono">{s.sequenceNumber}</span>}
+    <div className="space-y-3">
+      <DetailHero
+        label={`Cancel withdrawal · ${s.vault.name}`}
+        value={<>req #{s.sequenceNumber}</>}
       />
-      <DetailKV
-        label="Effect"
-        value={<>Shares return to your wallet on confirmation.</>}
-      />
-    </DetailGrid>
+      <div className="text-caption text-canvas-white/55">
+        Shares return to your wallet on confirmation. No fees beyond gas.
+      </div>
+    </div>
   );
 }
 
