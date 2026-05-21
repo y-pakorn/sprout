@@ -1023,7 +1023,12 @@ export function Conversation() {
                 partner: PARTNER_ADDRESS,
                 commissionBps: PARTNER_COMMISSION_BPS,
               },
-              extendTx: { tx: tx as never },
+              // Pass our pre-built input coin via coinIn. Without this 7K's
+              // buildTx calls getSplitCoinForTx internally and pulls its
+              // own coin, leaving our coinWithBalance Result (or upstream
+              // swap output) orphan as result_idx 0 — which fails Sui's
+              // PTB resolver with UnusedValueWithoutDrop.
+              extendTx: { tx: tx as never, coinIn: origin.arg },
             });
           } catch (buildErr) {
             const raw = (buildErr as Error).message ?? String(buildErr);
