@@ -692,6 +692,11 @@ export function Conversation() {
         expectedHuman: number;
       };
       const handles = new Map<string, HandleEntry>();
+      // Handle ids consumed by a downstream step. Any handle NOT in this set
+      // by the end of the steps walk is a Result coin that nothing took
+      // ownership of — we must explicitly transfer those to the sender or
+      // Sui will reject the PTB with `UnusedValueWithoutDrop`.
+      const consumedHandles = new Set<string>();
       const resolved: ResolvedStep[] = [];
 
       function resolveOrigin(step: RawStep): HandleEntry {
@@ -703,6 +708,7 @@ export function Conversation() {
               `Step ${step.id}: handle '${step.fromHandle}' has not been produced yet by the time this step runs. Available handles at this point: [${available}]. This usually means an upstream step failed or the id reference is mistyped. FIX: verify the upstream step's id matches and retry executePlan.`,
             );
           }
+          consumedHandles.add(step.fromHandle);
           return h;
         }
         if (!step.fromSymbol || step.fromAmount == null) {
@@ -896,6 +902,7 @@ export function Conversation() {
                   `Merge ${step.id}: unknown handle '${hId}'.`,
                 );
               }
+              consumedHandles.add(hId);
               sources.push({ entry: h, label: hId });
             }
           }
@@ -1229,6 +1236,19 @@ export function Conversation() {
             sharesHuman: origin.expectedHuman,
           });
         }
+      }
+
+      // Transfer any unconsumed coin handles to the sender. Without this a
+      // solo swap (or any branch whose terminal Result coin isn't deposited
+      // or redeemed) leaves an unused PTB Result and Sui rejects the tx
+      // with `UnusedValueWithoutDrop`.
+      const orphanArgs: TransactionObjectArgument[] = [];
+      for (const [id, entry] of handles) {
+        if (consumedHandles.has(id)) continue;
+        orphanArgs.push(entry.arg);
+      }
+      if (orphanArgs.length > 0) {
+        tx.transferObjects(orphanArgs, tx.pure.address(acct.address));
       }
 
       const depositSteps = resolved.filter(
