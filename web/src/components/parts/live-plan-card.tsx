@@ -521,9 +521,9 @@ function ExpandableStep({
  * Detail-panel primitives — hero + meta chips pattern
  * ───────────────────────────────────────────────────────── */
 
-/** A compact stat chip: label on top, value below, raised against the
- *  detail-panel background. Default tone uses ~12% white so it actually
- *  separates from the ~25% black panel underneath. */
+/** Tile-style chip. Significantly more presence than the previous flat
+ *  treatment — bg-white/[0.10] + 1px ring carves it out of the dark panel
+ *  background. Min-width 8rem so values don't get squeezed. */
 function DetailChip({
   label,
   value,
@@ -536,15 +536,15 @@ function DetailChip({
   return (
     <div
       className={cn(
-        "flex min-w-[6.5rem] flex-col gap-0.5 px-3 py-2 ring-1",
+        "flex min-w-[8rem] flex-col gap-1 px-3.5 py-2.5 ring-1",
         tone === "warn" && "bg-warning/15 ring-warning/40",
         tone === "block" && "bg-destructive/15 ring-destructive/40",
         tone === "lime" && "bg-cash-lime/10 ring-cash-lime/30",
-        tone === "default" && "bg-white/[0.10] ring-white/[0.06]",
+        tone === "default" && "bg-white/[0.10] ring-white/[0.10]",
       )}
-      style={{ borderRadius: 10 }}
+      style={{ borderRadius: 12 }}
     >
-      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
         {label}
       </span>
       <span className="font-mono text-body-sm font-semibold tabular-nums text-canvas-white">
@@ -554,9 +554,42 @@ function DetailChip({
   );
 }
 
-/** Hero stat — significantly larger value than the meta chips, with
- *  optional trailing chip (verdict, modifier, etc.) for relationships
- *  that belong directly to the headline. */
+/** Two-line hero pattern — large numeric value with a small caption
+ *  describing the unit. The previous version mashed numbers and token
+ *  symbols into one 22px string; this isolates the number as the
+ *  headline and demotes denomination text to a caption. */
+function NumericHero({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+        {label}
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-2.5">
+        <span
+          className="font-mono font-semibold tabular-nums text-canvas-white"
+          style={{ fontSize: "28px", lineHeight: 1, letterSpacing: "-0.02em" }}
+        >
+          {value}
+        </span>
+        <span className="text-body-sm font-medium text-canvas-white/55">
+          {unit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Hero with a free-form value (typically `{amount} {symbol}`) and an
+ *  optional trailing chip. Used by step kinds where the headline isn't
+ *  a pure number (redeem, cancel, split source). */
 function DetailHero({
   label,
   value,
@@ -567,14 +600,14 @@ function DetailHero({
   trailing?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
           {label}
         </div>
         <div
-          className="truncate font-mono font-bold tabular-nums leading-none text-canvas-white"
-          style={{ fontSize: "22px", letterSpacing: "-0.01em" }}
+          className="truncate font-mono font-semibold tabular-nums leading-none text-canvas-white"
+          style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
         >
           {value}
         </div>
@@ -584,9 +617,9 @@ function DetailHero({
   );
 }
 
-/** Verdict-tinted chip used as the trailing affordance on swap detail.
- *  Sized larger than DetailChip so it reads as the swap's safety signal,
- *  not as a peer meta tile. */
+/** Verdict-tinted chip used as the trailing safety signal on swap detail.
+ *  Larger + brighter so it reads as the swap's primary check, not as a
+ *  peer of the meta chips below. */
 function VerdictChip({
   label,
   value,
@@ -600,10 +633,10 @@ function VerdictChip({
 }) {
   const palette =
     verdict === "block"
-      ? "bg-destructive/20 ring-destructive/50 text-canvas-white"
+      ? "bg-destructive/20 ring-destructive/50"
       : verdict === "warn"
-        ? "bg-warning/15 ring-warning/50 text-canvas-white"
-        : "bg-cash-lime/15 ring-cash-lime/40 text-canvas-white";
+        ? "bg-warning/20 ring-warning/50"
+        : "bg-cash-lime/15 ring-cash-lime/45";
   const dotColor =
     verdict === "block"
       ? "bg-destructive"
@@ -613,21 +646,21 @@ function VerdictChip({
   return (
     <div
       className={cn(
-        "flex shrink-0 flex-col items-end gap-0.5 px-3 py-2 ring-1",
+        "flex shrink-0 flex-col items-start gap-1 px-3.5 py-2.5 ring-1",
         palette,
       )}
-      style={{ borderRadius: 12, minWidth: "5.5rem" }}
+      style={{ borderRadius: 12, minWidth: "7.5rem" }}
     >
-      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
         {label}
       </span>
       <span
-        className="font-mono font-bold tabular-nums leading-none"
-        style={{ fontSize: "18px", letterSpacing: "-0.01em" }}
+        className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
+        style={{ fontSize: "20px", letterSpacing: "-0.015em" }}
       >
         {value}
       </span>
-      <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-canvas-white/70">
+      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/85">
         <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
         {caption}
       </span>
@@ -1505,24 +1538,21 @@ function SwapDetail({
     impactPct > 0 && s.slippagePct < impactPct;
 
   return (
-    <div className="space-y-4">
-      <DetailHero
-        label="Effective rate"
-        value={
-          <>
-            1 {s.fromSymbol} ≈ {rate.toFixed(6)} {s.toSymbol}
-          </>
-        }
-        trailing={
-          <VerdictChip
-            label="Price impact"
-            value={fmtImpact(s.impactPct)}
-            verdict={verdict}
-            caption={verdictCaption}
-          />
-        }
-      />
-      <div className="flex flex-wrap gap-2">
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <NumericHero
+          label="Effective rate"
+          value={rate.toFixed(6)}
+          unit={`${s.toSymbol} per ${s.fromSymbol}`}
+        />
+        <VerdictChip
+          label="Price impact"
+          value={fmtImpact(s.impactPct)}
+          verdict={verdict}
+          caption={verdictCaption}
+        />
+      </div>
+      <div className="flex flex-wrap gap-2.5">
         <DetailChip
           label="Slippage cap"
           value={`${s.slippagePct}%`}
@@ -1563,19 +1593,21 @@ function RouteBreakdown({
   const sorted = [...withShares].sort((a, b) => b._share - a._share);
 
   return (
-    <div className="space-y-2 border-t border-white/[0.06] pt-3">
-      <DetailSectionLabel
-        label="Route"
-        meta={
-          sorted.length === 0
-            ? "1 direct route"
-            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`
-        }
-      />
-      <div className="space-y-1">
+    <div className="space-y-3 border-t border-white/[0.08] pt-4">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+          Route
+        </span>
+        <span className="font-mono text-caption tabular-nums text-canvas-white/70">
+          {sorted.length === 0
+            ? "Direct route"
+            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
+        </span>
+      </div>
+      <div className="space-y-2">
         {sorted.length === 0 ? (
-          <div className="text-body-sm text-canvas-white/55">
-            Direct {s.fromSymbol} → {s.toSymbol} swap on Bluefin7K.
+          <div className="text-body-sm text-canvas-white/70">
+            Direct {s.fromSymbol} → {s.toSymbol} via Bluefin7K.
           </div>
         ) : (
           sorted.map((route, i) => (
@@ -1615,19 +1647,19 @@ function SplitRow({
 }) {
   const pct = Math.round(route._share * 100);
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2.5">
       <span
         className={cn(
           "inline-flex shrink-0 items-center justify-center font-mono font-bold tabular-nums",
           dominant
-            ? "bg-cash-lime text-midnight-black text-body-sm py-1 px-2.5"
-            : "bg-white/[0.10] text-canvas-white text-caption py-0.5 px-2",
+            ? "bg-cash-lime text-midnight-black text-body-sm py-1.5 px-3"
+            : "bg-white/[0.12] text-canvas-white text-caption py-1 px-2.5 ring-1 ring-white/[0.08]",
         )}
-        style={{ borderRadius: 9999, minWidth: dominant ? 52 : 44 }}
+        style={{ borderRadius: 9999, minWidth: dominant ? 58 : 50 }}
       >
         {pct}%
       </span>
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         {route.hops.map((hop, i) => {
           const type = hop.pool?.type;
           const inIcon = hop.tokenIn ? iconLookup(hop.tokenIn) : undefined;
@@ -1638,22 +1670,20 @@ function SplitRow({
             <Fragment key={i}>
               {i > 0 && (
                 <ArrowRight
-                  className="size-3 shrink-0 text-canvas-white/30"
+                  className="size-3.5 shrink-0 text-canvas-white/40"
                   strokeWidth={2.4}
                 />
               )}
               <span
-                className="inline-flex shrink-0 items-center gap-1.5 bg-white/[0.05] py-0.5 pl-1 pr-2 text-caption font-medium text-canvas-white/85"
+                className="inline-flex shrink-0 items-center gap-2 bg-white/[0.10] py-1 pl-1.5 pr-3 text-body-sm font-medium text-canvas-white ring-1 ring-white/[0.08]"
                 style={{ borderRadius: 9999 }}
                 title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
               >
                 <span className="inline-flex items-center">
-                  <AssetIcon src={inIcon} label={inSym} size={12} />
-                  <ArrowRight
-                    className="mx-0.5 size-2.5 text-canvas-white/30"
-                    strokeWidth={2.4}
-                  />
-                  <AssetIcon src={outIcon} label={outSym} size={12} />
+                  <AssetIcon src={inIcon} label={inSym} size={16} />
+                  <span className="-ml-1.5 inline-flex rounded-full ring-2 ring-[#0d0d11]">
+                    <AssetIcon src={outIcon} label={outSym} size={16} />
+                  </span>
                 </span>
                 {type ? dexLabel(type) : "unknown"}
               </span>
@@ -1680,25 +1710,14 @@ function DepositDetail({
   const rewardHeavy = rewardShare > 0.5;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
-            APY
-          </span>
-          <span className="text-caption text-canvas-white/55">
-            · 30-day average
-          </span>
-        </div>
-        <div
-          className="font-mono font-bold tabular-nums leading-none text-canvas-white"
-          style={{ fontSize: "28px", letterSpacing: "-0.015em" }}
-        >
-          {fmtPct(v.apyPct)}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <NumericHero
+        label="APY · 30-day average"
+        value={fmtPct(v.apyPct)}
+        unit={v.category}
+      />
       <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2.5">
         {v.tvlUsd !== undefined && (
           <DetailChip
             label="TVL"
@@ -1714,11 +1733,10 @@ function DepositDetail({
           }
           tone={v.withdrawalPeriodDays ? "warn" : "default"}
         />
-        <DetailChip label="Category" value={v.category} />
       </div>
       {rewardHeavy && (
         <div
-          className="flex items-start gap-2 border-l-2 border-warning bg-warning/10 px-2.5 py-2 text-caption text-canvas-white/85"
+          className="flex items-start gap-2 border-l-2 border-warning bg-warning/10 px-3 py-2 text-caption text-canvas-white/85"
           style={{ borderRadius: 8 }}
         >
           <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-warning" />
@@ -1732,7 +1750,7 @@ function DepositDetail({
           e.stopPropagation();
           onOpenVault(v.id);
         }}
-        className="inline-flex items-center gap-1 bg-white/[0.10] px-3 py-1.5 text-caption font-medium text-canvas-white ring-1 ring-white/[0.06] transition-colors hover:bg-white/[0.14]"
+        className="inline-flex items-center gap-1.5 bg-white/[0.10] px-3 py-1.5 text-caption font-semibold text-canvas-white ring-1 ring-white/[0.10] transition-colors hover:bg-white/[0.16]"
         style={{ borderRadius: 9999 }}
       >
         Full vault info
