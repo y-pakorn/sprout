@@ -214,43 +214,42 @@ export function LivePlanCard({
       style={{ borderRadius: 20 }}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <div className="flex items-baseline gap-1.5">
+        <div className="flex items-baseline gap-2">
           <span className="text-caption font-medium uppercase tracking-wider text-cash-lime">
             Plan
           </span>
-          <span className="text-caption text-canvas-white/55">
-            {swapSteps.length > 0 && (
-              <>
-                {swapSteps.length} swap
-                {swapSteps.length === 1 ? "" : "s"}
-                {depositSteps.length > 0 ? " · " : ""}
-              </>
-            )}
-            {depositSteps.length > 0 && (
-              <>
-                {depositSteps.length} deposit
-                {depositSteps.length === 1 ? "" : "s"}
-              </>
-            )}
-          </span>
           {hasSwapSteps && onRefresh && (
-            <span className="flex items-center gap-1 text-caption text-canvas-white/55">
+            <span
+              className="flex items-center gap-1.5 text-caption text-canvas-white/55"
+              title={
+                refreshing
+                  ? "Refreshing quote"
+                  : ageSec < 2
+                    ? "Just refreshed"
+                    : `Quote refreshed ${ageSec}s ago`
+              }
+            >
               <motion.span
-                animate={{ rotate: refreshing ? 360 : 0 }}
+                animate={{
+                  opacity: refreshing ? [0.4, 1, 0.4] : 1,
+                  scale: refreshing ? [0.8, 1, 0.8] : 1,
+                }}
                 transition={
                   refreshing
-                    ? { duration: 0.8, repeat: Infinity, ease: "linear" }
+                    ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
                     : { duration: 0 }
                 }
-                className="inline-flex"
-              >
-                <RefreshCw className="size-3" strokeWidth={2.4} />
-              </motion.span>
+                className={cn(
+                  "inline-block size-1.5",
+                  refreshing ? "bg-cash-lime" : "bg-cash-lime/60",
+                )}
+                style={{ borderRadius: 9999 }}
+              />
               {refreshing
-                ? "Refreshing…"
+                ? "Live"
                 : ageSec < 2
-                  ? "Just updated"
-                  : `Updated ${ageSec}s ago`}
+                  ? "Live"
+                  : `${ageSec}s`}
             </span>
           )}
         </div>
@@ -259,30 +258,42 @@ export function LivePlanCard({
             <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
               Blended APY
             </span>
-            <span className="text-body font-semibold tabular-nums text-canvas-white">
+            <span
+              className="font-mono font-bold tabular-nums text-cash-lime"
+              style={{ fontSize: "17px", letterSpacing: "-0.005em" }}
+            >
               {fmtPct(cached.summary.blendedApyPct)}
             </span>
           </div>
         )}
       </div>
 
-      {/* Step trail — every row expands to show its kind-specific detail */}
+      {/* Step trail — every row expands to show its kind-specific detail.
+       *  Steps that pass coins to the next step (swap → deposit, split →
+       *  deposit, etc.) get a "flow" connector in the gutter that binds
+       *  them visually into one plan. */}
       <motion.ol
         variants={stagger(0.05, 0.1)}
         initial="initial"
         animate="animate"
-        className="space-y-1.5"
+        className="relative space-y-0"
       >
-        {cached.steps.map((s, i) => (
-          <motion.li key={s.id} variants={fadeUp}>
-            <ExpandableStep
-              step={s}
-              idx={i}
-              iconLookup={iconLookup}
-              onOpenVault={(id) => setOpenVaultId(id)}
-            />
-          </motion.li>
-        ))}
+        {cached.steps.map((s, i) => {
+          const next = cached.steps[i + 1];
+          const flows = next ? stepFlowsInto(s, next) : false;
+          return (
+            <motion.li key={s.id} variants={fadeUp} className="relative">
+              <ExpandableStep
+                step={s}
+                idx={i}
+                iconLookup={iconLookup}
+                onOpenVault={(id) => setOpenVaultId(id)}
+              />
+              {flows && <FlowConnector />}
+              {!flows && next && <div className="h-1.5" />}
+            </motion.li>
+          );
+        })}
       </motion.ol>
 
       {/* Kind-dispatched aggregate stats */}
@@ -510,7 +521,9 @@ function ExpandableStep({
  * Detail-panel primitives — hero + meta chips pattern
  * ───────────────────────────────────────────────────────── */
 
-/** A compact stat chip: label on top, value below, inset background. */
+/** A compact stat chip: label on top, value below, raised against the
+ *  detail-panel background. Default tone uses ~12% white so it actually
+ *  separates from the ~25% black panel underneath. */
 function DetailChip({
   label,
   value,
@@ -518,15 +531,16 @@ function DetailChip({
 }: {
   label: string;
   value: React.ReactNode;
-  tone?: "default" | "warn" | "block";
+  tone?: "default" | "warn" | "block" | "lime";
 }) {
   return (
     <div
       className={cn(
-        "flex min-w-[6.5rem] flex-col gap-0.5 px-2.5 py-1.5",
-        tone === "warn" && "bg-warning/15 ring-1 ring-warning/30",
-        tone === "block" && "bg-destructive/15 ring-1 ring-destructive/30",
-        tone === "default" && "bg-white/[0.06]",
+        "flex min-w-[6.5rem] flex-col gap-0.5 px-3 py-2 ring-1",
+        tone === "warn" && "bg-warning/15 ring-warning/40",
+        tone === "block" && "bg-destructive/15 ring-destructive/40",
+        tone === "lime" && "bg-cash-lime/10 ring-cash-lime/30",
+        tone === "default" && "bg-white/[0.10] ring-white/[0.06]",
       )}
       style={{ borderRadius: 10 }}
     >
@@ -540,7 +554,9 @@ function DetailChip({
   );
 }
 
-/** A hero stat for the top of a detail panel — bigger, bolder label + value. */
+/** Hero stat — significantly larger value than the meta chips, with
+ *  optional trailing chip (verdict, modifier, etc.) for relationships
+ *  that belong directly to the headline. */
 function DetailHero({
   label,
   value,
@@ -551,16 +567,70 @@ function DetailHero({
   trailing?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-end justify-between gap-3">
-      <div className="min-w-0 flex-1">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
           {label}
         </div>
-        <div className="truncate font-mono text-body-lg font-semibold tabular-nums leading-tight text-canvas-white">
+        <div
+          className="truncate font-mono font-bold tabular-nums leading-none text-canvas-white"
+          style={{ fontSize: "22px", letterSpacing: "-0.01em" }}
+        >
           {value}
         </div>
       </div>
       {trailing}
+    </div>
+  );
+}
+
+/** Verdict-tinted chip used as the trailing affordance on swap detail.
+ *  Sized larger than DetailChip so it reads as the swap's safety signal,
+ *  not as a peer meta tile. */
+function VerdictChip({
+  label,
+  value,
+  verdict,
+  caption,
+}: {
+  label: string;
+  value: React.ReactNode;
+  verdict: "pass" | "warn" | "block";
+  caption: string;
+}) {
+  const palette =
+    verdict === "block"
+      ? "bg-destructive/20 ring-destructive/50 text-canvas-white"
+      : verdict === "warn"
+        ? "bg-warning/15 ring-warning/50 text-canvas-white"
+        : "bg-cash-lime/15 ring-cash-lime/40 text-canvas-white";
+  const dotColor =
+    verdict === "block"
+      ? "bg-destructive"
+      : verdict === "warn"
+        ? "bg-warning"
+        : "bg-cash-lime";
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 flex-col items-end gap-0.5 px-3 py-2 ring-1",
+        palette,
+      )}
+      style={{ borderRadius: 12, minWidth: "5.5rem" }}
+    >
+      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+        {label}
+      </span>
+      <span
+        className="font-mono font-bold tabular-nums leading-none"
+        style={{ fontSize: "18px", letterSpacing: "-0.01em" }}
+      >
+        {value}
+      </span>
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-canvas-white/70">
+        <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
+        {caption}
+      </span>
     </div>
   );
 }
@@ -1375,6 +1445,41 @@ function shortfallButtonLabel(check: BalanceCheck): string {
  * Per-kind expanded detail panels
  * ───────────────────────────────────────────────────────── */
 
+/**
+ * True when `next` consumes a coin handle produced by `current`. Used by
+ * the step trail to decide whether to draw a flow connector between two
+ * adjacent rows (binding "swap then deposit" into one visual chain).
+ */
+function stepFlowsInto(current: ResolvedStep, next: ResolvedStep): boolean {
+  if (current.kind === "cancelRedeemFromVault") return false;
+  if (next.kind === "cancelRedeemFromVault") return false;
+  // Cheap heuristic: any step that produces a handle (swap / split /
+  // merge) followed immediately by a step that takes a fromHandle reads
+  // as a flow. We can't reach into the raw input from the resolved step
+  // shape without extra plumbing, but adjacency + non-terminal upstream
+  // covers the common composes (swap→deposit, split→deposit, merge→swap).
+  const producers = ["swap", "split", "merge"];
+  const consumers = ["swap", "split", "merge", "deposit", "redeemFromVault"];
+  return producers.includes(current.kind) && consumers.includes(next.kind);
+}
+
+/**
+ * Vertical line + arrow gutter element drawn between two flowing steps.
+ * Lives inside the parent row's positioning context with a short height
+ * so the connector visually links the bottom of one row to the top of
+ * the next.
+ */
+function FlowConnector() {
+  return (
+    <div className="relative flex h-3 w-full justify-start pl-[1.375rem]">
+      <span
+        className="h-full w-px bg-gradient-to-b from-cash-lime/60 to-cash-lime/20"
+        aria-hidden
+      />
+    </div>
+  );
+}
+
 function fmtImpact(pct: number | undefined): string {
   if (pct === undefined || pct <= 0) return "0%";
   if (pct < 0.001) return "<0.001%";
@@ -1392,8 +1497,12 @@ function SwapDetail({
     s.fromAmountHuman > 0 ? s.toAmountHuman / s.fromAmountHuman : 0;
   const minReceived = s.toAmountHuman * (1 - s.slippagePct / 100);
   const impactPct = s.impactPct ?? 0;
-  const impactTone: "default" | "warn" | "block" =
-    impactPct >= 5 ? "block" : impactPct >= 1 ? "warn" : "default";
+  const verdict: "pass" | "warn" | "block" =
+    impactPct >= 5 ? "block" : impactPct >= 1 ? "warn" : "pass";
+  const verdictCaption =
+    verdict === "block" ? "High" : verdict === "warn" ? "Elevated" : "Low";
+  const slippageTight =
+    impactPct > 0 && s.slippagePct < impactPct;
 
   return (
     <div className="space-y-4">
@@ -1405,15 +1514,20 @@ function SwapDetail({
           </>
         }
         trailing={
-          <DetailChip
-            label="Impact"
+          <VerdictChip
+            label="Price impact"
             value={fmtImpact(s.impactPct)}
-            tone={impactTone}
+            verdict={verdict}
+            caption={verdictCaption}
           />
         }
       />
       <div className="flex flex-wrap gap-2">
-        <DetailChip label="Slippage cap" value={`${s.slippagePct}%`} />
+        <DetailChip
+          label="Slippage cap"
+          value={`${s.slippagePct}%`}
+          tone={slippageTight ? "warn" : "default"}
+        />
         <DetailChip
           label="Min received"
           value={`${fmtAmount(minReceived)} ${s.toSymbol}`}
@@ -1501,50 +1615,52 @@ function SplitRow({
 }) {
   const pct = Math.round(route._share * 100);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-2">
       <span
         className={cn(
-          "inline-flex shrink-0 items-center px-2 py-0.5 font-mono text-caption font-semibold tabular-nums",
+          "inline-flex shrink-0 items-center justify-center font-mono font-bold tabular-nums",
           dominant
-            ? "bg-cash-lime text-midnight-black"
-            : "bg-white/[0.08] text-canvas-white",
+            ? "bg-cash-lime text-midnight-black text-body-sm py-1 px-2.5"
+            : "bg-white/[0.10] text-canvas-white text-caption py-0.5 px-2",
         )}
-        style={{ borderRadius: 9999, minWidth: 42, justifyContent: "center" }}
+        style={{ borderRadius: 9999, minWidth: dominant ? 52 : 44 }}
       >
         {pct}%
       </span>
-      {route.hops.map((hop, i) => {
-        const type = hop.pool?.type;
-        const inIcon = hop.tokenIn ? iconLookup(hop.tokenIn) : undefined;
-        const outIcon = hop.tokenOut ? iconLookup(hop.tokenOut) : undefined;
-        const inSym = hop.tokenIn ? symbolFromType(hop.tokenIn) : "?";
-        const outSym = hop.tokenOut ? symbolFromType(hop.tokenOut) : "?";
-        return (
-          <Fragment key={i}>
-            {i > 0 && (
-              <ArrowRight
-                className="size-3 shrink-0 text-canvas-white/40"
-                strokeWidth={2.4}
-              />
-            )}
-            <span
-              className="inline-flex shrink-0 items-center gap-1.5 border border-white/[0.06] bg-white/[0.05] py-1 pl-1.5 pr-2.5 text-body-sm font-medium text-canvas-white"
-              style={{ borderRadius: 9999 }}
-              title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
-            >
-              <span className="inline-flex items-center">
-                <AssetIcon src={inIcon} label={inSym} size={14} />
+      <div className="flex flex-wrap items-center gap-1">
+        {route.hops.map((hop, i) => {
+          const type = hop.pool?.type;
+          const inIcon = hop.tokenIn ? iconLookup(hop.tokenIn) : undefined;
+          const outIcon = hop.tokenOut ? iconLookup(hop.tokenOut) : undefined;
+          const inSym = hop.tokenIn ? symbolFromType(hop.tokenIn) : "?";
+          const outSym = hop.tokenOut ? symbolFromType(hop.tokenOut) : "?";
+          return (
+            <Fragment key={i}>
+              {i > 0 && (
                 <ArrowRight
-                  className="mx-0.5 size-2.5 text-canvas-white/40"
+                  className="size-3 shrink-0 text-canvas-white/30"
                   strokeWidth={2.4}
                 />
-                <AssetIcon src={outIcon} label={outSym} size={14} />
+              )}
+              <span
+                className="inline-flex shrink-0 items-center gap-1.5 bg-white/[0.05] py-0.5 pl-1 pr-2 text-caption font-medium text-canvas-white/85"
+                style={{ borderRadius: 9999 }}
+                title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
+              >
+                <span className="inline-flex items-center">
+                  <AssetIcon src={inIcon} label={inSym} size={12} />
+                  <ArrowRight
+                    className="mx-0.5 size-2.5 text-canvas-white/30"
+                    strokeWidth={2.4}
+                  />
+                  <AssetIcon src={outIcon} label={outSym} size={12} />
+                </span>
+                {type ? dexLabel(type) : "unknown"}
               </span>
-              {type ? dexLabel(type) : "unknown"}
-            </span>
-          </Fragment>
-        );
-      })}
+            </Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1565,15 +1681,22 @@ function DepositDetail({
 
   return (
     <div className="space-y-4">
-      <DetailHero
-        label={`APY · ${v.category}`}
-        value={fmtPct(v.apyPct)}
-        trailing={
-          <span className="text-caption text-canvas-white/55">
-            30-day avg
+      <div className="space-y-1">
+        <div className="flex items-baseline gap-2">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+            APY
           </span>
-        }
-      />
+          <span className="text-caption text-canvas-white/55">
+            · 30-day average
+          </span>
+        </div>
+        <div
+          className="font-mono font-bold tabular-nums leading-none text-canvas-white"
+          style={{ fontSize: "28px", letterSpacing: "-0.015em" }}
+        >
+          {fmtPct(v.apyPct)}
+        </div>
+      </div>
       <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
       <div className="flex flex-wrap gap-2">
         {v.tvlUsd !== undefined && (
@@ -1591,15 +1714,12 @@ function DepositDetail({
           }
           tone={v.withdrawalPeriodDays ? "warn" : "default"}
         />
-        <DetailChip
-          label="Strategy"
-          value={v.name}
-        />
+        <DetailChip label="Category" value={v.category} />
       </div>
       {rewardHeavy && (
         <div
-          className="flex items-start gap-2 border border-warning/30 bg-warning/10 px-2.5 py-2 text-caption text-canvas-white/80"
-          style={{ borderRadius: 10 }}
+          className="flex items-start gap-2 border-l-2 border-warning bg-warning/10 px-2.5 py-2 text-caption text-canvas-white/85"
+          style={{ borderRadius: 8 }}
         >
           <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-warning" />
           {Math.round(rewardShare * 100)}% of headline APY is reward emissions
@@ -1612,7 +1732,7 @@ function DepositDetail({
           e.stopPropagation();
           onOpenVault(v.id);
         }}
-        className="inline-flex items-center gap-1 bg-white/[0.08] px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-white/[0.14]"
+        className="inline-flex items-center gap-1 bg-white/[0.10] px-3 py-1.5 text-caption font-medium text-canvas-white ring-1 ring-white/[0.06] transition-colors hover:bg-white/[0.14]"
         style={{ borderRadius: 9999 }}
       >
         Full vault info
