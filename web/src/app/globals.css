@@ -163,8 +163,12 @@ select {
   isolation: isolate;
 }
 @supports (backdrop-filter: url("#liquid-glass-filter")) {
+  /* Chromium path — run the SVG lens displacement FIRST so it can bend the
+   * crisp backdrop, then only a whisper of blur + saturation on top.
+   * Heavy post-blur washes out the refraction; the lensy look needs the
+   * sharp edges of whatever's behind to actually warp. */
   .liquid-glass {
-    backdrop-filter: url("#liquid-glass-filter") blur(6px) saturate(150%);
+    backdrop-filter: url("#liquid-glass-filter") blur(2px) saturate(160%);
   }
 }
 /* Nested liquid-glass — keep displacement off (no double-refraction) and
