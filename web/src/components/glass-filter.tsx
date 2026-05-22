@@ -1,27 +1,30 @@
-import { displacementMap } from "@/lib/glass-displacement-map";
-
 /**
  * Mounts the hidden SVG that defines `#liquid-glass-filter`, referenced
  * by every `.liquid-glass` surface via `filter: url(#liquid-glass-filter)`
  * on the `::after` pseudo that captures the backdrop.
  *
- * Recipe: https://codepen.io/daftplug/pen/QwbaYGO (`#btn-glass` filter).
+ * Recipe: https://codepen.io/daftplug/pen/QwbaYGO — specifically the
+ * `#container-glass` filter (NOT `#btn-glass`). The CodePen ships two:
  *
- *  - `primitiveUnits="objectBoundingBox"` — every coordinate and scale
- *    inside the filter is normalized to the element's box [0..1]. That's
- *    why feImage is `width="1" height="1"` and feDisplacementMap is
- *    `scale="1"` — the encoding does the work, not a magic pixel number.
- *  - feImage loads the displacement-map PNG (stored as a data URL in
- *    glass-displacement-map.ts). The PNG's R/G channels encode inward-
- *    pointing displacement vectors that are strongest at the rim and
- *    zero at the center — that's the iOS lens-edge bend.
- *  - feGaussianBlur (stdDeviation=0.02) softens the map a touch so the
- *    displacement transitions don't quantize visibly.
- *  - feDisplacementMap warps SourceGraphic (the captured backdrop) by
- *    the softened map. Output is the liquid-bent backdrop.
+ *   - `#container-glass` (this one) uses feTurbulence at a low
+ *     baseFrequency for big panels — 300×200px and up. The procedural
+ *     noise field stretches across the whole surface, so the
+ *     displacement varies organically.
+ *   - `#btn-glass` uses feImage with a tiny PNG and primitiveUnits=
+ *     objectBoundingBox, tuned for small (~70px) buttons where the PNG
+ *     can encode the lens shape directly.
  *
- * NOT used: feTurbulence (procedural noise). That gives water-ripple
- * randomness, not the structured lens distortion the PNG encodes.
+ * Our cards are container-sized, so feTurbulence is the right call.
+ * Tried feImage earlier and the displacement was invisible because the
+ * PNG was designed for buttons, not panels.
+ *
+ * Filter chain:
+ *   feTurbulence(0.008 0.008, octaves=2, seed=92) → noise
+ *   feGaussianBlur(stdDeviation=0.02) on noise   → blur
+ *   feDisplacementMap(SourceGraphic, blur, scale=77, R, G)
+ *
+ * SourceGraphic here is the backdrop captured by the ::after pseudo's
+ * `backdrop-filter: blur(0)` — the live pixels behind the panel.
  */
 export function GlassFilter() {
   return (
@@ -33,22 +36,23 @@ export function GlassFilter() {
     >
       <filter
         id="liquid-glass-filter"
-        primitiveUnits="objectBoundingBox"
+        x="0%"
+        y="0%"
+        width="100%"
+        height="100%"
       >
-        <feImage
-          href={displacementMap}
-          x="0"
-          y="0"
-          width="1"
-          height="1"
-          result="map"
-          preserveAspectRatio="none"
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.008 0.008"
+          numOctaves={2}
+          seed={92}
+          result="noise"
         />
-        <feGaussianBlur in="SourceGraphic" stdDeviation="0.02" result="blur" />
+        <feGaussianBlur in="noise" stdDeviation="0.02" result="blur" />
         <feDisplacementMap
-          in="blur"
-          in2="map"
-          scale="1"
+          in="SourceGraphic"
+          in2="blur"
+          scale="77"
           xChannelSelector="R"
           yChannelSelector="G"
         />
