@@ -89,8 +89,12 @@ export function Conversation() {
   suiClientRef.current = suiClient;
 
   // Slippage state — applies to any swap step inside an executePlan plan.
-  // Used to rebuild the plan when the user adjusts the cap on the card.
+  // The ref mirror is used by runExecutePlan so silent rebuilds triggered
+  // immediately after setSlippagePct see the NEW value, not the stale
+  // closure-captured one.
   const [slippagePct, setSlippagePct] = useState(1);
+  const slippageRef = useRef(slippagePct);
+  slippageRef.current = slippagePct;
   const [signError, setSignError] = useState<string | null>(null);
 
   // Active plan-deposit state (one plan card may be live at a time).
@@ -1018,7 +1022,7 @@ export function Conversation() {
               `Swap ${step.id}: unknown destination token '${step.toSymbol}'.`,
             );
           }
-          const slip = step.slippagePct ?? slippagePct;
+          const slip = step.slippagePct ?? slippageRef.current;
           const amountInRaw = BigInt(
             Math.floor(origin.expectedHuman * 10 ** origin.decimals),
           );
