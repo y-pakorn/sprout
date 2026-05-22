@@ -162,10 +162,7 @@ function VaultPositionRow({
       className={cn(
         "flex items-center gap-3 liquid-glass px-3 py-2.5",
       )}
-      style={{
-        borderRadius: 18,
-        boxShadow: "inset 0 0 0 1.5px var(--color-cash-lime, #00d54f)",
-      }}
+      style={{ borderRadius: 18 }}
     >
       <div className="relative shrink-0">
         <AssetIcon
