@@ -1837,6 +1837,48 @@ function ApyComposition({
   );
 }
 
+/** One thin stacked bar showing how N segments split a whole. Each
+ *  segment is drawn in a decreasing-opacity lime shade so the rhythm
+ *  reads as "first portion is dominant, then descending." Used by both
+ *  split and merge details. */
+function PortionsBar({ values }: { values: number[] }) {
+  const sum = values.reduce((acc, v) => acc + v, 0);
+  if (sum <= 0) return null;
+  return (
+    <div
+      className="flex h-1.5 w-full overflow-hidden bg-white/[0.06]"
+      style={{ borderRadius: 9999 }}
+    >
+      {values.map((v, i) => (
+        <div
+          key={i}
+          className={cn(
+            i === 0 && "bg-cash-lime",
+            i === 1 && "bg-cash-lime/65",
+            i === 2 && "bg-cash-lime/40",
+            i >= 3 && "bg-cash-lime/25",
+          )}
+          style={{ width: `${(v / sum) * 100}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SegmentDot({ index }: { index: number }) {
+  return (
+    <span
+      className={cn(
+        "inline-block size-2 shrink-0 rounded-full",
+        index === 0 && "bg-cash-lime",
+        index === 1 && "bg-cash-lime/65",
+        index === 2 && "bg-cash-lime/40",
+        index >= 3 && "bg-cash-lime/25",
+      )}
+    />
+  );
+}
+
 function SplitDetail({ s }: { s: ResolvedSplitStep }) {
   return (
     <div className="space-y-4">
@@ -1856,6 +1898,7 @@ function SplitDetail({ s }: { s: ResolvedSplitStep }) {
           {s.portions.length}-way split
         </span>
       </div>
+      <PortionsBar values={s.portions.map((p) => p.bps)} />
       <div className="space-y-1">
         {s.portions.map((p, i) => {
           const pct = (p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2);
@@ -1864,7 +1907,8 @@ function SplitDetail({ s }: { s: ResolvedSplitStep }) {
               key={i}
               className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
             >
-              <span className="text-body-sm text-canvas-white/70">
+              <span className="flex items-center gap-2 text-body-sm text-canvas-white/70">
+                <SegmentDot index={i} />
                 Portion {i + 1}
               </span>
               <span className="flex items-baseline gap-2 text-body-sm">
@@ -1910,6 +1954,11 @@ function MergeDetail({
   s: ResolvedMergeStep;
   cached: CachedActionPlan;
 }) {
+  // Sort sources by contribution descending so the bar's lime gradient
+  // reads "biggest contributor first, smallest last."
+  const ordered = [...s.sources]
+    .map((src, originalIndex) => ({ src, originalIndex }))
+    .sort((a, b) => b.src.human - a.src.human);
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -1928,20 +1977,30 @@ function MergeDetail({
           {s.sources.length} sources
         </span>
       </div>
+      <PortionsBar values={ordered.map(({ src }) => src.human)} />
       <div className="space-y-1">
-        {s.sources.map((src, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
-          >
-            <span className="text-body-sm text-canvas-white/70">
-              {describeMergeSource(src.label, cached)}
-            </span>
-            <span className="text-body-sm tabular-nums text-canvas-white">
-              {fmtAmount(src.human)} {s.symbol}
-            </span>
-          </div>
-        ))}
+        {ordered.map(({ src }, i) => {
+          const pct = s.totalHuman > 0 ? (src.human / s.totalHuman) * 100 : 0;
+          return (
+            <div
+              key={i}
+              className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
+            >
+              <span className="flex items-center gap-2 text-body-sm text-canvas-white/70">
+                <SegmentDot index={i} />
+                {describeMergeSource(src.label, cached)}
+              </span>
+              <span className="flex items-baseline gap-2 text-body-sm">
+                <span className="font-semibold text-canvas-white">
+                  {pct.toFixed(pct % 1 === 0 ? 0 : 1)}%
+                </span>
+                <span className="tabular-nums text-canvas-white/70">
+                  {fmtAmount(src.human)} {s.symbol}
+                </span>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
