@@ -621,10 +621,10 @@ function DetailHero({
   );
 }
 
-/** Verdict-tinted chip used as the trailing safety signal on swap detail.
- *  Matches the height of NumericHero's label+value pair beside it — label
- *  on top, then value with a verdict dot inline so the chip stays
- *  vertically compact instead of towering. */
+/** Verdict-bearing chip — only tints background on actual alerts
+ *  (warn / block). Pass verdict uses the neutral chip palette so a
+ *  healthy swap doesn't visually shout. Status dot still carries the
+ *  verdict color so the user gets the signal. */
 function VerdictChip({
   label,
   value,
@@ -641,7 +641,7 @@ function VerdictChip({
       ? "bg-destructive/20 ring-destructive/50"
       : verdict === "warn"
         ? "bg-warning/20 ring-warning/50"
-        : "bg-cash-lime/15 ring-cash-lime/45";
+        : "bg-white/[0.10] ring-white/[0.10]";
   const dotColor =
     verdict === "block"
       ? "bg-destructive"
