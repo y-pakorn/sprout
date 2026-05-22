@@ -699,7 +699,14 @@ export function Conversation() {
       const consumedHandles = new Set<string>();
       const resolved: ResolvedStep[] = [];
 
-      function resolveOrigin(step: RawStep): HandleEntry {
+      function resolveOrigin(
+        step: RawStep,
+        /** When false, don't pre-add a coinWithBalance Result to the tx
+         *  for balance-based origins. 7K's buildTx pulls its own input
+         *  coin via getSplitCoinForTx when no coinIn is given — pre-
+         *  adding our own would leave it as an orphan Result. */
+        addCoinToTx = true,
+      ): HandleEntry {
         if (step.fromHandle) {
           const h = handles.get(step.fromHandle);
           if (!h) {
@@ -718,6 +725,16 @@ export function Conversation() {
         }
         const coin = resolveSymbol(map, step.fromSymbol);
         if (coin) {
+          if (!addCoinToTx) {
+            // Metadata-only: 7K's buildTx will pull from sender balance.
+            return {
+              arg: null as unknown as TransactionObjectArgument,
+              symbol: step.fromSymbol.toUpperCase(),
+              coinType: coin.coin_type,
+              decimals: coin.decimals,
+              expectedHuman: step.fromAmount,
+            };
+          }
           const raw = BigInt(
             Math.floor(step.fromAmount * 10 ** coin.decimals),
           );
@@ -975,11 +992,25 @@ export function Conversation() {
           continue;
         }
 
-        const origin = resolveOrigin(step);
+        // For swaps drawing from balance, skip the pre-built coinWithBalance.
+        // 7K's buildTx will pull the input itself via getSplitCoinForTx and
+        // a stray coinWithBalance Result would either leak orphan or break
+        // the SDK's serialization (readUint8 errors).
+        const skipBalanceCoin =
+          step.kind === "swap" && !step.fromHandle;
+        const origin = resolveOrigin(step, !skipBalanceCoin);
 
         if (step.kind === "swap") {
           if (!step.toSymbol) {
             throw new Error(`Swap ${step.id}: missing toSymbol.`);
+          }
+          // Vault receipt tokens (ercUSD, eACRED, eUSDT, etc.) have no
+          // 7K route and trying to swap them produces opaque SDK errors.
+          // Reject up front with a clear hint.
+          if (vaultByReceipt.has(canonicalCoinType(origin.coinType))) {
+            throw new Error(
+              `Swap ${step.id}: ${origin.symbol} is a vault receipt token and cannot be swapped on Bluefin7K. Exit the vault via redeemFromVault first, then swap the underlying.`,
+            );
           }
           const outCoin = resolveSymbol(map, step.toSymbol);
           if (!outCoin) {
@@ -1023,12 +1054,15 @@ export function Conversation() {
                 partner: PARTNER_ADDRESS,
                 commissionBps: PARTNER_COMMISSION_BPS,
               },
-              // Pass our pre-built input coin via coinIn. Without this 7K's
-              // buildTx calls getSplitCoinForTx internally and pulls its
-              // own coin, leaving our coinWithBalance Result (or upstream
-              // swap output) orphan as result_idx 0 — which fails Sui's
-              // PTB resolver with UnusedValueWithoutDrop.
-              extendTx: { tx: tx as never, coinIn: origin.arg },
+              // Pass coinIn ONLY for chained swaps (fromHandle) — there
+              // the upstream Result must be consumed or it goes orphan.
+              // For balance-based swaps we let 7K pull from the sender's
+              // balance via its own getSplitCoinForTx; passing a stray
+              // coinIn there breaks SDK serialization.
+              extendTx: {
+                tx: tx as never,
+                coinIn: step.fromHandle ? origin.arg : undefined,
+              },
             });
           } catch (buildErr) {
             const raw = (buildErr as Error).message ?? String(buildErr);
