@@ -135,47 +135,77 @@ select {
   letter-spacing: inherit;
 }
 
-/* Liquid-glass surface — frosted glass with a soft gradient hairline.
- * Used by all cinematic surfaces (header pill, content shells, cards).
+/* Liquid glass — exact recipe from https://kube.io/blog/liquid-glass-css-svg/
  *
- * Two-layer effect:
- *   1. Base: plain blur+saturate (Safari, Firefox, anything without SVG
- *      filter support in `backdrop-filter`).
- *   2. Chrome override: layer the SVG `#liquid-glass-filter` BEFORE the
- *      blur+saturate, so the iOS lens displacement runs on the crisp backdrop
- *      and the frost lands on top. Defined in <GlassFilter />.
+ *   .liquid-glass               → backdrop blur + saturate, plus
+ *                                 background: rgba(255,255,255,0.10)
+ *   .liquid-glass::before       → 135° rim light gradient,
+ *                                 mix-blend-mode: screen
+ *   .liquid-glass::after        → inset 0 1px 2px rgba(255,255,255,0.5)
+ *                                 — the "reflecting glass border" on the
+ *                                 top edge
+ *   @supports (...) override   → Chromium replaces backdrop-filter with
+ *                                 url(#liquid-glass-filter) which adds
+ *                                 3-channel chromatic aberration at the
+ *                                 rim (see <GlassFilter />)
+ *
+ * No outer drop shadow — the article doesn't include one and the slab
+ * sells its own thickness via the rim + edge highlight.
  */
-/* Real liquid glass — no painted rim, no specular gradient. The visual
- * "glass" comes from:
- *   - backdrop-filter: blur + saturate frosts the backdrop
- *   - SVG filter (3-channel feDisplacementMap) ADDS chromatic edge
- *     refraction on Chromium — the rainbow rim that real glass produces
- *   - drop-shadow underneath gives the slab a sense of lift
- * Anything else (painted gradients, manual highlights) cheapens the
- * effect into "frosted div with a paintjob." */
 .liquid-glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
   border: none;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   position: relative;
   overflow: hidden;
+  isolation: isolate;
 }
 @supports (backdrop-filter: url("#liquid-glass-filter")) {
-  /* Chromium path — run the SVG displacement on the raw backdrop, then
-   * a softer blur lands on top of the refracted result. The chromatic
-   * aberration at the edges is the look. */
   .liquid-glass {
-    backdrop-filter: url("#liquid-glass-filter") blur(8px) saturate(170%);
+    backdrop-filter: url("#liquid-glass-filter") blur(6px) saturate(170%);
   }
 }
-/* Nested liquid-glass — no second displacement (avoids double-refraction
- * artifacts), no second drop shadow. Just a hint of frost over the
- * parent glass so the nested panel reads as a sub-compartment. */
+/* Rim light — 135° gradient from upper-left, fades out by the midpoint.
+ * mix-blend-mode: screen makes it add light to the backdrop rather than
+ * paint white over it. */
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 1;
+}
+/* Reflecting glass border — a 1px inset highlight on the top edge that
+ * sells the "thickness" of the glass slab. Drawn via inset box-shadow
+ * so it follows border-radius automatically. */
+.liquid-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  z-index: 2;
+}
+/* Nested liquid-glass — no second displacement (no double-refraction),
+ * lighter frost, and softer rim/border so the inner panel reads as a
+ * sub-compartment, not a peer of the outer card. */
 .liquid-glass .liquid-glass {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(8px) saturate(120%);
-  -webkit-backdrop-filter: blur(8px) saturate(120%);
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+}
+.liquid-glass .liquid-glass::before {
+  opacity: 0.5;
+}
+.liquid-glass .liquid-glass::after {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
 }
