@@ -259,7 +259,7 @@ export function LivePlanCard({
               Blended APY
             </span>
             <span
-              className="font-mono font-bold tabular-nums text-cash-lime"
+              className="font-bold tabular-nums text-cash-lime"
               style={{ fontSize: "17px", letterSpacing: "-0.005em" }}
             >
               {fmtPct(cached.summary.blendedApyPct)}
@@ -286,6 +286,7 @@ export function LivePlanCard({
               <ExpandableStep
                 step={s}
                 idx={i}
+                cached={cached}
                 iconLookup={iconLookup}
                 onOpenVault={(id) => setOpenVaultId(id)}
               />
@@ -455,11 +456,13 @@ export function LivePlanCard({
 function ExpandableStep({
   step,
   idx,
+  cached,
   iconLookup,
   onOpenVault,
 }: {
   step: ResolvedStep;
   idx: number;
+  cached: CachedActionPlan;
   iconLookup: IconLookup;
   onOpenVault: (vaultId: string) => void;
 }) {
@@ -497,14 +500,15 @@ function ExpandableStep({
             transition={EXPAND}
             className="overflow-hidden"
           >
-            {/* Inset recess — visually a "drawer" under the summary row */}
+            {/* Inset recess — subtle white tint, not a black hole */}
             <div className="px-2 pb-2">
               <div
-                className="border border-white/[0.06] bg-black/25 px-3.5 py-3"
+                className="bg-white/[0.04] px-4 py-3.5 ring-1 ring-white/[0.06]"
                 style={{ borderRadius: 12 }}
               >
                 <StepDetail
                   step={step}
+                  cached={cached}
                   iconLookup={iconLookup}
                   onOpenVault={onOpenVault}
                 />
@@ -547,7 +551,7 @@ function DetailChip({
       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
         {label}
       </span>
-      <span className="font-mono text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
         {value}
       </span>
     </div>
@@ -574,7 +578,7 @@ function NumericHero({
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2.5">
         <span
-          className="font-mono font-semibold tabular-nums text-canvas-white"
+          className="font-semibold tabular-nums text-canvas-white"
           style={{ fontSize: "28px", lineHeight: 1, letterSpacing: "-0.02em" }}
         >
           {value}
@@ -606,7 +610,7 @@ function DetailHero({
           {label}
         </div>
         <div
-          className="truncate font-mono font-semibold tabular-nums leading-none text-canvas-white"
+          className="truncate font-semibold tabular-nums leading-none text-canvas-white"
           style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
         >
           {value}
@@ -657,7 +661,7 @@ function VerdictChip({
       </span>
       <span className="flex items-baseline gap-2">
         <span
-          className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
+          className="font-semibold tabular-nums leading-none text-canvas-white"
           style={{ fontSize: "20px", letterSpacing: "-0.015em" }}
         >
           {value}
@@ -713,16 +717,18 @@ function StepSummary({
 
 function StepDetail({
   step,
+  cached,
   iconLookup,
   onOpenVault,
 }: {
   step: ResolvedStep;
+  cached: CachedActionPlan;
   iconLookup: IconLookup;
   onOpenVault: (vaultId: string) => void;
 }) {
   if (step.kind === "swap") return <SwapDetail s={step} iconLookup={iconLookup} />;
   if (step.kind === "split") return <SplitDetail s={step} />;
-  if (step.kind === "merge") return <MergeDetail s={step} />;
+  if (step.kind === "merge") return <MergeDetail s={step} cached={cached} />;
   if (step.kind === "deposit")
     return <DepositDetail s={step} onOpenVault={onOpenVault} />;
   if (step.kind === "redeemFromVault") return <RedeemDetail s={step} />;
@@ -1601,7 +1607,7 @@ function RouteBreakdown({
         <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
           Route
         </span>
-        <span className="font-mono text-caption tabular-nums text-canvas-white/70">
+        <span className="text-caption tabular-nums text-canvas-white/70">
           {sorted.length === 0
             ? "Direct route"
             : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
@@ -1653,7 +1659,7 @@ function SplitRow({
     <div className="flex flex-wrap items-center gap-2.5">
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center py-1 px-2.5 font-mono text-caption font-bold tabular-nums ring-1",
+          "inline-flex shrink-0 items-center justify-center py-1 px-2.5 text-caption font-bold tabular-nums ring-1",
           dominant
             ? "bg-cash-lime text-midnight-black ring-cash-lime"
             : "bg-white/[0.10] text-canvas-white/85 ring-white/[0.08]",
@@ -1684,7 +1690,7 @@ function SplitRow({
               >
                 <span className="inline-flex items-center">
                   <AssetIcon src={inIcon} label={inSym} size={16} />
-                  <span className="-ml-1.5 inline-flex rounded-full ring-2 ring-[#0d0d11]">
+                  <span className="-ml-1 inline-flex">
                     <AssetIcon src={outIcon} label={outSym} size={16} />
                   </span>
                 </span>
@@ -1721,7 +1727,7 @@ function DepositDetail({
             APY · 30-day average
           </div>
           <div
-            className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
+            className="font-semibold tabular-nums leading-none text-canvas-white"
             style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
           >
             {fmtPct(v.apyPct)}
@@ -1764,7 +1770,6 @@ function DepositDetail({
               ? `≤${v.withdrawalPeriodDays}d`
               : "Soon"
           }
-          tone={v.withdrawalPeriodDays ? "warn" : "default"}
         />
       </div>
       {rewardHeavy && (
@@ -1816,14 +1821,14 @@ function ApyComposition({
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block size-2 rounded-full bg-cash-lime" />
           <span className="text-canvas-white/55">Yield</span>
-          <span className="font-mono tabular-nums text-canvas-white">
+          <span className="tabular-nums text-canvas-white">
             {fmtPct(lendApy)}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block size-2 rounded-full bg-white/40" />
           <span className="text-canvas-white/55">Rewards</span>
-          <span className="font-mono tabular-nums text-canvas-white">
+          <span className="tabular-nums text-canvas-white">
             {fmtPct(rewardApy)}
           </span>
         </span>
@@ -1834,85 +1839,109 @@ function ApyComposition({
 
 function SplitDetail({ s }: { s: ResolvedSplitStep }) {
   return (
-    <div className="space-y-3">
-      <DetailHero
-        label="Source"
-        value={
-          <>
-            {fmtAmount(s.totalHuman)} {s.sourceSymbol}
-          </>
-        }
-        trailing={
-          <DetailChip
-            label="Portions"
-            value={`${s.portions.length}-way`}
-          />
-        }
-      />
-      <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <DetailSectionLabel label="Allocation" />
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
-          {s.portions.map((p, i) => {
-            const pct = (p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2);
-            const widthPct = p.bps / 100;
-            return (
-              <div key={i} className="space-y-1">
-                <div className="flex items-baseline justify-between text-body-sm">
-                  <span className="text-canvas-white/55">Portion {i + 1}</span>
-                  <span className="font-mono tabular-nums text-canvas-white">
-                    {pct}% · {fmtAmount(p.human)} {s.sourceSymbol}
-                  </span>
-                </div>
-                <div
-                  className="h-1 w-full overflow-hidden bg-white/[0.06]"
-                  style={{ borderRadius: 9999 }}
-                >
-                  <div
-                    className="h-full bg-cash-lime/70"
-                    style={{ width: `${widthPct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+            Source
+          </div>
+          <div
+            className="font-semibold tabular-nums leading-none text-canvas-white"
+            style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
+          >
+            {fmtAmount(s.totalHuman)} {s.sourceSymbol}
+          </div>
         </div>
+        <span className="shrink-0 self-start text-caption text-canvas-white/55">
+          {s.portions.length}-way split
+        </span>
+      </div>
+      <div className="space-y-1">
+        {s.portions.map((p, i) => {
+          const pct = (p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2);
+          return (
+            <div
+              key={i}
+              className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
+            >
+              <span className="text-body-sm text-canvas-white/70">
+                Portion {i + 1}
+              </span>
+              <span className="flex items-baseline gap-2 text-body-sm">
+                <span className="font-semibold text-canvas-white">
+                  {pct}%
+                </span>
+                <span className="tabular-nums text-canvas-white/70">
+                  {fmtAmount(p.human)} {s.sourceSymbol}
+                </span>
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function MergeDetail({ s }: { s: ResolvedMergeStep }) {
+function describeMergeSource(
+  rawLabel: string,
+  cached: CachedActionPlan,
+): string {
+  if (rawLabel.startsWith("balance:")) {
+    const sym = rawLabel.split(":")[1];
+    return `Your ${sym} balance`;
+  }
+  const upstreamId = rawLabel.split(".")[0];
+  const upstream = cached.steps.find((step) => step.id === upstreamId);
+  if (upstream?.kind === "swap") {
+    return `Swap ${upstream.fromSymbol} → ${upstream.toSymbol}`;
+  }
+  if (upstream?.kind === "split") {
+    const portionIdx = parseInt(rawLabel.split(".")[1] ?? "0", 10);
+    return `Split portion ${portionIdx + 1}`;
+  }
+  return rawLabel;
+}
+
+function MergeDetail({
+  s,
+  cached,
+}: {
+  s: ResolvedMergeStep;
+  cached: CachedActionPlan;
+}) {
   return (
-    <div className="space-y-3">
-      <DetailHero
-        label="Combined"
-        value={
-          <>
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+            Combined
+          </div>
+          <div
+            className="font-semibold tabular-nums leading-none text-canvas-white"
+            style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
+          >
             {fmtAmount(s.totalHuman)} {s.symbol}
-          </>
-        }
-        trailing={
-          <DetailChip
-            label="Sources"
-            value={`${s.sources.length}`}
-          />
-        }
-      />
-      <div className="space-y-2 border-t border-white/[0.06] pt-3">
-        <DetailSectionLabel label="Contributors" />
-        <div className="space-y-1">
-          {s.sources.map((src, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between text-body-sm"
-            >
-              <span className="text-canvas-white/55">{src.label}</span>
-              <span className="font-mono tabular-nums text-canvas-white">
-                {fmtAmount(src.human)} {s.symbol}
-              </span>
-            </div>
-          ))}
+          </div>
         </div>
+        <span className="shrink-0 self-start text-caption text-canvas-white/55">
+          {s.sources.length} sources
+        </span>
+      </div>
+      <div className="space-y-1">
+        {s.sources.map((src, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
+          >
+            <span className="text-body-sm text-canvas-white/70">
+              {describeMergeSource(src.label, cached)}
+            </span>
+            <span className="text-body-sm tabular-nums text-canvas-white">
+              {fmtAmount(src.human)} {s.symbol}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
