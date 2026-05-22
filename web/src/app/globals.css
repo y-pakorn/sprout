@@ -135,77 +135,76 @@ select {
   letter-spacing: inherit;
 }
 
-/* Liquid glass — exact recipe from https://kube.io/blog/liquid-glass-css-svg/
+/* Liquid glass — recipe from https://codepen.io/daftplug/pen/QwbaYGO
  *
- *   .liquid-glass               → backdrop blur + saturate, plus
- *                                 background: rgba(255,255,255,0.10)
- *   .liquid-glass::before       → 135° rim light gradient,
- *                                 mix-blend-mode: screen
- *   .liquid-glass::after        → inset 0 1px 2px rgba(255,255,255,0.5)
- *                                 — the "reflecting glass border" on the
- *                                 top edge
- *   @supports (...) override   → Chromium replaces backdrop-filter with
- *                                 url(#liquid-glass-filter) which adds
- *                                 3-channel chromatic aberration at the
- *                                 rim (see <GlassFilter />)
+ * Two-pseudo pattern:
+ *   .liquid-glass          — transparent container, position: relative.
+ *                            content sits naturally on top.
+ *   .liquid-glass::before  — highlight frame. Paired inset box-shadows:
+ *                            1) `inset 2px 2px 0 -2px white/0.7` —
+ *                               crisp top-left edge light
+ *                            2) `inset 0 0 3px 1px white/0.7` —
+ *                               subtle inner glow on all four edges
+ *                            Drawn ABOVE the glass (z-index: 0).
+ *   .liquid-glass::after   — glass body. `backdrop-filter: blur(0)`
+ *                            captures the live backdrop into the pseudo
+ *                            box; `filter: url(#liquid-glass-filter)`
+ *                            then warps that capture via feTurbulence-
+ *                            driven feDisplacementMap. Sits BEHIND the
+ *                            content (z-index: -1), contained by
+ *                            `isolation: isolate` on the parent so the
+ *                            negative z-index doesn't escape.
  *
- * No outer drop shadow — the article doesn't include one and the slab
- * sells its own thickness via the rim + edge highlight.
+ * No backdrop-filter on the container, no outer shadow, no painted
+ * gradient. All the visual weight comes from the displaced ::after.
  */
 .liquid-glass {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px) saturate(160%);
-  -webkit-backdrop-filter: blur(10px) saturate(160%);
-  border: none;
   position: relative;
-  overflow: hidden;
   isolation: isolate;
+  border: none;
 }
-@supports (backdrop-filter: url("#liquid-glass-filter")) {
-  .liquid-glass {
-    backdrop-filter: url("#liquid-glass-filter") blur(6px) saturate(170%);
-  }
-}
-/* Rim light — 135° gradient from upper-left, fades out by the midpoint.
- * mix-blend-mode: screen makes it add light to the backdrop rather than
- * paint white over it. */
 .liquid-glass::before {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: 0;
+  overflow: hidden;
   border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0) 50%
-  );
-  mix-blend-mode: screen;
+  box-shadow:
+    inset 2px 2px 0 -2px rgba(255, 255, 255, 0.7),
+    inset 0 0 3px 1px rgba(255, 255, 255, 0.7);
   pointer-events: none;
-  z-index: 1;
 }
-/* Reflecting glass border — a 1px inset highlight on the top edge that
- * sells the "thickness" of the glass slab. Drawn via inset box-shadow
- * so it follows border-radius automatically. */
 .liquid-glass::after {
   content: "";
   position: absolute;
   inset: 0;
+  z-index: -1;
+  overflow: hidden;
   border-radius: inherit;
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  filter: url("#liquid-glass-filter");
+  -webkit-filter: url("#liquid-glass-filter");
+  isolation: isolate;
   pointer-events: none;
-  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.04);
 }
-/* Nested liquid-glass — no second displacement (no double-refraction),
- * lighter frost, and softer rim/border so the inner panel reads as a
- * sub-compartment, not a peer of the outer card. */
-.liquid-glass .liquid-glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
+/* Browsers without SVG-filter-in-`filter` support (Safari, Firefox) get
+ * a clean blur fallback so the surface still reads as glass. */
+@supports not (filter: url("#liquid-glass-filter")) {
+  .liquid-glass::after {
+    filter: none;
+    -webkit-filter: none;
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+  }
 }
+/* Nested liquid-glass — softer highlights so the inner panel reads as a
+ * sub-compartment of the outer, not a peer.  Still gets its own
+ * displaced ::after — the parent's filter doesn't bleed in. */
 .liquid-glass .liquid-glass::before {
-  opacity: 0.5;
-}
-.liquid-glass .liquid-glass::after {
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 1px 1px 0 -1px rgba(255, 255, 255, 0.4),
+    inset 0 0 2px 1px rgba(255, 255, 255, 0.25);
 }
