@@ -618,8 +618,9 @@ function DetailHero({
 }
 
 /** Verdict-tinted chip used as the trailing safety signal on swap detail.
- *  Larger + brighter so it reads as the swap's primary check, not as a
- *  peer of the meta chips below. */
+ *  Matches the height of NumericHero's label+value pair beside it — label
+ *  on top, then value with a verdict dot inline so the chip stays
+ *  vertically compact instead of towering. */
 function VerdictChip({
   label,
   value,
@@ -646,23 +647,25 @@ function VerdictChip({
   return (
     <div
       className={cn(
-        "flex shrink-0 flex-col items-start gap-1 px-3.5 py-2.5 ring-1",
+        "flex shrink-0 flex-col items-start gap-1.5 px-3.5 py-2 ring-1",
         palette,
       )}
-      style={{ borderRadius: 12, minWidth: "7.5rem" }}
+      style={{ borderRadius: 12, minWidth: "7rem" }}
     >
       <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
         {label}
       </span>
-      <span
-        className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
-        style={{ fontSize: "20px", letterSpacing: "-0.015em" }}
-      >
-        {value}
-      </span>
-      <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/85">
-        <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
-        {caption}
+      <span className="flex items-baseline gap-2">
+        <span
+          className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
+          style={{ fontSize: "20px", letterSpacing: "-0.015em" }}
+        >
+          {value}
+        </span>
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/85">
+          <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
+          {caption}
+        </span>
       </span>
     </div>
   );
@@ -1593,7 +1596,7 @@ function RouteBreakdown({
   const sorted = [...withShares].sort((a, b) => b._share - a._share);
 
   return (
-    <div className="space-y-3 border-t border-white/[0.08] pt-4">
+    <div className="space-y-3 pt-2">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
           Route
@@ -1650,12 +1653,12 @@ function SplitRow({
     <div className="flex flex-wrap items-center gap-2.5">
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center font-mono font-bold tabular-nums",
+          "inline-flex shrink-0 items-center justify-center py-1 px-2.5 font-mono text-caption font-bold tabular-nums ring-1",
           dominant
-            ? "bg-cash-lime text-midnight-black text-body-sm py-1.5 px-3"
-            : "bg-white/[0.12] text-canvas-white text-caption py-1 px-2.5 ring-1 ring-white/[0.08]",
+            ? "bg-cash-lime text-midnight-black ring-cash-lime"
+            : "bg-white/[0.10] text-canvas-white/85 ring-white/[0.08]",
         )}
-        style={{ borderRadius: 9999, minWidth: dominant ? 58 : 50 }}
+        style={{ borderRadius: 9999, minWidth: 52 }}
       >
         {pct}%
       </span>
@@ -1708,16 +1711,46 @@ function DepositDetail({
   const totalApy = lendApy + rewardApy;
   const rewardShare = totalApy > 0 ? rewardApy / totalApy : 0;
   const rewardHeavy = rewardShare > 0.5;
+  const composedFromBoth = lendApy > 0 && rewardApy > 0;
 
   return (
-    <div className="space-y-5">
-      <NumericHero
-        label="APY · 30-day average"
-        value={fmtPct(v.apyPct)}
-        unit={v.category}
-      />
-      <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
-      <div className="flex flex-wrap gap-2.5">
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+            APY · 30-day average
+          </div>
+          <div
+            className="font-mono font-semibold tabular-nums leading-none text-canvas-white"
+            style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
+          >
+            {fmtPct(v.apyPct)}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenVault(v.id);
+          }}
+          className="inline-flex shrink-0 items-center gap-1.5 self-start bg-white/[0.10] px-3 py-1.5 text-caption font-semibold text-canvas-white ring-1 ring-white/[0.10] transition-colors hover:bg-white/[0.16]"
+          style={{ borderRadius: 9999 }}
+        >
+          Full vault info
+          <ExternalLink className="size-3" strokeWidth={2.4} />
+        </button>
+      </div>
+      {composedFromBoth ? (
+        <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
+      ) : (
+        <div className="text-caption text-canvas-white/70">
+          {rewardApy === 0
+            ? "100% from deposit yield — no reward emissions."
+            : "100% from reward emissions — no underlying yield."}
+        </div>
+      )}
+      <div className="grid gap-2.5 sm:grid-cols-3">
+        <DetailChip label="Strategy" value={v.category} />
         {v.tvlUsd !== undefined && (
           <DetailChip
             label="TVL"
@@ -1744,18 +1777,6 @@ function DepositDetail({
           — variable, not durable yield.
         </div>
       )}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenVault(v.id);
-        }}
-        className="inline-flex items-center gap-1.5 bg-white/[0.10] px-3 py-1.5 text-caption font-semibold text-canvas-white ring-1 ring-white/[0.10] transition-colors hover:bg-white/[0.16]"
-        style={{ borderRadius: 9999 }}
-      >
-        Full vault info
-        <ExternalLink className="size-3" strokeWidth={2.4} />
-      </button>
     </div>
   );
 }
