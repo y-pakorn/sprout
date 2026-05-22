@@ -500,12 +500,12 @@ function ExpandableStep({
             transition={EXPAND}
             className="overflow-hidden"
           >
-            {/* Inset recess — subtle white tint, not a black hole */}
+            {/* Inset recess — nested liquid-glass so the detail panel
+             *  carries its own rim + sheen instead of reading as a flat
+             *  tint. globals.css `.liquid-glass .liquid-glass` softens
+             *  the frost so we don't double-blur. */}
             <div className="px-2 pb-2">
-              <div
-                className="bg-white/[0.04] px-4 py-3.5 ring-1 ring-white/[0.06]"
-                style={{ borderRadius: 12 }}
-              >
+              <div className="liquid-glass rounded-[12px] px-4 py-3.5">
                 <StepDetail
                   step={step}
                   cached={cached}
