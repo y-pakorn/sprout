@@ -67,10 +67,8 @@ export function VaultRiskDetail({
   return (
     <div
       className={cn(
-        "overflow-hidden",
-        verdict === "pass" && "opacity-60",
-        verdict === "flag" && "border-l-2 border-warning pl-2",
-        verdict === "block" && "border-l-2 border-destructive pl-2",
+        "overflow-hidden transition-colors",
+        verdict === "pass" && "opacity-55 hover:opacity-80",
       )}
     >
       <button
@@ -79,24 +77,24 @@ export function VaultRiskDetail({
         disabled={!expandable}
         aria-label={`${VERDICT_LABEL[verdict]}: ${title}`}
         className={cn(
-          "flex w-full items-center gap-2.5 py-1.5 text-left",
+          "flex w-full items-center gap-3 py-2.5 text-left",
           expandable && "cursor-pointer",
         )}
       >
         <VerdictIcon v={verdict} />
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5 leading-tight">
-          <span className="text-body-sm font-medium text-canvas-white">
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="text-body-sm font-medium text-canvas-white">
             {title}
-          </span>
-          <span className="truncate text-caption text-canvas-white/55">
+          </div>
+          <div className="truncate text-caption text-canvas-white/55">
             {summary}
-          </span>
+          </div>
         </div>
         {expandable && (
           <ChevronDown
             className={cn(
-              "size-3.5 shrink-0 text-canvas-white/55 transition-transform duration-200",
-              open && "rotate-180",
+              "size-3.5 shrink-0 text-canvas-white/40 transition-transform duration-200",
+              open && "rotate-180 text-canvas-white/70",
             )}
             strokeWidth={2.4}
           />
@@ -112,7 +110,7 @@ export function VaultRiskDetail({
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div className="pb-2.5 pl-6 pr-2 text-body-sm text-canvas-white/55">
+            <div className="mb-2 ml-7 mr-1 rounded-[10px] bg-white/[0.04] px-3 py-2.5 text-body-sm text-canvas-white/70 ring-1 ring-white/[0.06]">
               {detail && (
                 <div className="prose-sprout space-y-2">
                   <ReactMarkdown
@@ -146,8 +144,7 @@ export function VaultRiskDetail({
                     e.stopPropagation();
                     onAskAgent();
                   }}
-                  className="mt-2.5 inline-flex items-center gap-1 liquid-glass px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-cash-lime"
-                  style={{ borderRadius: 9999 }}
+                  className="mt-3 inline-flex items-center gap-1 rounded-pill bg-white/[0.10] px-2.5 py-1 text-caption font-medium text-canvas-white ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.16]"
                 >
                   Ask Sprout to explain →
                 </button>

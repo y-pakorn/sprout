@@ -2111,7 +2111,6 @@ function computeStatTiles(cached: CachedActionPlan): StatTile[] {
         id: "deposit",
         label: depositCount === 1 ? "Deposit" : "Total deposit",
         value: summarizeDeposits(deposits),
-        tone: "lime",
       },
       {
         id: "apy",
