@@ -11,10 +11,10 @@ import {
   X as XIcon,
 } from "lucide-react";
 import {
-  useSignAndExecuteTransaction,
-  useSuiClient,
+  useDAppKit,
+  useCurrentClient,
   useCurrentAccount,
-} from "@mysten/dapp-kit";
+} from "@mysten/dapp-kit-react";
 import { Transaction, coinWithBalance } from "@mysten/sui/transactions";
 import { AssetIcon } from "@/components/asset-icon";
 import type { VaultBalancePosition } from "@/lib/vault-balance";
@@ -46,8 +46,8 @@ type State =
  */
 export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props) {
   const account = useCurrentAccount();
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dAppKit = useDAppKit();
   const [sharesInput, setSharesInput] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -94,10 +94,10 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
       // count we have was already scaled — so fetch the canonical
       // decimals from chain metadata at sign-time. Fall back to 6 if the
       // RPC drops the metadata.
-      const md = await client.getCoinMetadata({
+      const md = await client.core.getCoinMetadata({
         coinType: v.receiptCoinType,
       });
-      const decimals = md?.decimals ?? 6;
+      const decimals = md.coinMetadata?.decimals ?? 6;
       const raw = BigInt(Math.floor(sharesParsed * 10 ** decimals));
       const shareCoin = tx.add(
         coinWithBalance({
@@ -136,13 +136,17 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
         sharesCoinArg: shareCoin,
       });
 
-      const signed = await signAndExecute({ transaction: tx });
-      setState({ kind: "confirming", digest: signed.digest });
-      await client.waitForTransaction({
-        digest: signed.digest,
-        options: { showEffects: true },
+      const signed = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      const digest =
+        signed.$kind === "Transaction"
+          ? signed.Transaction.digest
+          : signed.FailedTransaction.digest;
+      setState({ kind: "confirming", digest });
+      await client.core.waitForTransaction({
+        digest,
+        include: { effects: true },
       });
-      setState({ kind: "done", digest: signed.digest });
+      setState({ kind: "done", digest });
       onSuccess?.();
     } catch (e) {
       setState({ kind: "error", message: (e as Error).message });

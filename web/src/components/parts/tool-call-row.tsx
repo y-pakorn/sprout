@@ -1,7 +1,9 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Loader2, Check, AlertCircle } from "lucide-react";
+import { Check, AlertCircle } from "lucide-react";
+import { LiquidBlob } from "@/components/parts/liquid-blob";
+import { popIn } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type Status = "input-streaming" | "input-available" | "output-available" | "output-error";
@@ -21,28 +23,31 @@ export function ToolCallRow({ label, status }: Props) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="inline-flex items-center gap-2 surface-card px-4 py-2 text-body-sm font-medium text-midnight-ink rounded-card"
+      className="inline-flex items-center gap-2.5 surface-card px-3.5 py-2 text-body-sm font-medium rounded-card"
     >
-      <span
-        className={cn(
-          "inline-flex size-5 items-center justify-center rounded-full",
-          isDone && "bg-deliver-green text-midnight-ink",
-          isError && "bg-destructive text-canvas-white",
-          !isDone && !isError && "surface-panel text-muted-ash",
-        )}
-      >
-        {isDone ? (
-          <Check className="size-3" strokeWidth={2.8} />
-        ) : isError ? (
-          <AlertCircle className="size-3" strokeWidth={2.4} />
-        ) : (
-          <Loader2 className="size-3 animate-spin" strokeWidth={2.4} />
-        )}
-      </span>
-      <span>{label}</span>
-      {isWorking && (
-        <span className="text-muted-ash">…</span>
+      {isWorking ? (
+        <LiquidBlob size={20} />
+      ) : (
+        <motion.span
+          variants={popIn}
+          initial="initial"
+          animate="animate"
+          className={cn(
+            "inline-flex size-5 items-center justify-center rounded-full",
+            isDone && "bg-deliver-green text-midnight-ink",
+            isError && "bg-destructive text-canvas-white",
+          )}
+        >
+          {isDone ? (
+            <Check className="size-3" strokeWidth={2.8} />
+          ) : (
+            <AlertCircle className="size-3" strokeWidth={2.4} />
+          )}
+        </motion.span>
       )}
+      <span className={isWorking ? "shimmer-text" : "text-midnight-ink"}>
+        {label}
+      </span>
     </motion.div>
   );
 }

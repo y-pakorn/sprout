@@ -13,9 +13,9 @@ import {
 } from "lucide-react";
 import {
   useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+  useDAppKit,
+  useCurrentClient,
+} from "@mysten/dapp-kit-react";
 import { Transaction } from "@mysten/sui/transactions";
 import { AssetIcon } from "@/components/asset-icon";
 import { SproutBadge } from "@/components/ui/sprout-badge";
@@ -451,8 +451,8 @@ function PendingRow({
   >("idle");
   const [cancelErr, setCancelErr] = useState<string | null>(null);
   const account = useCurrentAccount();
-  const client = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const client = useCurrentClient();
+  const dAppKit = useDAppKit();
 
   async function cancel() {
     if (!account) return;
@@ -485,11 +485,15 @@ function PendingRow({
         },
         sequenceNumber: w.sequenceNumber,
       });
-      const signed = await signAndExecute({ transaction: tx });
+      const signed = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+      const digest =
+        signed.$kind === "Transaction"
+          ? signed.Transaction.digest
+          : signed.FailedTransaction.digest;
       setCancelling("confirming");
-      await client.waitForTransaction({
-        digest: signed.digest,
-        options: { showEffects: true },
+      await client.core.waitForTransaction({
+        digest,
+        include: { effects: true },
       });
       setCancelling("idle");
       setTimeout(onCancelled, 600);

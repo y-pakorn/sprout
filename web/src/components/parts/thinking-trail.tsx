@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown, Sparkles } from "lucide-react";
+import { LiquidBlob } from "@/components/parts/liquid-blob";
 
 type Props = {
   text: string;
@@ -51,15 +52,7 @@ export function ThinkingTrail({ text, streaming }: Props) {
         className="inline-flex items-center gap-2 surface-card pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-muted-ash transition-opacity hover:opacity-70 rounded-button"
       >
         {streaming ? (
-          <motion.span
-            animate={{ scale: [1, 1.35, 1] }}
-            transition={{
-              duration: 1.1,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="inline-block size-1.5 bg-deliver-green rounded-full"
-          />
+          <LiquidBlob size={16} />
         ) : (
           <Sparkles className="size-3 text-deliver-green" strokeWidth={2.4} />
         )}

@@ -301,7 +301,7 @@ export function GradientField({ mode }: { mode: CinematicMode }) {
       ref={ref}
       aria-hidden
       className={
-        "pointer-events-none fixed inset-0 z-0 h-full w-full transition-opacity duration-700 " +
+        "pointer-events-none fixed inset-0 z-0 h-full w-screen transition-opacity duration-700 " +
         (mode === "bright" ? "opacity-100" : "opacity-60")
       }
     />
