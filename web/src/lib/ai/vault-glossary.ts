@@ -19,7 +19,8 @@ export type GlossaryKey =
   | "price-impact"
   | "slippage"
   | "protocol-risk"
-  | "rate-slippage";
+  | "rate-slippage"
+  | "vault-token-swap";
 
 export const VAULT_GLOSSARY: Record<GlossaryKey, string> = {
   "impermanent-loss": `**Impermanent loss** is the gap between holding two tokens passively and putting them into a liquidity pool. When the price ratio between the two assets moves, the pool rebalances to keep its invariant — so you end up with less of the asset that went UP and more of the asset that went DOWN. The bigger the move, the wider the gap.
@@ -84,6 +85,14 @@ The Guardian's "Slippage cap" row checks whether your cap is wider than the curr
 For Ember vaults specifically: assets are held in MPC wallets, strategies are executed by named operators, and admin powers are limited but non-zero. Read Ember's risk disclosure before sizing a position you can't afford to lose.`,
 
   "rate-slippage": `**Rate slippage on vault deposits** happens when the vault's share-price updates between the moment you accept the quote and the moment the transaction lands on chain. We currently mint at \`minSharesToMint = 0\` — meaning we accept any share count — which is fine for most vaults where rates move slowly, but if the rate jumps adversely you could get fewer shares than expected.`,
+
+  "vault-token-swap": `**Vault share tokens** (e.g. ercUSD, eACRED, eUSDT, ercSUI) are receipts for a deposit in an Ember vault — not ordinary coins. They CAN be swapped on Bluefin7K when a route exists, but that's usually the worse exit.
+
+**Why redeeming beats swapping:** a vault share keeps accruing value as the strategy earns — its redemption value is the vault's live share price. Selling the share on a DEX prices it against a thin secondary market, which typically trades at a discount to that "true" share price, so you leave yield on the table. You also pay swap price impact + fees on top.
+
+**When swapping makes sense:** redemptions have a withdrawal lockup (e.g. up to a few days), so if you need the funds immediately and can't wait, swapping the share directly is the only instant exit — at a worse rate.
+
+**Better path when you can wait:** \`redeemFromVault\` (request a withdrawal) → wait out the lockup → then swap the underlying token if you want a different asset.`,
 };
 
 /**
