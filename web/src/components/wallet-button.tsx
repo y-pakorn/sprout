@@ -4,11 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   useCurrentAccount,
-  useConnectWallet,
-  useDisconnectWallet,
-  useResolveSuiNSName,
   useWallets,
-} from "@mysten/dapp-kit";
+  useDAppKit,
+} from "@mysten/dapp-kit-react";
 
 type DetectedWallet = ReturnType<typeof useWallets>[number];
 import {
@@ -53,7 +51,9 @@ export function WalletButton({
   tone = "default",
 }: { tone?: "default" | "glass" } = {}) {
   const account = useCurrentAccount();
-  const { data: suins } = useResolveSuiNSName(account?.address ?? null);
+  // SuiNS reverse-resolution isn't wired on the new gRPC client yet — fall
+  // back to the short address (display already handles the no-name case).
+  const suins: string | null = null;
   const [menuOpen, setMenuOpen] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -102,10 +102,10 @@ export function WalletButton({
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-        className="inline-flex items-center gap-2 bg-whisper-gray pl-1.5 pr-3 py-1 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline rounded-button"
+        className="inline-flex items-center gap-2 bg-canvas-white pl-1.5 pr-3 py-1 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline shadow-button rounded-button"
       >
         <span
-          className="inline-flex size-7 items-center justify-center text-canvas-white text-caption font-semibold rounded-full tracking-[0]"
+          className="inline-flex size-7 items-center justify-center text-canvas-white text-caption font-medium rounded-full tracking-[0]"
           style={{ background: avatarTone(account.address) }}
         >
           {avatarLetter(suins, account.address)}
@@ -144,7 +144,7 @@ function WalletMenu({
   suins: string | null;
   onClose: () => void;
 }) {
-  const { mutate: disconnect } = useDisconnectWallet();
+  const dAppKit = useDAppKit();
   const [copied, setCopied] = useState(false);
 
   function copyAddress() {
@@ -159,13 +159,13 @@ function WalletMenu({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -6, scale: 0.97 }}
       transition={{ type: "spring", visualDuration: 0.25, bounce: 0.2 }}
-      className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 origin-top-right rounded-card bg-canvas-white p-2 ring-1 ring-hairline shadow-header"
+      className="absolute right-0 top-[calc(100%+8px)] z-50 w-60 origin-top-right rounded-card bg-canvas-white p-1.5 ring-1 ring-hairline shadow-header"
     >
       <div
-        className="flex items-center gap-3 bg-whisper-gray px-3 py-3 rounded-card"
+        className="flex items-center gap-2.5 bg-whisper-gray px-2.5 py-2.5 rounded-card"
       >
         <span
-          className="inline-flex size-10 shrink-0 items-center justify-center text-canvas-white text-body font-semibold rounded-full tracking-[0]"
+          className="inline-flex size-8 shrink-0 items-center justify-center text-canvas-white text-body-sm font-medium rounded-full tracking-[0]"
           style={{ background: avatarTone(address) }}
         >
           {avatarLetter(suins, address)}
@@ -173,10 +173,10 @@ function WalletMenu({
         <div className="min-w-0 flex-1 space-y-0.5">
           {suins ? (
             <>
-              <div className="truncate text-body font-medium leading-tight">
+              <div className="truncate text-body-sm font-medium leading-tight">
                 {suins}
               </div>
-              <div className="truncate font-mono text-body-sm text-muted-ash">
+              <div className="truncate font-mono text-caption text-muted-ash">
                 {shortAddr(address)}
               </div>
             </>
@@ -185,7 +185,7 @@ function WalletMenu({
               <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
                 Connected
               </div>
-              <div className="break-all font-mono text-body-sm leading-tight">
+              <div className="break-all font-mono text-caption leading-tight">
                 {shortAddr(address)}
               </div>
             </>
@@ -208,7 +208,7 @@ function WalletMenu({
           Icon={LogOut}
           label="Disconnect"
           onClick={() => {
-            disconnect();
+            void dAppKit.disconnectWallet();
             onClose();
           }}
           danger
@@ -232,14 +232,14 @@ function MenuItem({
   danger?: boolean;
 }) {
   const cls = cn(
-    "flex w-full items-center gap-2.5 rounded-button px-3 py-2 text-left text-body-sm font-medium transition-colors",
+    "flex w-full items-center gap-2 rounded-button px-2.5 py-1.5 text-left text-sm font-medium transition-colors",
     danger
       ? "text-destructive hover:bg-destructive/10"
       : "text-midnight-ink hover:bg-whisper-gray",
   );
   const inner = (
     <>
-      <Icon className="size-4" strokeWidth={2.2} />
+      <Icon className="size-3.5" strokeWidth={2.2} />
       {label}
     </>
   );
@@ -274,10 +274,10 @@ function ConnectDialog({
   onClose: () => void;
 }) {
   const wallets = useWallets();
-  const { mutate: connect } = useConnectWallet();
+  const dAppKit = useDAppKit();
 
   function handleConnect(wallet: DetectedWallet) {
-    connect({ wallet }, { onSuccess: onClose });
+    dAppKit.connectWallet({ wallet }).then(onClose).catch(() => {});
   }
 
   return (

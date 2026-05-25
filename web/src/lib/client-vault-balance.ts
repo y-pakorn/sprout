@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useCurrentAccount, useSuiClient } from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { fetchAllBalances, type CoreClientLike } from "@/lib/grpc-balances";
 import { fetchVaults } from "@/lib/client-vaults";
 import { canonicalCoinType } from "@/lib/client-coins";
 import type {
@@ -20,13 +21,13 @@ import type {
  */
 export async function fetchVaultBalanceClient(
   address: string,
-  client: ReturnType<typeof useSuiClient>,
+  client: CoreClientLike,
 ): Promise<VaultBalance> {
   type RawBal = { coinType: string; totalBalance: string };
 
   const [serverRes, allBalances, vaults] = await Promise.all([
     fetch(`/api/vault-balance/${address}`, { cache: "no-store" }),
-    client.getAllBalances({ owner: address }),
+    fetchAllBalances(client, address),
     fetchVaults(),
   ]);
   if (!serverRes.ok) {
@@ -89,7 +90,7 @@ export function useVaultBalance(): {
   refresh: () => void;
 } {
   const account = useCurrentAccount();
-  const client = useSuiClient();
+  const client = useCurrentClient();
   const [state, setState] = useState<VaultBalanceState>({ status: "idle" });
   const [tick, setTick] = useState(0);
 

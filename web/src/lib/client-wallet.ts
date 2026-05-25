@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import {
-  useCurrentAccount,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
+import { fetchAllBalances, type CoreClientLike } from "@/lib/grpc-balances";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import {
   useCoinMap,
@@ -32,13 +30,13 @@ export type TokenHolding = {
  */
 export async function fetchWalletHoldings(
   address: string,
-  client: ReturnType<typeof useSuiClient>,
+  client: CoreClientLike,
   coinMap: CoinMap | null,
 ): Promise<TokenHolding[]> {
   type RawBal = { coinType: string; totalBalance: string };
 
   const [allBalances, receiptIndex] = await Promise.all([
-    client.getAllBalances({ owner: address }),
+    fetchAllBalances(client, address),
     loadVaultReceiptIndex().catch(
       () => new Map() as Awaited<ReturnType<typeof loadVaultReceiptIndex>>,
     ),
@@ -121,7 +119,7 @@ export function useWalletHoldings(): {
   refresh: () => void;
 } {
   const account = useCurrentAccount();
-  const client = useSuiClient();
+  const client = useCurrentClient();
   const coinMap = useCoinMap();
   const [state, setState] = useState<State>({ status: "idle" });
   const [tick, setTick] = useState(0);
