@@ -33,6 +33,7 @@ import type {
   ResolvedCancelRedeemStep,
   ResolvedStep,
 } from "@/lib/ai/action-plan-cache";
+import { providerLabel } from "@/lib/seven-k";
 import { dexLabel } from "@/lib/bluefin7k";
 import { untrustedDexes } from "@/lib/route-trust";
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
@@ -1058,6 +1059,26 @@ function swapRisks(swaps: ResolvedSwapStep[]): GuardianRow[] {
   if (swaps.length === 0) return [];
   const out: GuardianRow[] = [];
 
+  // Vault share tokens can be swapped, but redeeming through the vault usually
+  // returns more. Surface the tradeoff (informational flag — not blocking).
+  const vaultSwaps = swaps.filter((s) => s.fromVault);
+  if (vaultSwaps.length > 0) {
+    const syms = Array.from(new Set(vaultSwaps.map((s) => s.fromSymbol)));
+    out.push({
+      id: "swap-vault-token",
+      title: "Vault token swap",
+      summary:
+        vaultSwaps.length === 1
+          ? `${syms[0]} is a ${vaultSwaps[0].fromVault!.vaultName} share — redeeming usually beats swapping`
+          : `Swapping vault shares (${syms.join(", ")}) — redeeming usually beats swapping`,
+      verdict: "flag",
+      detail:
+        getGlossary("vault-token-swap") +
+        "\n\n**For this plan:** you're selling a vault share on the open market. If you don't need the funds right away, redeeming through the vault (request a withdrawal, wait out the lockup, then swap the underlying) typically returns more.",
+      askPrompt: "Should I redeem my vault token instead of swapping it?",
+    });
+  }
+
   const unverifiedSymbols = new Set<string>();
   for (const s of swaps) {
     if (s.fromVerified === false) unverifiedSymbols.add(s.fromSymbol);
@@ -1091,9 +1112,9 @@ function swapRisks(swaps: ResolvedSwapStep[]): GuardianRow[] {
       swaps.length === 1
         ? swaps[0].impactPct !== undefined && swaps[0].impactPct > 0
           ? swaps[0].impactPct < 0.001
-            ? `<0.001% across ${swaps[0].hops} hop(s) on ${swaps[0].dexes.join(" + ")}`
-            : `${swaps[0].impactPct.toFixed(3)}% across ${swaps[0].hops} hop(s) on ${swaps[0].dexes.join(" + ")}`
-          : `0% across ${swaps[0].hops} hop(s)`
+            ? `<0.001% via ${providerLabel(swaps[0].provider)}`
+            : `${swaps[0].impactPct.toFixed(3)}% via ${providerLabel(swaps[0].provider)}`
+          : `0% via ${providerLabel(swaps[0].provider)}`
         : `${swaps.length} swaps · max ${maxImpact.toFixed(3)}% impact`,
     verdict: impactV,
     detail:
@@ -1556,10 +1577,36 @@ function SwapDetail({
   );
 }
 
+function symbolFromType(coinType?: string): string {
+  if (!coinType) return "?";
+  const parts = coinType.split("::");
+  return parts[parts.length - 1] || "?";
+}
+
+function TokenChip({
+  coinType,
+  iconLookup,
+}: {
+  coinType?: string;
+  iconLookup: IconLookup;
+}) {
+  const sym = symbolFromType(coinType);
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-card bg-whisper-gray px-2 py-1 text-caption font-medium text-midnight-ink ring-1 ring-hairline">
+      <AssetIcon
+        src={coinType ? iconLookup(coinType) : undefined}
+        label={sym}
+        size={14}
+      />
+      {sym}
+    </span>
+  );
+}
+
 /**
- * Route breakdown for a swap — per-route share% + DEX chain for each hop.
- * Data sourced from s.quote.routes[].hops[].pool.type with share derived
- * from tokenInAmount when the SDK doesn't provide it directly.
+ * Route breakdown for a swap — the 7K Meta Aggregator picks the best provider
+ * across Bluefin7K / Cetus / FlowX; we show which won, how much better, and the
+ * token-by-token path: which token swaps to which at which venue.
  */
 function RouteBreakdown({
   s,
@@ -1568,115 +1615,84 @@ function RouteBreakdown({
   s: ResolvedSwapStep;
   iconLookup: IconLookup;
 }) {
-  const routes = s.quote.routes ?? [];
-  const totalIn = routes.reduce(
-    (acc, r) => acc + (Number(r.tokenInAmount) || 0),
-    0,
-  );
-  const withShares = routes.map((r) => {
-    const declared = typeof r.share === "number" ? r.share : null;
-    const derived = totalIn > 0 ? Number(r.tokenInAmount) / totalIn : 0;
-    return { ...r, _share: declared ?? derived };
-  });
-  const sorted = [...withShares].sort((a, b) => b._share - a._share);
-
+  const splits = (s.routeSplits ?? []).filter((sp) => sp.hops.length > 0);
+  const tied =
+    s.comparedProvider !== undefined &&
+    (s.rateImprovementPct ?? 0) < 0.01;
   return (
-    <div className="space-y-3 pt-2">
+    <div className="space-y-2.5 pt-2">
       <div className="flex items-baseline justify-between">
         <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
           Route
         </span>
         <span className="text-caption tabular-nums text-muted-ash">
-          {sorted.length === 0
-            ? "Direct route"
-            : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
+          via {providerLabel(s.provider)}
+          {s.hops > 1 ? ` · ${s.hops} hops` : ""}
         </span>
       </div>
-      <div className="space-y-2">
-        {sorted.length === 0 ? (
-          <div className="text-body-sm text-muted-ash">
-            Direct {s.fromSymbol} → {s.toSymbol} via Bluefin7K.
-          </div>
+      <div className="text-body-sm text-muted-ash">
+        Best route for {s.fromSymbol} → {s.toSymbol} via{" "}
+        <span className="font-medium text-midnight-ink">
+          {providerLabel(s.provider)}
+        </span>
+        {s.comparedProvider ? (
+          tied ? (
+            <> — matched {providerLabel(s.comparedProvider)}.</>
+          ) : (
+            <>
+              {" — "}
+              <span className="font-medium text-deliver-green">
+                {(s.rateImprovementPct ?? 0).toFixed(2)}% better
+              </span>{" "}
+              than {providerLabel(s.comparedProvider)}.
+            </>
+          )
         ) : (
-          sorted.map((route, i) => (
-            <SplitRow
+          "."
+        )}
+      </div>
+      {splits.length > 0 ? (
+        <div className="space-y-2">
+          {splits.map((sp, i) => (
+            <div
               key={i}
-              route={route}
-              iconLookup={iconLookup}
-              dominant={i === 0}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function symbolFromType(coinType: string): string {
-  const parts = coinType.split("::");
-  return parts[parts.length - 1] || "?";
-}
-
-function SplitRow({
-  route,
-  iconLookup,
-  dominant,
-}: {
-  route: {
-    _share: number;
-    hops: Array<{
-      pool?: { type?: string };
-      tokenIn?: string;
-      tokenOut?: string;
-    }>;
-  };
-  iconLookup: IconLookup;
-  dominant?: boolean;
-}) {
-  const pct = Math.round(route._share * 100);
-  return (
-    <div className="flex flex-wrap items-center gap-2.5">
-      <span
-        className={cn(
-          "inline-flex min-w-[52px] shrink-0 items-center justify-center rounded-card px-2.5 py-1 text-caption font-semibold tabular-nums ring-1",
-          dominant
-            ? "bg-midnight-ink text-canvas-white ring-midnight-ink"
-            : "bg-whisper-gray text-muted-ash ring-hairline",
-        )}
-      >
-        {pct}%
-      </span>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {route.hops.map((hop, i) => {
-          const type = hop.pool?.type;
-          const inIcon = hop.tokenIn ? iconLookup(hop.tokenIn) : undefined;
-          const outIcon = hop.tokenOut ? iconLookup(hop.tokenOut) : undefined;
-          const inSym = hop.tokenIn ? symbolFromType(hop.tokenIn) : "?";
-          const outSym = hop.tokenOut ? symbolFromType(hop.tokenOut) : "?";
-          return (
-            <Fragment key={i}>
-              {i > 0 && (
-                <ArrowRight
-                  className="size-3.5 shrink-0 text-muted-ash"
-                  strokeWidth={2.4}
-                />
-              )}
-              <span
-                className="inline-flex shrink-0 items-center gap-2 bg-whisper-gray py-1 pl-1.5 pr-3 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline rounded-card"
-                title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
-              >
-                <span className="inline-flex items-center">
-                  <AssetIcon src={inIcon} label={inSym} size={16} />
-                  <span className="-ml-1 inline-flex">
-                    <AssetIcon src={outIcon} label={outSym} size={16} />
-                  </span>
+              className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5"
+            >
+              {splits.length > 1 && (
+                <span className="inline-flex min-w-[40px] shrink-0 items-center justify-center rounded-card bg-whisper-gray px-2 py-1 text-caption font-medium tabular-nums text-muted-ash ring-1 ring-hairline">
+                  {Math.round(sp.sharePct * 100)}%
                 </span>
-                {type ? dexLabel(type) : "unknown"}
-              </span>
-            </Fragment>
-          );
-        })}
-      </div>
+              )}
+              <TokenChip
+                coinType={sp.hops[0]?.tokenIn ?? s.fromCoinType}
+                iconLookup={iconLookup}
+              />
+              {sp.hops.map((h, j) => (
+                <Fragment key={j}>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-caption text-muted-ash">
+                    <ArrowRight className="size-3" strokeWidth={2.4} />
+                    <span className="font-medium text-midnight-ink">
+                      {dexLabel(h.dex)}
+                    </span>
+                    <ArrowRight className="size-3" strokeWidth={2.4} />
+                  </span>
+                  <TokenChip
+                    coinType={
+                      h.tokenOut ??
+                      (j === sp.hops.length - 1 ? s.toCoinType : undefined)
+                    }
+                    iconLookup={iconLookup}
+                  />
+                </Fragment>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-caption text-muted-ash">
+          Routed via {providerLabel(s.provider)}.
+        </div>
+      )}
     </div>
   );
 }

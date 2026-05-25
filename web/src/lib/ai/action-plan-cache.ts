@@ -1,7 +1,6 @@
 "use client";
 
 import type { Transaction } from "@mysten/sui/transactions";
-import type { QuoteResponse } from "@bluefin-exchange/bluefin7k-aggregator-sdk";
 import type { SuiVault } from "@/lib/vaults";
 
 // ───────────────────────────────────────────────────────────────────────
@@ -30,7 +29,19 @@ export type ResolvedSwapStep = {
   hops: number;
   dexes: string[];
   impactPct?: number;
-  quote: QuoteResponse;
+  /** Winning 7K Meta Aggregator provider ("bluefin7k" | "cetus" | "flowx"). */
+  provider: string;
+  /** How much better the winner's output was vs the runner-up (percent). */
+  rateImprovementPct?: number;
+  /** The runner-up provider the winner beat (when more than one quoted). */
+  comparedProvider?: string;
+  /** Per-path route breakdown: split % + each hop's venue and tokens. */
+  routeSplits?: {
+    sharePct: number;
+    hops: { dex: string; tokenIn?: string; tokenOut?: string }[];
+  }[];
+  /** Raw winning provider quote (shape varies by provider). */
+  quote?: unknown;
   /** Coin-list verified flags for the Guardian token-verification risk row.
    *  Optional because chained-handle origins (e.g. split outputs, receipt
    *  tokens) may not resolve through the standard coin map. */
@@ -38,6 +49,10 @@ export type ResolvedSwapStep = {
   toVerified?: boolean;
   fromIcon?: string;
   toIcon?: string;
+  /** Set when the swap's input is a vault receipt/share token. Drives the
+   *  Guardian "vault token swap" flag — redeeming through the vault usually
+   *  beats selling the share on the open market. */
+  fromVault?: { vaultName: string; depositSymbol: string };
 };
 
 export type ResolvedSplitStep = {

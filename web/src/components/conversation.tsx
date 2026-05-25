@@ -1,35 +1,38 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
+import { ChevronDown } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { StickToBottom } from "use-stick-to-bottom";
+import { useStickToBottom } from "use-stick-to-bottom";
 import {
   useCurrentAccount,
-  useSignAndExecuteTransaction,
-  useSuiClient,
-} from "@mysten/dapp-kit";
+  useCurrentClient,
+  useDAppKit,
+} from "@mysten/dapp-kit-react";
 
-type SuiClientLike = ReturnType<typeof useSuiClient>;
+type SuiClientLike = ReturnType<typeof useCurrentClient>;
 import type { Transaction } from "@mysten/sui/transactions";
+import { fetchAllBalances, fetchBalance } from "@/lib/grpc-balances";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
 import { AgentMessage } from "@/components/agent-message";
 import { ErrorBanner } from "@/components/parts/error-banner";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
+import { LiquidBlob } from "@/components/parts/liquid-blob";
+import { SPRING_BOUNCY } from "@/lib/motion";
 import {
   useCoinMap,
   resolveSymbol,
   canonicalCoinType,
 } from "@/lib/client-coins";
-import { useVaults, fetchVaults, fetchDeployment } from "@/lib/client-vaults";
+import { useVaults, fetchVaults } from "@/lib/client-vaults";
 import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
   vaultsListCache,
   type CachedActionPlan,
-  type ResolvedStep,
   type ResolvedSwapStep,
   type ResolvedSplitStep,
   type ResolvedDepositStep,
@@ -38,31 +41,14 @@ import {
   type RawStep,
 } from "@/lib/ai/action-plan-cache";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
-import {
-  getQuote,
-  buildTx,
-  extractRoute,
-  getTokenPrices,
-  computePriceImpactPct,
-  dexLabel,
-  PARTNER_ADDRESS,
-  PARTNER_COMMISSION_BPS,
-} from "@/lib/bluefin7k";
-import {
-  Transaction as SuiTransaction,
-  coinWithBalance,
-  type TransactionObjectArgument,
-} from "@mysten/sui/transactions";
+import { getTokenPrices } from "@/lib/bluefin7k";
+import { providerLabel } from "@/lib/seven-k";
+import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
 import type { VaultPosition } from "@/components/parts/wallet-card";
 import {
   loadVaultReceiptIndex,
   type VaultReceiptEntry,
 } from "@/lib/vault-receipt-index";
-import {
-  appendDepositCall,
-  appendRedeemCall,
-  appendCancelRedeemCall,
-} from "@/lib/ember-actions";
 
 // Re-export for legacy local type references. `VaultPosition` import above
 // keeps the prop-shape contract with downstream cards stable.
@@ -71,8 +57,15 @@ type VaultPositionInfo = VaultReceiptEntry;
 export function Conversation() {
   const account = useCurrentAccount();
   const coinMap = useCoinMap();
-  const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
+  const suiClient = useCurrentClient();
+  const dAppKit = useDAppKit();
+  const signAndExecute = (args: { transaction: Transaction }) =>
+    dAppKit.signAndExecuteTransaction(args);
+
+  // Stick-to-bottom for the active conversation. Used via the hook (not the
+  // component) so the scroller is an inner div and the scroll-to-bottom button
+  // can live in a non-scrolling wrapper that stays pinned to the viewport.
+  const stick = useStickToBottom({ resize: "smooth", initial: "smooth" });
 
   // Refs so onToolCall (which captures first-render closure) always reads
   // the latest wallet/client values without re-subscribing.
@@ -266,16 +259,17 @@ export function Conversation() {
       return;
     }
     try {
-      const res = await client.getBalance({
-        owner: acct.address,
-        coinType: coin.coin_type,
-      });
+      const totalBalanceRaw = await fetchBalance(
+        client,
+        acct.address,
+        coin.coin_type
+      );
       // If the caller is asking about a vault receipt token, attach the
       // vault position metadata so the result renders as a vault card.
       const vaultByReceipt = await loadVaultReceiptIndex();
       const vaultMatch = vaultByReceipt.get(canonicalCoinType(coin.coin_type));
       const decimals = vaultMatch?.shareDecimals ?? coin.decimals;
-      const human = Number(res.totalBalance) / 10 ** decimals;
+      const human = Number(totalBalanceRaw) / 10 ** decimals;
       // USD price: vault receipt tokens come from Bluefin's vault list
       // (the 7K /price endpoint silently drops them — verified). Plain
       // tokens come from the 7K oracle.
@@ -337,7 +331,7 @@ export function Conversation() {
       return;
     }
     try {
-      const all = await client.getAllBalances({ owner: acct.address });
+      const all = await fetchAllBalances(client, acct.address);
       // Reverse-index coinType → {symbol, decimals} from the known coin map
       const byType = new Map<string, { symbol: string; decimals: number }>();
       if (map) {
@@ -492,7 +486,7 @@ export function Conversation() {
       //  3. vault receipt index (vault metadata + canonical share price)
       const [serverRes, allBalances, vaultByReceipt] = await Promise.all([
         fetch(`/api/vault-balance/${acct.address}`, { cache: "no-store" }),
-        client.getAllBalances({ owner: acct.address }),
+        fetchAllBalances(client, acct.address),
         loadVaultReceiptIndex(),
       ]);
       if (!serverRes.ok) {
@@ -651,626 +645,34 @@ export function Conversation() {
     const { steps } = toolCall.input as { steps: RawStep[] };
 
     try {
-      // Vault list + deployment are needed for any step that touches the
-      // gateway (deposit, redeem, cancel).
-      const needsVaults = steps.some(
-        (s) =>
-          s.kind === "deposit" ||
-          s.kind === "redeemFromVault" ||
-          s.kind === "cancelRedeemFromVault"
-      );
-      const vaults = needsVaults ? vaultList ?? (await fetchVaults()) : null;
-      const deployment = needsVaults ? await fetchDeployment() : null;
-      // Receipt-coin index lets us resolve receipt symbols (e.g. ercUSD)
-      // for redeemFromVault — they're not in the standard coin map.
-      const vaultByReceipt = needsVaults
-        ? await loadVaultReceiptIndex()
-        : new Map<string, never>();
+      // On silent rebuilds, preserve the previously-computed real gas
+      // (buildPlanTransaction skips the dryRun when estimateGas is false).
+      const prev = silent
+        ? actionPlanCache.get(toolCall.toolCallId)
+        : undefined;
 
-      const tx = new SuiTransaction();
-      tx.setSender(acct.address);
+      const { tx, resolved, summary } = await buildPlanTransaction({
+        steps,
+        sender: acct.address,
+        coinMap: map,
+        vaultList,
+        slippagePct: slippageRef.current,
+        client: suiClientRef.current,
+        estimateGas: !silent,
+        prevGasSui: prev?.summary.estimatedGasSui,
+      });
 
-      type HandleEntry = {
-        arg: TransactionObjectArgument;
-        symbol: string;
-        coinType: string;
-        decimals: number;
-        expectedHuman: number;
+      const cached: CachedActionPlan = {
+        tx,
+        steps: resolved,
+        originalInput: steps,
+        summary,
+        fetchedAt: Date.now(),
       };
-      const handles = new Map<string, HandleEntry>();
-      // Handle ids consumed by a downstream step. Any handle NOT in this set
-      // by the end of the steps walk is a Result coin that nothing took
-      // ownership of — we must explicitly transfer those to the sender or
-      // Sui will reject the PTB with `UnusedValueWithoutDrop`.
-      const consumedHandles = new Set<string>();
-      const resolved: ResolvedStep[] = [];
-
-      function resolveOrigin(
-        step: RawStep,
-        /** When false, don't pre-add a coinWithBalance Result to the tx
-         *  for balance-based origins. 7K's buildTx pulls its own input
-         *  coin via getSplitCoinForTx when no coinIn is given — pre-
-         *  adding our own would leave it as an orphan Result. */
-        addCoinToTx = true
-      ): HandleEntry {
-        if (step.fromHandle) {
-          const h = handles.get(step.fromHandle);
-          if (!h) {
-            const available = Array.from(handles.keys()).join(", ") || "(none)";
-            throw new Error(
-              `Step ${step.id}: handle '${step.fromHandle}' has not been produced yet by the time this step runs. Available handles at this point: [${available}]. This usually means an upstream step failed or the id reference is mistyped. FIX: verify the upstream step's id matches and retry executePlan.`
-            );
-          }
-          consumedHandles.add(step.fromHandle);
-          return h;
-        }
-        if (!step.fromSymbol || step.fromAmount == null) {
-          throw new Error(
-            `Step ${step.id}: missing origin — provide either fromHandle or fromSymbol+fromAmount.`
-          );
-        }
-        const coin = resolveSymbol(map, step.fromSymbol);
-        if (coin) {
-          if (!addCoinToTx) {
-            // Metadata-only: 7K's buildTx will pull from sender balance.
-            return {
-              arg: null as unknown as TransactionObjectArgument,
-              symbol: step.fromSymbol.toUpperCase(),
-              coinType: coin.coin_type,
-              decimals: coin.decimals,
-              expectedHuman: step.fromAmount,
-            };
-          }
-          const raw = BigInt(Math.floor(step.fromAmount * 10 ** coin.decimals));
-          const arg = tx.add(
-            coinWithBalance({ balance: raw, type: coin.coin_type })
-          ) as unknown as TransactionObjectArgument;
-          return {
-            arg,
-            symbol: step.fromSymbol.toUpperCase(),
-            coinType: coin.coin_type,
-            decimals: coin.decimals,
-            expectedHuman: step.fromAmount,
-          };
-        }
-        // Fall back: receipt coin (vault share token) symbol lookup. Receipt
-        // tokens aren't in the standard coin map — they live in the vault
-        // receipt index.
-        const wantSym = step.fromSymbol.toUpperCase();
-        for (const v of vaultByReceipt.values()) {
-          const vTyped = v as {
-            position: { depositCoinType: string };
-            shareDecimals: number;
-          };
-          for (const ct of vaultByReceipt.keys()) {
-            if (vaultByReceipt.get(ct) !== v) continue;
-            // The receipt symbol is the trailing :: segment of the coin type.
-            const sym = ct.split("::").pop()?.toUpperCase();
-            if (sym === wantSym) {
-              const raw = BigInt(
-                Math.floor(step.fromAmount * 10 ** vTyped.shareDecimals)
-              );
-              const arg = tx.add(
-                coinWithBalance({ balance: raw, type: ct })
-              ) as unknown as TransactionObjectArgument;
-              return {
-                arg,
-                symbol: wantSym,
-                coinType: ct,
-                decimals: vTyped.shareDecimals,
-                expectedHuman: step.fromAmount,
-              };
-            }
-          }
-        }
-        throw new Error(
-          `Step ${step.id}: unknown token symbol '${step.fromSymbol}'. If you meant a vault receipt token, use the symbol from getVaultBalance.positions[].receiptCoinSymbol.`
-        );
-      }
-
-      // Topo-sort steps by fromHandle dependencies. The agent may emit
-      // them in any order; we walk the DAG so each step runs after the
-      // step it consumes. Steps with no fromHandle (drawn directly from
-      // balance) have no deps.
-      const stepById = new Map<string, RawStep>();
-      for (const s of steps) {
-        if (stepById.has(s.id)) {
-          throw new Error(`Duplicate step id '${s.id}' in plan.`);
-        }
-        stepById.set(s.id, s);
-      }
-      function depsOf(s: RawStep): string[] {
-        const out: string[] = [];
-        if (s.fromHandle) out.push(s.fromHandle);
-        if (s.fromHandles) out.push(...s.fromHandles);
-        // Strip ".N" indexing — "split1.0" → "split1".
-        return out.map((h) => h.split(".")[0]);
-      }
-      const sorted: RawStep[] = [];
-      const visiting = new Set<string>();
-      const visited = new Set<string>();
-      function checkHandleShape(s: RawStep, handle: string) {
-        const dep = handle.split(".")[0];
-        const parent = stepById.get(dep);
-        if (!parent) {
-          const ids = Array.from(stepById.keys()).join(", ") || "(none)";
-          throw new Error(
-            `Step ${s.id}: unknown handle '${handle}'. No upstream step has id '${dep}'. Existing step ids in this plan: [${ids}]. FIX: either rename your upstream step to '${dep}', or change ${s.id}.fromHandle to reference an existing id. Then retry executePlan with the corrected plan.`
-          );
-        }
-        const hasDot = handle.includes(".");
-        if (hasDot && parent.kind !== "split") {
-          throw new Error(
-            `Step ${s.id}: handle '${handle}' uses split-output syntax \`<id>.<i>\` but upstream step '${parent.id}' is a ${parent.kind}, not a split. ${parent.kind} steps produce a single handle '${parent.id}' (no dot). FIX: either (a) use 'fromHandle: \"${parent.id}\"' to consume the whole ${parent.kind} output, or (b) insert a split step between '${parent.id}' and '${s.id}' (e.g. { kind: \"split\", id: \"split_${parent.id}\", fromHandle: \"${parent.id}\", portionsBps: [...] }) and have '${s.id}' reference 'split_${parent.id}.0'. Then retry executePlan.`
-          );
-        }
-        if (!hasDot && parent.kind === "split") {
-          throw new Error(
-            `Step ${s.id}: handle '${handle}' references split step '${parent.id}' but doesn't pick a portion. Split steps produce indexed handles '${parent.id}.0', '${parent.id}.1', etc. FIX: change ${s.id}.fromHandle to one of those (e.g. '${parent.id}.0'). Then retry executePlan.`
-          );
-        }
-        return parent;
-      }
-      function visit(s: RawStep) {
-        if (visited.has(s.id)) return;
-        if (visiting.has(s.id)) {
-          throw new Error(`Step ${s.id}: dependency cycle detected.`);
-        }
-        visiting.add(s.id);
-        const handles = [
-          ...(s.fromHandle ? [s.fromHandle] : []),
-          ...(s.fromHandles ?? []),
-        ];
-        for (const h of handles) {
-          const parent = checkHandleShape(s, h);
-          visit(parent);
-        }
-        void depsOf;
-        visiting.delete(s.id);
-        visited.add(s.id);
-        sorted.push(s);
-      }
-      for (const s of steps) visit(s);
-
-      for (const step of sorted) {
-        // cancelRedeemFromVault has no coin origin — just a vault + sequence.
-        if (step.kind === "cancelRedeemFromVault") {
-          if (!step.vaultId) {
-            throw new Error(`Cancel ${step.id}: missing vaultId.`);
-          }
-          if (!step.sequenceNumber) {
-            throw new Error(
-              `Cancel ${step.id}: missing sequenceNumber. Read it from getVaultBalance.withdrawals[].sequenceNumber.`
-            );
-          }
-          if (!vaults || !deployment) {
-            throw new Error("Vaults / deployment data not available.");
-          }
-          const v = vaults.find((x) => x.id === step.vaultId);
-          if (!v) {
-            throw new Error(
-              `Cancel ${step.id}: unknown vault id '${step.vaultId}'.`
-            );
-          }
-          const receiptCoinType =
-            v.receiptCoinType ||
-            deployment.vaultsByObjectId[v.objectId]?.receiptCoinType ||
-            "";
-          if (!receiptCoinType) {
-            throw new Error(
-              `Cancel ${step.id}: no receipt coin type for vault '${v.name}'.`
-            );
-          }
-          let seqBig: bigint;
-          try {
-            seqBig = BigInt(step.sequenceNumber);
-          } catch {
-            throw new Error(
-              `Cancel ${step.id}: sequenceNumber '${step.sequenceNumber}' is not a valid u128.`
-            );
-          }
-          appendCancelRedeemCall({
-            tx,
-            gateway: {
-              packageId: deployment.packageId,
-              protocolConfigId: deployment.protocolConfigId,
-            },
-            vault: {
-              objectId: v.objectId,
-              depositCoinType: v.depositCoinType,
-              receiptCoinType,
-            },
-            sequenceNumber: seqBig,
-          });
-          resolved.push({
-            kind: "cancelRedeemFromVault",
-            id: step.id,
-            vault: v,
-            sequenceNumber: step.sequenceNumber,
-          });
-          continue;
-        }
-
-        // Merge has a different origin shape (multiple sources). Handle
-        // it before the single-origin resolution.
-        if (step.kind === "merge") {
-          const sources: Array<{ entry: HandleEntry; label: string }> = [];
-          if (step.fromHandles) {
-            for (const hId of step.fromHandles) {
-              const h = handles.get(hId);
-              if (!h) {
-                throw new Error(`Merge ${step.id}: unknown handle '${hId}'.`);
-              }
-              consumedHandles.add(hId);
-              sources.push({ entry: h, label: hId });
-            }
-          }
-          if (step.fromSymbol && step.fromAmount != null) {
-            const coin = resolveSymbol(map, step.fromSymbol);
-            if (!coin) {
-              throw new Error(
-                `Merge ${step.id}: unknown token '${step.fromSymbol}'.`
-              );
-            }
-            const raw = BigInt(
-              Math.floor(step.fromAmount * 10 ** coin.decimals)
-            );
-            const arg = tx.add(
-              coinWithBalance({ balance: raw, type: coin.coin_type })
-            ) as unknown as TransactionObjectArgument;
-            sources.push({
-              entry: {
-                arg,
-                symbol: step.fromSymbol.toUpperCase(),
-                coinType: coin.coin_type,
-                decimals: coin.decimals,
-                expectedHuman: step.fromAmount,
-              },
-              label: `balance:${step.fromSymbol.toUpperCase()}`,
-            });
-          }
-          if (sources.length < 2) {
-            throw new Error(
-              `Merge ${step.id}: needs at least 2 source coins (fromHandles + optional fromSymbol/fromAmount).`
-            );
-          }
-          // All sources must share coin type
-          const ct = canonicalCoinType(sources[0].entry.coinType);
-          for (const s of sources.slice(1)) {
-            if (canonicalCoinType(s.entry.coinType) !== ct) {
-              throw new Error(
-                `Merge ${step.id}: source coin types don't match — got ${sources[0].entry.symbol} and ${s.entry.symbol}. Can only merge same-token coins.`
-              );
-            }
-          }
-          const [dest, ...rest] = sources;
-          tx.mergeCoins(
-            dest.entry.arg,
-            rest.map((r) => r.entry.arg)
-          );
-          const totalHuman = sources.reduce(
-            (s, x) => s + x.entry.expectedHuman,
-            0
-          );
-          handles.set(step.id, {
-            arg: dest.entry.arg,
-            symbol: dest.entry.symbol,
-            coinType: dest.entry.coinType,
-            decimals: dest.entry.decimals,
-            expectedHuman: totalHuman,
-          });
-          resolved.push({
-            kind: "merge",
-            id: step.id,
-            symbol: dest.entry.symbol,
-            coinType: dest.entry.coinType,
-            decimals: dest.entry.decimals,
-            totalHuman,
-            sources: sources.map((s) => ({
-              label: s.label,
-              human: s.entry.expectedHuman,
-            })),
-          });
-          continue;
-        }
-
-        // For swaps drawing from balance, skip the pre-built coinWithBalance.
-        // 7K's buildTx will pull the input itself via getSplitCoinForTx and
-        // a stray coinWithBalance Result would either leak orphan or break
-        // the SDK's serialization (readUint8 errors).
-        const skipBalanceCoin = step.kind === "swap" && !step.fromHandle;
-        const origin = resolveOrigin(step, !skipBalanceCoin);
-
-        if (step.kind === "swap") {
-          if (!step.toSymbol) {
-            throw new Error(`Swap ${step.id}: missing toSymbol.`);
-          }
-          // Vault receipt tokens (ercUSD, eACRED, eUSDT, etc.) have no
-          // 7K route and trying to swap them produces opaque SDK errors.
-          // Reject up front with a clear hint.
-          if (vaultByReceipt.has(canonicalCoinType(origin.coinType))) {
-            throw new Error(
-              `Swap ${step.id}: ${origin.symbol} is a vault receipt token and cannot be swapped on Bluefin7K. Exit the vault via redeemFromVault first, then swap the underlying.`
-            );
-          }
-          const outCoin = resolveSymbol(map, step.toSymbol);
-          if (!outCoin) {
-            throw new Error(
-              `Swap ${step.id}: unknown destination token '${step.toSymbol}'.`
-            );
-          }
-          const slip = step.slippagePct ?? slippageRef.current;
-          const amountInRaw = BigInt(
-            Math.floor(origin.expectedHuman * 10 ** origin.decimals)
-          );
-          const quote = await getQuote({
-            tokenIn: origin.coinType,
-            tokenOut: outCoin.coin_type,
-            amountIn: amountInRaw.toString(),
-          });
-          const route = extractRoute(quote);
-          let impactPct = 0;
-          try {
-            const prices = await getTokenPrices([
-              origin.coinType,
-              outCoin.coin_type,
-            ]);
-            impactPct = computePriceImpactPct(
-              quote,
-              prices[origin.coinType] ?? 0,
-              prices[outCoin.coin_type] ?? 0,
-              origin.decimals,
-              outCoin.decimals
-            );
-          } catch (e) {
-            console.warn(`[plan] swap ${step.id} price impact failed`, e);
-          }
-          let built;
-          try {
-            built = await buildTx({
-              quoteResponse: quote,
-              accountAddress: acct.address,
-              slippage: slip / 100,
-              commission: {
-                partner: PARTNER_ADDRESS,
-                commissionBps: PARTNER_COMMISSION_BPS,
-              },
-              // Pass coinIn ONLY for chained swaps (fromHandle) — there
-              // the upstream Result must be consumed or it goes orphan.
-              // For balance-based swaps we let 7K pull from the sender's
-              // balance via its own getSplitCoinForTx; passing a stray
-              // coinIn there breaks SDK serialization.
-              extendTx: {
-                tx: tx as never,
-                coinIn: step.fromHandle ? origin.arg : undefined,
-              },
-            });
-          } catch (buildErr) {
-            const raw = (buildErr as Error).message ?? String(buildErr);
-            // 7K's SDK throws a confusing TypeError when the user's
-            // balance is short. Surface a cleaner message.
-            if (/insufficient balance/i.test(raw)) {
-              const m = raw.match(/Insufficient balance of ([^\s]+) for/i);
-              const coin = m?.[1] ?? origin.coinType;
-              const symbolGuess = coin.split("::").pop() ?? origin.symbol;
-              throw new Error(
-                `Swap ${step.id}: your wallet doesn't have enough ${symbolGuess} on-chain (refresh and re-check balances). 7K reported: ${raw}`
-              );
-            }
-            if (/readUint8 is not a function/i.test(raw)) {
-              throw new Error(
-                `Swap ${step.id}: 7K SDK couldn't build the transaction (likely insufficient balance or unsupported route for ${origin.symbol} → ${step.toSymbol}). Refresh balances and try again.`
-              );
-            }
-            throw new Error(`Swap ${step.id}: build failed — ${raw}`);
-          }
-          const toHuman =
-            Number(quote.returnAmountWithDecimal) / 10 ** outCoin.decimals;
-          handles.set(step.id, {
-            arg: built.coinOut as unknown as TransactionObjectArgument,
-            symbol: step.toSymbol.toUpperCase(),
-            coinType: outCoin.coin_type,
-            decimals: outCoin.decimals,
-            expectedHuman: toHuman,
-          });
-          const fromCoinMeta = resolveSymbol(map, origin.symbol);
-          resolved.push({
-            kind: "swap",
-            id: step.id,
-            fromSymbol: origin.symbol,
-            fromCoinType: origin.coinType,
-            fromDecimals: origin.decimals,
-            fromAmountHuman: origin.expectedHuman,
-            toSymbol: step.toSymbol.toUpperCase(),
-            toCoinType: outCoin.coin_type,
-            toDecimals: outCoin.decimals,
-            toAmountHuman: toHuman,
-            slippagePct: slip,
-            hops: route.hopCount,
-            dexes: route.dexes.map(dexLabel),
-            impactPct,
-            quote,
-            fromVerified: fromCoinMeta?.verified ?? false,
-            toVerified: outCoin.verified,
-            fromIcon: fromCoinMeta?.icon_url,
-            toIcon: outCoin.icon_url,
-          });
-        } else if (step.kind === "split") {
-          if (!step.portionsBps || step.portionsBps.length < 2) {
-            throw new Error(
-              `Split ${step.id}: portionsBps must have at least 2 entries.`
-            );
-          }
-          const bpsSum = step.portionsBps.reduce((s, b) => s + b, 0);
-          if (bpsSum !== 10000) {
-            throw new Error(
-              `Split ${step.id}: portionsBps must sum to 10000; got ${bpsSum}.`
-            );
-          }
-          const totalRaw = BigInt(
-            Math.floor(origin.expectedHuman * 10 ** origin.decimals)
-          );
-          const portionsRaw: bigint[] = [];
-          let runningSum = BigInt(0);
-          for (let i = 0; i < step.portionsBps.length; i++) {
-            if (i === step.portionsBps.length - 1) {
-              portionsRaw.push(totalRaw - runningSum);
-            } else {
-              const p =
-                (totalRaw * BigInt(step.portionsBps[i])) / BigInt(10000);
-              portionsRaw.push(p);
-              runningSum += p;
-            }
-          }
-          const splitArgs = portionsRaw.map((p) => tx.pure.u64(p));
-          // @mysten/sui v2 splitCoins returns a Result (indexable), not an array.
-          const splitResult = tx.splitCoins(origin.arg, splitArgs);
-          for (let i = 0; i < portionsRaw.length; i++) {
-            handles.set(`${step.id}.${i}`, {
-              arg: splitResult[i] as unknown as TransactionObjectArgument,
-              symbol: origin.symbol,
-              coinType: origin.coinType,
-              decimals: origin.decimals,
-              expectedHuman: Number(portionsRaw[i]) / 10 ** origin.decimals,
-            });
-          }
-          resolved.push({
-            kind: "split",
-            id: step.id,
-            sourceSymbol: origin.symbol,
-            sourceCoinType: origin.coinType,
-            sourceDecimals: origin.decimals,
-            totalHuman: origin.expectedHuman,
-            portions: step.portionsBps.map((bps, i) => ({
-              bps,
-              human: Number(portionsRaw[i]) / 10 ** origin.decimals,
-              raw: portionsRaw[i].toString(),
-            })),
-          });
-        } else if (step.kind === "deposit") {
-          if (!step.vaultId) {
-            throw new Error(`Deposit ${step.id}: missing vaultId.`);
-          }
-          if (!vaults || !deployment) {
-            throw new Error("Vaults / deployment data not available.");
-          }
-          const v = vaults.find((x) => x.id === step.vaultId);
-          if (!v) {
-            throw new Error(
-              `Deposit ${step.id}: unknown vault id '${step.vaultId}'.`
-            );
-          }
-          if (
-            canonicalCoinType(origin.coinType) !==
-            canonicalCoinType(v.depositCoinType)
-          ) {
-            throw new Error(
-              `Deposit ${step.id}: vault '${v.name}' expects ${v.depositSymbol} but the source coin is ${origin.symbol}. Insert a swap step that produces ${v.depositSymbol} first.`
-            );
-          }
-          const receiptCoinType =
-            v.receiptCoinType ||
-            deployment.vaultsByObjectId[v.objectId]?.receiptCoinType ||
-            "";
-          if (!receiptCoinType) {
-            throw new Error(
-              `Deposit ${step.id}: no receipt coin type for vault '${v.name}'.`
-            );
-          }
-          appendDepositCall({
-            tx,
-            gateway: {
-              packageId: deployment.packageId,
-              protocolConfigId: deployment.protocolConfigId,
-            },
-            vault: {
-              objectId: v.objectId,
-              depositCoinType: v.depositCoinType,
-              receiptCoinType,
-            },
-            coinArg: origin.arg,
-          });
-          resolved.push({
-            kind: "deposit",
-            id: step.id,
-            vault: v,
-            sourceSymbol: origin.symbol,
-            sourceCoinType: origin.coinType,
-            sourceDecimals: origin.decimals,
-            amountHuman: origin.expectedHuman,
-          });
-        } else if (step.kind === "redeemFromVault") {
-          if (!step.vaultId) {
-            throw new Error(`Redeem ${step.id}: missing vaultId.`);
-          }
-          if (!vaults || !deployment) {
-            throw new Error("Vaults / deployment data not available.");
-          }
-          const v = vaults.find((x) => x.id === step.vaultId);
-          if (!v) {
-            throw new Error(
-              `Redeem ${step.id}: unknown vault id '${step.vaultId}'.`
-            );
-          }
-          const receiptCoinType =
-            v.receiptCoinType ||
-            deployment.vaultsByObjectId[v.objectId]?.receiptCoinType ||
-            "";
-          if (!receiptCoinType) {
-            throw new Error(
-              `Redeem ${step.id}: no receipt coin type for vault '${v.name}'.`
-            );
-          }
-          if (
-            canonicalCoinType(origin.coinType) !==
-            canonicalCoinType(receiptCoinType)
-          ) {
-            throw new Error(
-              `Redeem ${step.id}: source coin (${
-                origin.symbol
-              }) doesn't match vault '${v.name}' receipt token (${
-                v.receiptCoinSymbol ?? "share"
-              }). Use fromSymbol="${
-                v.receiptCoinSymbol ?? "ercUSD"
-              }" for this redemption.`
-            );
-          }
-          appendRedeemCall({
-            tx,
-            gateway: {
-              packageId: deployment.packageId,
-              protocolConfigId: deployment.protocolConfigId,
-            },
-            vault: {
-              objectId: v.objectId,
-              depositCoinType: v.depositCoinType,
-              receiptCoinType,
-            },
-            sharesCoinArg: origin.arg,
-          });
-          resolved.push({
-            kind: "redeemFromVault",
-            id: step.id,
-            vault: v,
-            receiptSymbol: origin.symbol,
-            receiptCoinType: origin.coinType,
-            receiptDecimals: origin.decimals,
-            sharesHuman: origin.expectedHuman,
-          });
-        }
-      }
-
-      // Transfer any unconsumed coin handles to the sender. Without this a
-      // solo swap (or any branch whose terminal Result coin isn't deposited
-      // or redeemed) leaves an unused PTB Result and Sui rejects the tx
-      // with `UnusedValueWithoutDrop`.
-      const orphanArgs: TransactionObjectArgument[] = [];
-      for (const [id, entry] of handles) {
-        if (consumedHandles.has(id)) continue;
-        orphanArgs.push(entry.arg);
-      }
-      if (orphanArgs.length > 0) {
-        tx.transferObjects(orphanArgs, tx.pure.address(acct.address));
+      actionPlanCache.set(toolCall.toolCallId, cached);
+      if (silent) {
+        bumpRefresh((v) => v + 1);
+        return;
       }
 
       const depositSteps = resolved.filter(
@@ -1288,78 +690,6 @@ export function Conversation() {
       const cancelSteps = resolved.filter(
         (s): s is ResolvedCancelRedeemStep => s.kind === "cancelRedeemFromVault"
       );
-
-      const blendedApyPct =
-        depositSteps.length > 0
-          ? depositSteps.reduce((s, d) => s + d.vault.apyPct, 0) /
-            depositSteps.length
-          : 0;
-
-      // Real gas estimate via dryRun. Heuristic below is the fallback when
-      // dryRun fails (simulated insufficient balance, network blip, etc.).
-      // Skipped on silent rebuilds — gas varies negligibly with slippage
-      // and an extra tx.build() round-trip increases the chance of racing
-      // 7K's SDK on rapid slippage changes.
-      const heuristicGasSui =
-        0.012 +
-        0.004 * depositSteps.length +
-        0.006 * swapSteps.length +
-        0.004 * redeemSteps.length +
-        0.003 * cancelSteps.length;
-      let estimatedGasSui = heuristicGasSui;
-      if (!silent) {
-        try {
-          const client = suiClientRef.current;
-          const bytes = await tx.build({ client });
-          const dryRun = await client.dryRunTransactionBlock({
-            transactionBlock: bytes,
-          });
-          const gas = dryRun.effects?.gasUsed;
-          if (gas) {
-            const mist =
-              BigInt(gas.computationCost) +
-              BigInt(gas.storageCost) -
-              BigInt(gas.storageRebate);
-            // Floor at 0 — a net rebate would otherwise render as negative.
-            const sui = Math.max(0, Number(mist) / 1e9);
-            if (sui > 0 && Number.isFinite(sui)) estimatedGasSui = sui;
-          }
-        } catch (e) {
-          console.warn(
-            "[runExecutePlan] gas dryRun failed; falling back to heuristic",
-            e
-          );
-        }
-      } else {
-        // Preserve the previously-computed real gas if we have one — the
-        // heuristic is otherwise a step backward on rebuild.
-        const prev = actionPlanCache.get(toolCall.toolCallId);
-        if (prev && prev.summary.estimatedGasSui > 0) {
-          estimatedGasSui = prev.summary.estimatedGasSui;
-        }
-      }
-
-      const cached: CachedActionPlan = {
-        tx,
-        steps: resolved,
-        originalInput: steps,
-        summary: {
-          swapCount: swapSteps.length,
-          splitCount: splitSteps.length,
-          depositCount: depositSteps.length,
-          redeemCount: redeemSteps.length,
-          cancelCount: cancelSteps.length,
-          vaults: depositSteps.map((d) => d.vault),
-          blendedApyPct,
-          estimatedGasSui,
-        },
-        fetchedAt: Date.now(),
-      };
-      actionPlanCache.set(toolCall.toolCallId, cached);
-      if (silent) {
-        bumpRefresh((v) => v + 1);
-        return;
-      }
 
       // Minimal summary back to the model — keeps prompt tokens tight.
       const output = {
@@ -1395,8 +725,16 @@ export function Conversation() {
           toAmount: Number(s.toAmountHuman.toFixed(6)),
           impactPct: Number((s.impactPct ?? 0).toFixed(3)),
           hops: s.hops,
+          aggregator: providerLabel(s.provider),
+          rateImprovementPct:
+            s.rateImprovementPct !== undefined
+              ? Number(s.rateImprovementPct.toFixed(3))
+              : undefined,
+          comparedAggregator: s.comparedProvider
+            ? providerLabel(s.comparedProvider)
+            : undefined,
         })),
-        blendedApyPct: Number(blendedApyPct.toFixed(3)),
+        blendedApyPct: Number(summary.blendedApyPct.toFixed(3)),
       };
       await addResult({
         tool: "executePlan",
@@ -1479,20 +817,26 @@ export function Conversation() {
       const signed = await signAndExecute({
         transaction: cached.tx as unknown as Transaction,
       });
+      const signedTx =
+        signed.$kind === "Transaction"
+          ? signed.Transaction
+          : signed.FailedTransaction;
       setPlanSigning(false);
       setPlanConfirming(true);
-      setPlanTxDigest(signed.digest);
+      setPlanTxDigest(signedTx.digest);
 
       try {
-        const finalized = await suiClientRef.current.waitForTransaction({
-          digest: signed.digest,
-          options: { showEffects: true, showBalanceChanges: true },
-          timeout: 30_000,
+        const finalized = await suiClientRef.current.core.waitForTransaction({
+          digest: signedTx.digest,
+          include: { effects: true, balanceChanges: true },
         });
-        const status = finalized.effects?.status?.status;
-        if (status === "success") {
+        const finTx =
+          finalized.$kind === "Transaction"
+            ? finalized.Transaction
+            : finalized.FailedTransaction;
+        if (finTx.status.success) {
           setPlanTxStatus("success");
-          const gas = finalized.effects?.gasUsed;
+          const gas = finTx.effects?.gasUsed;
           if (gas) {
             const mist =
               BigInt(gas.computationCost) +
@@ -1512,14 +856,12 @@ export function Conversation() {
               ? canonicalCoinType(d.vault.receiptCoinType)
               : undefined;
             if (!receiptType) return 0;
-            const change = finalized.balanceChanges?.find((b) => {
-              const owner = b.owner as { AddressOwner?: string };
-              return (
-                owner?.AddressOwner === acct.address &&
+            const change = finTx.balanceChanges?.find(
+              (b) =>
+                b.address === acct.address &&
                 canonicalCoinType(b.coinType) === receiptType &&
                 BigInt(b.amount) > BigInt(0)
-              );
-            });
+            );
             if (!change) return 0;
             return (
               Number(BigInt(change.amount)) / 10 ** d.vault.depositDecimals
@@ -1528,8 +870,13 @@ export function Conversation() {
           setPlanReceivedShares(sharesPerDeposit);
         } else {
           setPlanTxStatus("failure");
+          const err = finTx.status.success ? null : finTx.status.error;
           setPlanTxError(
-            finalized.effects?.status?.error || "Deposit failed on chain."
+            (typeof err === "string"
+              ? err
+              : err
+              ? JSON.stringify(err)
+              : null) || "Deposit failed on chain."
           );
         }
       } catch (waitErr) {
@@ -1637,104 +984,114 @@ export function Conversation() {
 
   return (
     <CinematicShell mode="dim">
-      <StickToBottom
-        className="flex-1 overflow-y-auto pt-16"
-        resize="smooth"
-        initial="smooth"
-      >
-        <StickToBottom.Content className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3">
-          {messages.map((m, i) => {
-            const isLastAssistant = i === lastAssistantIdx;
-            return (
-              <AgentMessage
-                key={m.id}
-                message={m}
-                isStreaming={isStreaming && isLastAssistant}
-                canRegenerate={isLastAssistant && !isStreaming}
-                onRegenerate={() => regenerate()}
-                planAction={{
-                  activePlanId,
-                  latestPlanId: latestPlanToolCallId,
-                  slippagePct,
-                  signing: planSigning,
-                  confirming: planConfirming,
-                  executed: planExecuted,
-                  txDigest: planTxDigest,
-                  txStatus: planTxStatus,
-                  txError: planTxError,
-                  gasUsedSui: planGasSui,
-                  receivedShares: planReceivedShares,
-                  walletConnected: !!account,
-                  iconLookup,
-                  onConfirm: handleConfirmPlan,
-                  onCancel: handleCancelPlan,
-                  onSlippageChange: handleSlippageChange,
-                  onRefresh: handlePlanRefresh,
-                }}
-              />
-            );
-          })}
-
-          {/* Thinking pill — staggered glowing dot wave, no text */}
-          {status === "submitted" && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="surface-card inline-flex items-center gap-1.5 self-start px-4 py-2.5 rounded-button"
-              role="status"
-              aria-label="Sprout is thinking"
+      <div className="flex h-dvh flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={stick.scrollRef}
+            className="min-h-0 flex-1 overflow-y-auto pt-16"
+          >
+            <div
+              ref={stick.contentRef}
+              className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
             >
-              {[0, 0.15, 0.3].map((delay) => (
-                <motion.span
-                  key={delay}
-                  className="inline-block size-1.5 bg-deliver-green rounded-full"
-                  animate={{
-                    scale: [0.6, 1, 0.6],
-                    y: [0, -3, 0],
+              {messages.map((m, i) => {
+                const isLastAssistant = i === lastAssistantIdx;
+                return (
+                  <AgentMessage
+                    key={m.id}
+                    message={m}
+                    isStreaming={isStreaming && isLastAssistant}
+                    canRegenerate={isLastAssistant && !isStreaming}
+                    onRegenerate={() => regenerate()}
+                    planAction={{
+                      activePlanId,
+                      latestPlanId: latestPlanToolCallId,
+                      slippagePct,
+                      signing: planSigning,
+                      confirming: planConfirming,
+                      executed: planExecuted,
+                      txDigest: planTxDigest,
+                      txStatus: planTxStatus,
+                      txError: planTxError,
+                      gasUsedSui: planGasSui,
+                      receivedShares: planReceivedShares,
+                      walletConnected: !!account,
+                      iconLookup,
+                      onConfirm: handleConfirmPlan,
+                      onCancel: handleCancelPlan,
+                      onSlippageChange: handleSlippageChange,
+                      onRefresh: handlePlanRefresh,
+                    }}
+                  />
+                );
+              })}
+
+              {/* Thinking pill — gooey liquid blob */}
+              {status === "submitted" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="surface-card inline-flex items-center self-start px-3 py-2 rounded-button"
+                  role="status"
+                  aria-label="Sprout is thinking"
+                >
+                  <LiquidBlob size={22} />
+                </motion.div>
+              )}
+
+              {signError && (
+                <ErrorBanner
+                  message={signError}
+                  coinMap={coinMap}
+                  onAskAgent={(prompt) => {
+                    setSignError(null);
+                    sendMessage({ text: prompt });
                   }}
-                  transition={{
-                    duration: 1.2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay,
-                  }}
+                  onDismiss={() => setSignError(null)}
                 />
-              ))}
-            </motion.div>
-          )}
+              )}
 
-          {signError && (
-            <ErrorBanner
-              message={signError}
-              coinMap={coinMap}
-              onAskAgent={(prompt) => {
-                setSignError(null);
-                sendMessage({ text: prompt });
-              }}
-              onDismiss={() => setSignError(null)}
-            />
-          )}
-
-          {error && (
-            <div className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive rounded-[18px]">
-              {error.message}
+              {error && (
+                <div className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive rounded-[18px]">
+                  {error.message}
+                </div>
+              )}
             </div>
-          )}
-        </StickToBottom.Content>
-      </StickToBottom>
+          </div>
 
-      <div className="shrink-0">
-        <div className="mx-auto w-full max-w-3xl px-6 py-4">
-          <ChatInput
-            value={draft}
-            onChange={setDraft}
-            onSubmit={() => submit(draft)}
-            disabled={isStreaming}
-            placeholder={
-              isStreaming ? "Sprout is thinking…" : "Tell me a swap or a goal…"
-            }
-            recentMessages={recentForAutocomplete}
-          />
+          <AnimatePresence>
+            {stick.escapedFromLock && !stick.isAtBottom && (
+              <motion.button
+                type="button"
+                initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                transition={SPRING_BOUNCY}
+                onClick={() => stick.scrollToBottom()}
+                aria-label="Scroll to bottom"
+                className="absolute bottom-3 left-1/2 z-10 inline-flex size-9 -translate-x-1/2 items-center justify-center surface-card text-muted-ash shadow-header transition-colors hover:text-midnight-ink rounded-full"
+              >
+                <ChevronDown className="size-4" strokeWidth={2.4} />
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="shrink-0">
+          <div className="mx-auto w-full max-w-3xl px-6 py-4">
+            <ChatInput
+              value={draft}
+              onChange={setDraft}
+              onSubmit={() => submit(draft)}
+              disabled={isStreaming}
+              placeholder={
+                isStreaming
+                  ? "Sprout is thinking…"
+                  : "Tell me a swap or a goal…"
+              }
+              recentMessages={recentForAutocomplete}
+            />
+          </div>
         </div>
       </div>
     </CinematicShell>

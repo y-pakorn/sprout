@@ -5,6 +5,9 @@
 // Guardian as an "unfamiliar venue" risk.
 
 const TRUSTED_DEXES = new Set<string>([
+  // 7K Meta Aggregator provider slugs (we route through these aggregators).
+  "bluefin7k",
+  "okx",
   "cetus",
   "cetus_dlmm",
   "aftermath",
