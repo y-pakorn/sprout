@@ -12,6 +12,7 @@ import {
 } from "@/lib/client-coins";
 import { fetchVaults, fetchDeployment } from "@/lib/client-vaults";
 import type { SuiVault } from "@/lib/vaults";
+import { fetchAllBalances, type CoreClientLike } from "@/lib/grpc-balances";
 import { loadVaultReceiptIndex } from "@/lib/vault-receipt-index";
 import {
   appendDepositCall,
@@ -88,6 +89,18 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
     ? await loadVaultReceiptIndex()
     : new Map<string, never>();
 
+  // Live raw balances — only fetched when a step draws by percentage, so we
+  // can resolve `fromPercent` to an EXACT u64 from on-chain state (no float
+  // round-trip, hence no dust / no overshoot past the wallet balance).
+  const needsBalances = steps.some((s) => s.fromPercent != null);
+  const balanceByType = new Map<string, bigint>();
+  if (needsBalances) {
+    const all = await fetchAllBalances(client as unknown as CoreClientLike, sender);
+    for (const b of all) {
+      balanceByType.set(canonicalCoinType(b.coinType), BigInt(b.totalBalance));
+    }
+  }
+
   const tx = new SuiTransaction();
   tx.setSender(sender);
 
@@ -97,7 +110,28 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
     coinType: string;
     decimals: number;
     expectedHuman: number;
+    /** Exact raw u64 to draw from the wallet for balance-funded origins.
+     *  Set for `fromAmount`/`fromPercent` draws; absent for chained handles. */
+    rawAmount?: bigint;
   };
+
+  /** Exact raw u64 a balance-funded step should draw — percent (from the live
+   *  balance) takes precedence over a fixed human `fromAmount`. */
+  function drawRaw(step: RawStep, coinType: string, decimals: number): bigint {
+    if (step.fromPercent != null) {
+      const balRaw = balanceByType.get(canonicalCoinType(coinType)) ?? BigInt(0);
+      // percent → bps (×100) so fractional percents (e.g. 33.33) survive.
+      const bps = BigInt(Math.round(step.fromPercent * 100));
+      const raw = (balRaw * bps) / BigInt(10000);
+      if (raw <= BigInt(0)) {
+        throw new Error(
+          `Step ${step.id}: wallet holds no ${step.fromSymbol ?? coinType} to draw ${step.fromPercent}% from.`
+        );
+      }
+      return raw;
+    }
+    return BigInt(Math.floor((step.fromAmount ?? 0) * 10 ** decimals));
+  }
   const handles = new Map<string, HandleEntry>();
   // Handle ids consumed by a downstream step. Any handle NOT in this set
   // by the end of the steps walk is a Result coin that nothing took
@@ -125,13 +159,18 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
       consumedHandles.add(step.fromHandle);
       return h;
     }
-    if (!step.fromSymbol || step.fromAmount == null) {
+    if (
+      !step.fromSymbol ||
+      (step.fromAmount == null && step.fromPercent == null)
+    ) {
       throw new Error(
-        `Step ${step.id}: missing origin — provide either fromHandle or fromSymbol+fromAmount.`
+        `Step ${step.id}: missing origin — provide fromHandle, fromSymbol+fromAmount, or fromSymbol+fromPercent.`
       );
     }
     const coin = resolveSymbol(map, step.fromSymbol);
     if (coin) {
+      const raw = drawRaw(step, coin.coin_type, coin.decimals);
+      const expectedHuman = Number(raw) / 10 ** coin.decimals;
       if (!addCoinToTx) {
         // Metadata-only: 7K's buildTx will pull from sender balance.
         return {
@@ -139,10 +178,10 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           symbol: step.fromSymbol.toUpperCase(),
           coinType: coin.coin_type,
           decimals: coin.decimals,
-          expectedHuman: step.fromAmount,
+          expectedHuman,
+          rawAmount: raw,
         };
       }
-      const raw = BigInt(Math.floor(step.fromAmount * 10 ** coin.decimals));
       const arg = tx.add(
         coinWithBalance({ balance: raw, type: coin.coin_type })
       ) as unknown as TransactionObjectArgument;
@@ -151,7 +190,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         symbol: step.fromSymbol.toUpperCase(),
         coinType: coin.coin_type,
         decimals: coin.decimals,
-        expectedHuman: step.fromAmount,
+        expectedHuman,
+        rawAmount: raw,
       };
     }
     // Fall back: receipt coin (vault share token) symbol lookup. Receipt
@@ -164,6 +204,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
       if (sym !== wantSym) continue;
       const entry = vaultByReceipt.get(ct) as { shareDecimals: number };
       const decimals = entry.shareDecimals;
+      const raw = drawRaw(step, ct, decimals);
+      const expectedHuman = Number(raw) / 10 ** decimals;
       if (!addCoinToTx) {
         // Metadata-only (balance-based swap): 7K's buildTx pulls the
         // receipt coin from the sender — adding our own coinWithBalance
@@ -173,10 +215,10 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           symbol: wantSym,
           coinType: ct,
           decimals,
-          expectedHuman: step.fromAmount,
+          expectedHuman,
+          rawAmount: raw,
         };
       }
-      const raw = BigInt(Math.floor(step.fromAmount * 10 ** decimals));
       const arg = tx.add(
         coinWithBalance({ balance: raw, type: ct, useGasCoin: false })
       ) as unknown as TransactionObjectArgument;
@@ -185,7 +227,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         symbol: wantSym,
         coinType: ct,
         decimals,
-        expectedHuman: step.fromAmount,
+        expectedHuman,
+        rawAmount: raw,
       };
     }
     throw new Error(
@@ -424,9 +467,11 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         );
       }
       const slip = step.slippagePct ?? slippagePct;
-      const amountInRaw = BigInt(
-        Math.floor(origin.expectedHuman * 10 ** origin.decimals)
-      );
+      // Prefer the origin's exact raw draw (percent/amount) over a float
+      // round-trip so the quoted amount matches the coin we actually source.
+      const amountInRaw =
+        origin.rawAmount ??
+        BigInt(Math.floor(origin.expectedHuman * 10 ** origin.decimals));
 
       // Quote across all composable aggregators via the 7K Meta
       // Aggregator and take the best output.
@@ -536,9 +581,9 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           `Split ${step.id}: portionsBps must sum to 10000; got ${bpsSum}.`
         );
       }
-      const totalRaw = BigInt(
-        Math.floor(origin.expectedHuman * 10 ** origin.decimals)
-      );
+      const totalRaw =
+        origin.rawAmount ??
+        BigInt(Math.floor(origin.expectedHuman * 10 ** origin.decimals));
       const portionsRaw: bigint[] = [];
       let runningSum = BigInt(0);
       for (let i = 0; i < step.portionsBps.length; i++) {

@@ -2,6 +2,18 @@
 // number renders identically wherever it appears. Pure functions, no React.
 
 /**
+ * Truncate (floor) a positive amount to `dp` decimal places. Unlike
+ * `toFixed`, this never rounds UP — so a balance reported to the agent or user
+ * can never read higher than the real on-chain amount, which would otherwise
+ * let a "swap everything" plan request more than the wallet holds.
+ */
+export function floorToDecimals(n: number, dp = 6): number {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const f = 10 ** dp;
+  return Math.floor(n * f) / f;
+}
+
+/**
  * USD formatter.
  * • ≥1: locale-grouped with 2 decimals (or 0 in `compact` mode).
  * • 0.01–1: fixed 2 decimals (`$0.04`).

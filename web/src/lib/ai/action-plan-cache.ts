@@ -136,6 +136,10 @@ export type RawStep = {
   fromHandles?: string[];
   fromSymbol?: string;
   fromAmount?: number;
+  /** Draw this percent (0–100) of the wallet's `fromSymbol` balance instead of
+   *  a fixed `fromAmount`. Resolved to an exact raw amount from the live
+   *  on-chain balance at build time — 100 = entire balance, no rounding dust. */
+  fromPercent?: number;
   toSymbol?: string;
   slippagePct?: number;
   portionsBps?: number[];

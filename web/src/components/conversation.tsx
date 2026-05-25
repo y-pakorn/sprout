@@ -44,6 +44,7 @@ import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
 import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
+import { floorToDecimals } from "@/lib/format";
 import type { VaultPosition } from "@/components/parts/wallet-card";
 import {
   loadVaultReceiptIndex,
@@ -293,7 +294,7 @@ export function Conversation() {
         toolCallId: toolCall.toolCallId,
         output: {
           symbol: symbol.toUpperCase(),
-          balance: Number(human.toFixed(6)),
+          balance: floorToDecimals(human),
           decimals,
           coinType: coin.coin_type,
           priceUsd,
@@ -372,7 +373,7 @@ export function Conversation() {
           const human = Number(b.totalBalance) / 10 ** decimals;
           return {
             symbol: known?.symbol ?? b.coinType.split("::").pop() ?? "?",
-            balance: Number(human.toFixed(6)),
+            balance: floorToDecimals(human),
             // Use the canonical type so the icon lookup (also canonicalized
             // via the same coin map) hits.
             coinType: canonType,
