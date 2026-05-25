@@ -18,8 +18,8 @@ importers:
         specifier: ^1.4.1
         version: 1.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@bluefin-exchange/bluefin7k-aggregator-sdk':
-        specifier: ^6.0.0
-        version: 6.0.0(@mysten/sui@2.16.3(typescript@5.9.3))(@pythnetwork/pyth-sui-js@2.4.0(axios@1.13.6)(typescript@5.9.3))
+        specifier: ^7.2.0
+        version: 7.2.0(@mysten/sui@2.16.3(typescript@5.9.3))(@pythnetwork/pyth-sui-js@2.4.0(axios@1.13.6)(typescript@5.9.3))
       '@cetusprotocol/aggregator-sdk':
         specifier: ^1.5.4
         version: 1.5.4(axios@1.13.6)(typescript@5.9.3)
@@ -329,8 +329,8 @@ packages:
       '@mysten/sui': ^1.44.0
       '@pythnetwork/pyth-sui-js': ^2.1.0
 
-  '@bluefin-exchange/bluefin7k-aggregator-sdk@6.0.0':
-    resolution: {integrity: sha512-qolRBtRn4HTqUR7afOZIgXpEdLwdCXS1R24ZrFgICC16Cg0lGL1vR4H2zg8u6uFs5yeLx/dg2rch9RXRlSbMWw==}
+  '@bluefin-exchange/bluefin7k-aggregator-sdk@7.2.0':
+    resolution: {integrity: sha512-oSvo6srVe4x2Q1YceOoYg4FEu77bGDcue2n65bsUTHGwxBChhUmHETKQbNY09tHU/V0Nnddbgv457hmnwG9TYw==}
     engines: {node: '>=24'}
     peerDependencies:
       '@mysten/sui': ^2.0.0
@@ -4643,7 +4643,7 @@ snapshots:
       uuid: 13.0.2
     optional: true
 
-  '@bluefin-exchange/bluefin7k-aggregator-sdk@6.0.0(@mysten/sui@2.16.3(typescript@5.9.3))(@pythnetwork/pyth-sui-js@2.4.0(axios@1.13.6)(typescript@5.9.3))':
+  '@bluefin-exchange/bluefin7k-aggregator-sdk@7.2.0(@mysten/sui@2.16.3(typescript@5.9.3))(@pythnetwork/pyth-sui-js@2.4.0(axios@1.13.6)(typescript@5.9.3))':
     dependencies:
       '@mysten/sui': 2.16.3(typescript@5.9.3)
       '@pythnetwork/pyth-sui-js': 2.4.0(axios@1.13.6)(typescript@5.9.3)
