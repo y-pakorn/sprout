@@ -1,255 +1,160 @@
 # Design — Sprout Style Reference
 
-> Cinematic, garden-coded fintech. Live grass-and-sky video underneath, frosted liquid glass on top, lime carries the brand. The page feels like a window into a calm field — not a dashboard.
-
-**Theme:** dark cinematic primary. Every page sits inside a video-backed shell with a glass header; only the landing hero shows the bg at full brightness, every other surface dims and blurs it so cards and text stay legible. Workspace (canvas-white) tokens still exist — they're reserved for dialogs and dense data.
-
-The aesthetic balances **rounded warmth** (pill buttons, soft glass cards, generous radii) with **typographic confidence** (big tight-tracked white headlines on dimmed grass). Color and shape do the work. Lime is the action color and never the background tone — it would camouflage against the grass.
+> Adapted from the **Amplemarket** design language (refero style `95cac053-2b53-48c4-a5cb-06ee08df9c7a`, amplemarket.com). This doc reproduces the refero guideline as the source of truth, then records how Sprout applies it (see **How Sprout applies it**).
 
 ---
 
-## Cinematic mode (primary)
+## Overview (refero)
 
-### Background
-
-A single full-viewport `<video>` element with `playbackRate = 1.25`, mouse-driven parallax via `motion/react`'s `useSpring`. The video lives in `web/src/components/parts/hero-video-bg.tsx` with two modes:
-
-| Mode      | When to use                          | Visual                                                                                                  |
-| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `bright`  | Landing hero only (`/` idle state)   | Full color, 1.08× scale, ±20px parallax. Light top scrim + heavy bottom scrim.                          |
-| `dim`     | Every other page + chat-in-progress  | `filter: blur(6px) brightness(0.55) saturate(115%)`, ±12px parallax. Full-viewport `rgba(8,12,16,0.62)` overlay so cards read clean. |
-
-Every page should wrap its content in `<CinematicShell mode="dim">` (`web/src/components/parts/cinematic-shell.tsx`). The shell mounts the video + glass header + a positioned z-20 content slot.
-
-### Liquid glass
-
-Custom utility `.liquid-glass` in `web/src/app/globals.css`. Frosted background with a sliver gradient border via `::before`.
-
-```css
-.liquid-glass {
-  background: rgba(255,255,255,0.06);
-  backdrop-filter: blur(14px) saturate(140%);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,0.1);
-  /* + gradient hairline */
-}
-```
-
-Use it for:
-- Header nav pill
-- Chip groups (example prompts, status pills)
-- Card shells over dim cinematic bg
-- User chat bubbles
-- Wallet connect button when on cinematic chrome
-
-Don't nest `.liquid-glass` inside another `.liquid-glass` — double-blur looks muddy.
-
-### Headline typography
-
-Two-line headline pair: line 1 white medium, line 2 white medium (same weight — opacity-only contrast fails on variable bg). Always include layered text-shadow so legibility survives the grass→sky transition:
-
-```ts
-textShadow: "0 2px 24px rgba(0,0,0,0.25)"
-```
-
-Font: CashSans, `clamp(40px, 5.4vw, 72px)`, `letter-spacing: -0.025em`, `leading: 1.05`. Centered.
-
-### Tone variants on components
-
-Components that ship with `tone` or `variant` props:
-
-| Component         | Prop            | Glass mode                                                    |
-| ----------------- | --------------- | ------------------------------------------------------------- |
-| `SiteHeader`      | `variant="glass"` | Transparent header, wordmark only (no lime square), glass nav pill, glass wallet pill |
-| `WalletButton`    | `tone="glass"`  | Glass pill, white text, "Connect" CTA replaces "Connect wallet" |
-| `ExamplePrompts`  | `tone="glass"`  | Opaque white pills with subtle ring (kept light for legibility — chips are CTAs) |
-| `LegRow`          | `tone="glass"`  | White primary text, white/55 secondary, lime APY accent       |
-
-### Scrims
-
-Cinematic content needs scrims, not vignettes. Top scrim anchors the header; bottom scrim anchors hero content over busy grass. Tokens:
-
-```css
---scrim-top: linear-gradient(180deg, rgba(8,16,12,0.55) 0%, rgba(0,0,0,0) 100%);
---scrim-bottom: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 100%);
-```
-
-### Readability rules
-
-- **Never use opacity-only contrast** on cinematic bg. `text-white/55` reads on a clean dark surface, but disappears against bright grass. Bump opacity AND add `text-shadow`, or switch to a darker scrim region.
-- **Hero text always uses layered shadow.** A single tight shadow handles sharp edges; a wider halo separates from variable backdrops.
-- **Lime is reserved for actions + positive deltas.** Never a large surface against grass — it camouflages. Use Cash Lime for: chat-input submit button, CTA pills, "Earning APY" stat, +yield text.
-- **Vault badges and brand marks stay opaque.** Sprout corner badges over photos use `bg-cash-lime text-midnight-black` — high-contrast micro chips.
+**Theme: light.** "Subtle dynamism on a crisp canvas." A high-tech platform aesthetic using a predominantly neutral palette punctuated by dynamic, soft-edged gradients. Strong, clean typography; subtle layered surface treatments; sparse, vibrant background accents that suggest energy and movement. Interactive elements are clearly defined, contrasting crisp type against dark fills or light backgrounds. The overall impression: restrained power and sophisticated utility.
 
 ---
 
-## Workspace mode (secondary)
+## Colors (refero)
 
-Canvas-white + Cloud Gray cards. Use for:
+| Name | Value | Token | Role |
+| --- | --- | --- | --- |
+| Midnight Ink | `#111111` | `--color-midnight-ink` | Primary text, icon fills, dominant backgrounds on dark sections, heavy borders |
+| Canvas | `#f6f5f3` | `--color-canvas` | **Page base (L0)** — the warm off-white the whole app sits on |
+| Canvas White | `#ffffff` | `--color-canvas-white` | **Cards (L1)** + text on dark sections; brighter than the page so cards pop |
+| Surface Charcoal | `#272625` | `--color-surface-charcoal` | Elevated card / input backgrounds (dark) |
+| Muted Ash | `#6d6c6b` | `--color-muted-ash` | Secondary text, subtle borders, inactive states |
+| Whisper Gray | `#f4f3ef` | `--color-whisper-gray` | Subtle background panels, light hover states |
+| Light Taupe | `#ecebea` | `--color-light-taupe` | Ghost-button backgrounds, subtle surface variations |
+| Deep Indigo | `#10054d` | `--color-deep-indigo` | Distinct element coloring, primary button text on light backgrounds |
+| Midnight Violet | `#2e2460` | `--color-midnight-violet` | Violet state accent for badges/validation; **do not promote to primary CTA color** |
+| Phoenix Orange | `#e8400d` | `--color-phoenix-orange` | Decorative gradient/background accent (warm) |
+| Cyan Glow | `#99fff9` | `--color-cyan-glow` | Decorative gradient/background accent (cool) |
+| Petal Pink / Mint Green / Canary Yellow / Subtle Lavender | `#ffd7f0` / `#b7efb2` / `#ffef99` / `#e2ddfd` | — | Soft accent cards, decorative background elements |
 
-- **Dialogs / modals** (`vault-info-dialog` etc.) — focused workspace where readability trumps cinematic feel.
-- **Markdown tables** inside agent replies — fall back to workspace when the cinematic glass can't carry the density.
-- **Receipts / completed transactions** — confirmation surfaces that need to feel grounded.
+**Pillar accents** — refero defines these as washes / "supporting accent, **not** a status color," for small functional accents (icons or tags related to their category):
 
-All workspace surfaces should sit *inside* a cinematic shell, not replace it. The page stays cinematic; the workspace surface is a card.
+| Name | Value | Token |
+| --- | --- | --- |
+| Engagement Gold | `#fbc768` | `--color-engagement-gold` |
+| LeadGen Red | `#e16540` | `--color-lead-gen-red` |
+| Intelligence Blue | `#328efa` | `--color-intelligence-blue` |
+| Deliver Green | `#47d096` | `--color-deliver-green` |
 
----
-
-## Tokens — Colors
-
-| Name           | Value     | Token                    | Role                                                                             |
-| -------------- | --------- | ------------------------ | -------------------------------------------------------------------------------- |
-| Cash Lime      | `#00D54F` | `--color-cash-lime`      | Action accent, positive yield, brand glyph. Never a large surface against grass. |
-| Midnight Black | `#000000` | `--color-midnight-black` | Text on lime fills, sprout badge glyph, workspace text                           |
-| Canvas White   | `#FFFFFF` | `--color-canvas-white`   | Primary text on cinematic, primary background for workspace mode                 |
-| Cloud Gray     | `#F4F4F5` | `--color-cloud-gray`     | Workspace card fill (dialogs only)                                               |
-| Subtle Gray    | `#858585` | `--color-subtle-gray`    | Workspace secondary text                                                         |
-| Hinting Gray   | `#B3B3B3` | `--color-hinting-gray`   | Workspace placeholder text                                                       |
-| Ghost Border   | `#E5E7EB` | `--color-ghost-border`   | Workspace outlines                                                               |
-
-Add: `--color-canvas-glass: rgba(255,255,255,0.06)` for glass surfaces.
-
----
-
-## Tokens — Typography
-
-### CashSans
-
-Bundled as `font.ttf` and loaded via `next/font/local` (variable `--font-brand`). Weights 400/500/700. Letter spacing -0.015em globally, -0.025em on display sizes.
-
-### Type Scale
-
-| Role     | Size                  | Line Height | Token            |
-| -------- | --------------------- | ----------- | ---------------- |
-| caption  | 12px                  | 1.5         | `--text-caption` |
-| body-sm  | 14px                  | 1.5         | `--text-body-sm` |
-| body     | 16px                  | 1.5         | `--text-body`    |
-| body-lg  | 20px                  | 1.5         | `--text-body-lg` |
-| title    | 32px                  | 1.2         | `--text-title`   |
-| subhead  | 48px                  | 1.1         | `--text-subhead` |
-| hero     | `clamp(56, 9vw, 96)`  | 1.0         | `--text-hero`    |
-| display  | `clamp(64, 12vw, 120)`| 0.95        | `--text-display` |
-
-### Hero shadows
-
-`--shadow-hero-text: 0 1px 2px rgba(0,0,0,0.35), 0 4px 32px rgba(0,0,0,0.55)`
+**Quick reference:** text `#111111` · background `#ffffff` · border `#11111114` (Midnight Ink @ 8%). No distinct saturated CTA color — primary actions use the dark Midnight Ink fill.
 
 ---
 
-## Tokens — Shape & Spacing
+## Typography (refero)
 
-**Base unit:** 4px. **Density:** comfortable.
+**Labil Grotesk Variable** (substitute: **Inter**). The variable font fine-tunes expression across headers and body; distinct letter-spacing creates a sharp, intentional rhythm.
 
-### Radii
+- **Weights available:** 400, 500, 700, 900.
+- **Letter-spacing rule:** larger sizes (≥20px) use **negative** tracking; small body text (12/14px) uses **positive** tracking for readability.
+- **Tracking by size:** -0.05em@84 · -0.04em@56 · -0.03em@44 · -0.02em@36 · -0.017em@28 · -0.011em@24 · -0.01em@20 · normal@16 · +0.025em@14 · +0.03em@12.
 
-| Element          | Value     | Token              |
-| ---------------- | --------- | ------------------ |
-| pill (buttons)   | `9999px`  | `--radius-pill`    |
-| logo mark        | `14px`    | `--radius-mark`    |
-| card             | `24px`    | `--radius-card`    |
-| card-lg          | `32px`    | `--radius-card-lg` |
-| image            | `28px`    | `--radius-image`   |
+### Type scale (refero)
 
-Glass cards default to `--radius-card` (24px). Inner rows: 18px.
-
-### Spacing
-
-4–24 scale (4px base). Section gap 96–128px on cinematic landing; 32–48 on dense in-app surfaces.
-
----
-
-## Components
-
-### Site header (`web/src/components/site-header.tsx`)
-
-- `variant="glass"` — cinematic chrome on every page. Wordmark (Sprout glyph + "Sprout TM"), nav pill in `.liquid-glass`, glass wallet pill on the right.
-- `variant="solid"` — workspace fallback, rare. Canvas-white bar with Cloud Gray active pill.
-
-### Chat input (`web/src/components/chat-input.tsx`)
-
-White pill, ALWAYS. It's the anchor — the single focal action on cinematic pages. No focus ring on the cinematic page (it draws too hard against grass); the bg switch from `bg-cloud-gray` → `bg-canvas-white` on focus is enough.
-
-### Example prompts (`web/src/components/example-prompts.tsx`)
-
-Pill chips. Two tones:
-- `default` — Cloud Gray fill, midnight text (workspace).
-- `glass` — opaque white pills with subtle ring (cinematic). Kept light because they're CTAs; full glass would dissolve.
-
-### Conversation surfaces (`web/src/components/conversation.tsx`)
-
-- **Idle (`messages.length === 0`)**: `<CinematicShell mode="bright">` with centered hero text + chat input + glass example chips.
-- **Chat-in-progress**: `<CinematicShell mode="dim">` with scrolling messages on top of dimmed bg. Chat input pill stays at the bottom.
-
-### Cards (parts/*.tsx)
-
-All major cards (`live-vault-card`, `vault-balance-card`, `wallet-card`, `balance-card`) use `.liquid-glass` outer shell with inner rows on `.liquid-glass` at 18px radius. Text white primary, white/55 secondary, lime accent for APY/yield positive.
-
-### Agent message (`web/src/components/agent-message.tsx`)
-
-- **User bubble**: `.liquid-glass`, white text, 16px radius. Right-aligned.
-- **Assistant text**: white markdown body. Inline code on `bg-white/10`. Links underlined with lime decoration.
-
-### Plan card (`web/src/components/parts/live-vault-card.tsx`)
-
-Numbered step rows on glass shell. Vault name + APY chip as hero. APY in white tabular-nums. Hover chevron on deposit rows.
-
-### Vault balance card
-
-Tabbed (Positions / Pending / Activity). Tab pill uses `.liquid-glass` with active tab `bg-midnight-black text-canvas-white`.
-
-### Portfolio page (`web/src/app/portfolio/page.tsx`)
-
-Cinematic dim shell. Hero: centered "$X" total in display-tight white. Stats: glass card with lime accent for Net Worth. Sections: glass card outer, dividers `divide-white/8`.
+| Role | Size | Line height | Tracking |
+| --- | --- | --- | --- |
+| caption | 10px | 1.0 | +0.3px |
+| body | 14px | 1.3 | +0.25px |
+| subheading | 20px | 1.1 | -0.2px |
+| heading-sm | 24px | 1.1 | -0.26px |
+| heading | 28px | 1.1 | -0.48px |
+| heading-lg | 44px | 1.1 | -1.32px |
+| display | 56px | 1.0 | -2.24px |
 
 ---
 
-## Do's / Don'ts
+## Border radius (refero)
+
+| Element | Value |
+| --- | --- |
+| cards | 12px |
+| icons | 12px |
+| badges | 12px |
+| images | 12px |
+| inputs | 12px |
+| **buttons / nav** | **8px** |
+
+Refero rule: "Apply 12px to most containers (cards, inputs, selected interactive elements); reserve 8px for primary buttons and nav. Do not vary border radius arbitrarily."
+
+---
+
+## Shadows (refero) — three only; subtle + diluted
+
+| Name | Value | Token |
+| --- | --- | --- |
+| Card – Elevated Light | `rgba(17,17,17,.02) 0 -6px 6px 0, rgba(17,17,17,.01) 0 -23px 9px 0` | `--shadow-card` |
+| Header / Floating Elements | `rgba(17,17,17,.05) 0 0 1px 0, rgba(17,17,17,.04) 1px 1px 1px 0, rgba(17,17,17,.03) 2px 3px 2px 0, rgba(17,17,17,.01) 4px 4px 2px 0` | `--shadow-header` |
+| Button / Interactive Element | `rgba(17,17,17,.04) 0 1px 2px 0, rgba(17,17,17,.04) 0 4px 8px 0` | `--shadow-button` |
+
+Refero rule: "Do not add heavy or opaque shadows; elevation should be subtle, diluted rgba(17,17,17,.02–.05)."
+
+---
+
+## Spacing & surfaces (refero)
+
+- **8px base unit.** Element gap 8px · card padding 20px · section gap 56px.
+- **Surfaces / elevation (Sprout model):**
+  - **L0 page** = Canvas `#f6f5f3` (`--color-canvas`) — the off-white base + hero gradient.
+  - **L1 card** = Canvas White `#ffffff` (`.surface-card`, + hairline ring + card shadow) — the first layer; *pops above* the page.
+  - **L2 recess** = Whisper Gray `#f4f3ef` (`.surface-panel`) — a subtle recessed sub-area **only when nested inside a white card**.
+  - **Rule: never place a gray surface directly on the page.** Top-level surfaces (chat input, chips, tool rows, cards) are white. Gray is recess-inside-white only. (Surface Charcoal `#272625` = dark inline badges/inputs, rare.)
+
+---
+
+## Component recipes (refero)
+
+- **Primary Filled Button – Dark** (CTA): Midnight Ink bg, Canvas White text, 8px radius, padding 12×16, weight 500.
+- **Default Button – Light** (secondary): Canvas White bg, Deep Indigo text, 8px radius, padding 12×16, weight 500.
+- **Ghost Button** (tertiary / nav): transparent, Muted Ash text (Canvas White on dark), 8px radius, no border, padding 12×16 (or 6×14 small).
+- **Card – Elevated Light:** Canvas White bg, subtle Card shadow, 12px radius, 20px padding.
+- **Card – Client Logo:** Whisper Gray bg, no shadow, 12px radius, padding 16×20.
+- **Card – Accent Colored:** Petal Pink / Mint / Canary / Lavender bg, no shadow, 12px radius.
+- **Input Field – Light:** Canvas White bg, Midnight Ink text, `rgba(17,17,17,.08)` border, 12px radius, padding 0×16.
+- **Input Field – Dark:** Midnight Violet bg, Canvas White text, `rgba(255,255,255,.08)` border, 12px radius.
+- **Navigation Link:** ghost styling, Muted Ash text, padding 6×14.
+- **Info Badge – Inline:** Surface Charcoal bg, Canvas White text, 12px radius, padding 8×10, 12px font.
+
+---
+
+## Imagery & layout (refero)
+
+- **Background:** a **faithful WebGL port of Amplemarket's `home-hero` shader** (`parts/gradient-field.tsx`) — 3 metaball blobs (additive exclusion blend) in **the app's accent palette**: Intelligence Blue `#328efa` (pointer-tracked), Deliver Green `#47d096` + Engagement Gold `#fbc768` (slow time animation), read straight from the `--color-*` accent tokens. In-shader film grain; colors passed 0–255 (shader ÷255). Transparent canvas over `#f6f5f3`; the wash is **confined to a contained bottom-right glow in the fragment shader** (alpha fades by distance from a corner anchor — tune `mc` + the `smoothstep` there) so most of the page reads as clean `#f6f5f3`.
+- **Icons:** outlined, lightweight, mono-color (Midnight Ink or Canvas White).
+- **Layout:** max-width contained, centered; full-bleed hero over a diffused gradient; sticky top nav with subtle elevation; generous vertical rhythm.
+
+---
+
+## Do / Don't (refero)
 
 **Do**
-- Wrap every page in `<CinematicShell mode="dim">` (or `mode="bright"` for the landing hero).
-- Layer shadows on hero text — never rely on opacity for contrast.
-- Use lime for actions + positive deltas only.
-- Use `.liquid-glass` for shells and chips; let videos and dimming carry depth.
-- Use `cn()` (`@/lib/utils`) for all conditional class logic — never raw template literals.
+- Negative tracking on text ≥20px; positive on 12/14px body.
+- Prioritize Canvas White backgrounds + Midnight Ink text (high contrast).
+- 12px radius on most containers; 8px on buttons/nav.
+- Intersperse soft-edged radial gradient washes for dynamism.
+- Whisper Gray for feature / logo cards.
+- 8px element gap, 20px card padding, 56px section gap.
+- Use pillar accents (Gold/Red/Blue/Green) for small functional accents (icons, tags).
 
 **Don't**
-- Use `text-white/40` or `text-white/55` for important content on cinematic bg. Variable backgrounds eat low-opacity text.
-- Apply lime as a large surface against grass — it camouflages.
-- Nest `.liquid-glass` inside another `.liquid-glass`.
-- Add sharp-cornered cards. Min radius is 14px (logo mark); rows are 18px; cards 24px.
-- Reach for new font families. CashSans is the only typeface.
+- Bright saturated colors for large backgrounds (only soft gradients).
+- Generic system fonts — always Labil Grotesk Variable.
+- Heavy/opaque shadows — keep diluted (.02–.05).
+- Arbitrary border radii — 12 containers / 8 buttons only.
+- Default browser-blue links — links are Midnight Ink (or Canvas White on dark).
+- Outline buttons for primary CTAs — use the solid dark fill.
+- Cluttered spacing — keep comfortable breathing room.
 
 ---
 
-## Quick start
+## How Sprout applies it
 
-`web/src/app/globals.css` defines the theme as Tailwind v4 `@theme` tokens plus the `.liquid-glass` utility. Both modes share the same color palette — cinematic just composes them differently.
+The refero guideline above is the source of truth. Sprout's intentional adaptations:
 
-Minimum cinematic page:
-
-```tsx
-import { CinematicShell } from "@/components/parts/cinematic-shell";
-
-export default function Page() {
-  return (
-    <CinematicShell mode="dim">
-      <main className="mx-auto max-w-3xl px-6 pb-24 pt-28">
-        <h1
-          className="display-tight text-canvas-white font-medium"
-          style={{
-            fontSize: "clamp(40px, 5.4vw, 72px)",
-            textShadow: "0 2px 24px rgba(0,0,0,0.25)",
-          }}
-        >
-          Yield without friction.
-        </h1>
-        <div
-          className="liquid-glass p-6 mt-8"
-          style={{ borderRadius: 24 }}
-        >
-          {/* glass card content here, white text */}
-        </div>
-      </main>
-    </CinematicShell>
-  );
-}
-```
+- **Tokens** live in `web/src/app/globals.css` (`@theme`). All colors/radii/shadows are CSS variables; **use Tailwind classes + `cn()`, never inline `style` for design tokens** (inline allowed only for runtime-dynamic values — element size from props, hashed avatar colors, `--wash-opacity`, sparkline geometry).
+- **Radius classes:** `rounded-card` (12, default for cards/inputs/badges/chips/dialogs/images), `rounded-button` (8, buttons + nav), `rounded-full` (genuine circles only — avatars, status dots, icon disks). The shadcn scale resolves `rounded-md/lg/xl` → 12.
+- **Shadow classes:** `shadow-card`, `shadow-header` (dialogs / menus / sticky header / floating), `shadow-button` (inputs / interactive). No other shadows.
+- **Font weights used: 400 (default) + 500 (`font-medium`, most emphasis) + 600 (`font-semibold`, rare key accents only).** We do **not** use 700/900 — `font-bold` is banned. Even the largest hero headlines render at medium weight.
+- **Deliver Green `#47d096` is promoted to the yield/positive status accent** (APY chips, "earning", success ticks/disks, share-price sparkline). Contrast rule: use it as fills/washes/dots/strokes — never small green body text. On a solid green badge, text is Midnight Ink; tinted chips (`bg-deliver-green/15`) use Midnight Ink text. Large APY numerals are Midnight Ink. Gold = warning/pending, LeadGen Red = error/destructive.
+- **Background:** the WebGL `<GradientField>` (`parts/gradient-field.tsx`), mounted once in `cinematic-chrome.tsx`. `<CinematicShell mode>` sets intensity (`bright` = landing hero, `dim` = calm in-app). Paused offscreen via IntersectionObserver; frozen under `prefers-reduced-motion`. Page base `#f6f5f3` shows before it mounts.
+- **Surfaces (elevation):** page `#f6f5f3` (L0) → `.surface-card` white card (L1, pops) → `.surface-panel` whisper-gray recess (L2, nested-in-white only). **Never a gray surface directly on the page** — top-level = white. `.surface-charcoal` for rare dark badges/inputs.
+- **Reusable atoms** (`web/src/components/ui/`): `Surface`-less utilities plus `SproutBadge`, `StatusDisk` (tone green/gold/red/neutral, wash or solid), `Tag` (tone neutral/green/gold/red/violet chip), `PillButton` (variant primary/secondary/ghost). Reuse these — don't re-implement the markup.
+- **Monospace** (`--font-mono`, Sometype Mono) is kept only for hex addresses / tx digests / tabular figures — a functional carve-out, not part of the Amplemarket brand voice.
