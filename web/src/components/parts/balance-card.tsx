@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Sprout } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
+import { SproutBadge } from "@/components/ui/sprout-badge";
 import type { VaultPosition } from "@/components/parts/wallet-card";
 import { fmtAmount, fmtPct, fmtUsd, fmtPriceUsd } from "@/lib/format";
 
@@ -39,11 +39,7 @@ export function BalanceCard({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-        className="inline-flex items-center gap-3 liquid-glass px-4 py-3"
-        style={{
-          borderRadius: 24,
-          boxShadow: "inset 0 0 0 1.5px var(--color-cash-lime, #00d54f)",
-        }}
+        className="inline-flex items-center gap-3 bg-canvas-white rounded-card px-4 py-3 ring-[1.5px] ring-inset ring-deliver-green"
       >
         <div className="relative shrink-0">
           <AssetIcon
@@ -51,26 +47,21 @@ export function BalanceCard({
             label={vaultPosition.vaultName}
             size={36}
           />
-          <span
-            className="absolute -bottom-1 -right-1 inline-flex size-4 items-center justify-center bg-cash-lime text-midnight-black"
-            style={{ borderRadius: 9999 }}
-          >
-            <Sprout className="size-2.5" strokeWidth={2.6} />
-          </span>
+          <SproutBadge />
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-caption font-medium text-canvas-white/55">
+          <span className="text-caption font-medium text-muted-ash">
             Vault position · {vaultPosition.depositSymbol} ·{" "}
             {fmtPct(vaultPosition.apyPct)} APY
           </span>
-          <span className="text-body-sm font-semibold text-canvas-white">
+          <span className="text-body-sm font-medium text-midnight-ink">
             {vaultPosition.vaultName}
           </span>
-          <span className="text-body-lg font-semibold leading-none text-canvas-white tabular-nums">
+          <span className="text-body-lg font-medium leading-none text-midnight-ink tabular-nums">
             {hasVaultValue ? fmtUsd(valueUsd!) : `${fmtAmount(balance)} shares`}
           </span>
           {hasVaultValue && (
-            <span className="text-caption font-medium tabular-nums text-canvas-white/55">
+            <span className="text-caption font-medium tabular-nums text-muted-ash">
               {fmtAmount(balance)} shares
             </span>
           )}
@@ -91,20 +82,19 @@ export function BalanceCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="inline-flex items-center gap-3 liquid-glass px-4 py-3"
-      style={{ borderRadius: 24 }}
+      className="inline-flex items-center gap-3 surface-card px-4 py-3 rounded-card"
     >
       <AssetIcon src={iconUrl} label={symbol} size={36} />
       <div className="flex flex-col leading-tight">
-        <span className="text-caption font-medium text-canvas-white/55">
+        <span className="text-caption font-medium text-muted-ash">
           {symbol} balance
           {hasPrice ? ` · ${fmtPriceUsd(priceUsd!)}` : ""}
         </span>
-        <span className="text-body-lg font-semibold text-canvas-white tabular-nums">
+        <span className="text-body-lg font-medium text-midnight-ink tabular-nums">
           {fmtAmount(balance)}
         </span>
         {hasValue && (
-          <span className="text-caption font-medium tabular-nums text-canvas-white/55">
+          <span className="text-caption font-medium tabular-nums text-muted-ash">
             {fmtUsd(valueUsd!)}
           </span>
         )}

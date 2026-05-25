@@ -78,8 +78,7 @@ export function AgentMessage({
         className="flex justify-end"
       >
         <div
-          className="liquid-glass max-w-[80%] px-3.5 py-2 text-body-sm text-canvas-white"
-          style={{ borderRadius: 16 }}
+          className="max-w-[80%] bg-midnight-ink px-3.5 py-2 text-body-sm text-canvas-white rounded-card"
         >
           {message.parts
             .filter((p) => p.type === "text")
@@ -118,7 +117,7 @@ export function AgentMessage({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="prose-sprout text-body text-canvas-white"
+              className="prose-sprout text-body text-midnight-ink"
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -132,13 +131,13 @@ export function AgentMessage({
                       href={href}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-canvas-white underline underline-offset-2 decoration-cash-lime decoration-2"
+                      className="font-medium text-midnight-ink underline underline-offset-2 decoration-midnight-ink decoration-2"
                     >
                       {children}
                     </a>
                   ),
                   code: ({ children }) => (
-                    <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-canvas-white">
+                    <code className="rounded-md bg-whisper-gray px-1.5 py-0.5 font-mono text-[0.85em] text-midnight-ink">
                       {children}
                     </code>
                   ),
@@ -153,8 +152,7 @@ export function AgentMessage({
                   // style cleanly as a fallback so they don't look broken.
                   table: ({ children }) => (
                     <div
-                      className="my-3 overflow-hidden bg-cloud-gray"
-                      style={{ borderRadius: 18 }}
+                      className="my-3 overflow-hidden bg-whisper-gray ring-1 ring-hairline rounded-card"
                     >
                       <table className="w-full border-collapse text-body-sm">
                         {children}
@@ -162,7 +160,7 @@ export function AgentMessage({
                     </div>
                   ),
                   thead: ({ children }) => (
-                    <thead className="bg-cloud-gray text-caption font-medium uppercase tracking-wide text-subtle-gray">
+                    <thead className="bg-whisper-gray text-caption font-medium uppercase tracking-wide text-muted-ash">
                       {children}
                     </thead>
                   ),
@@ -170,7 +168,7 @@ export function AgentMessage({
                     <tbody className="bg-canvas-white">{children}</tbody>
                   ),
                   tr: ({ children }) => (
-                    <tr className="border-b border-ghost-border/60 last:border-b-0">
+                    <tr className="border-b border-hairline last:border-b-0">
                       {children}
                     </tr>
                   ),
@@ -616,14 +614,13 @@ function VaultListCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="liquid-glass p-2"
-      style={{ borderRadius: 18, maxWidth: 520 }}
+      className="surface-card p-2 rounded-card max-w-[520px]"
     >
       <div className="flex items-center justify-between px-2 pt-1 pb-2">
-        <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+        <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
           {filteredSymbol ? `${filteredSymbol} vaults` : "Top vaults by APY"}
         </span>
-        <span className="text-caption text-canvas-white/55">
+        <span className="text-caption text-muted-ash">
           {vaults.length} option{vaults.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -633,15 +630,14 @@ function VaultListCard({
             <button
               type="button"
               onClick={() => setOpenVaultId(v.id)}
-              className={cn(
+              className={cn("rounded-card", 
                 "group relative flex w-full cursor-pointer items-center gap-2.5 overflow-hidden px-3 py-2 text-left",
-                "bg-white/[0.04]",
+                "bg-whisper-gray",
                 "transition-[background-color,box-shadow,transform] duration-200 ease-out",
-                "hover:bg-white/[0.12] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]",
-                "active:translate-y-px active:bg-white/[0.16]",
-                "focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_rgba(192,228,77,0.65)]",
+                "hover:bg-light-taupe",
+                "active:translate-y-px",
+                "focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-midnight-ink)]",
               )}
-              style={{ borderRadius: 14 }}
             >
               <AssetIcon
                 src={v.logoUrl ?? iconLookup(v.depositCoinType)}
@@ -650,17 +646,16 @@ function VaultListCard({
               />
               <div className="flex min-w-0 flex-1 flex-col leading-tight">
                 <div className="flex items-center gap-1.5">
-                  <span className="truncate text-body-sm font-semibold text-canvas-white">
+                  <span className="truncate text-body-sm font-medium text-midnight-ink">
                     {v.name}
                   </span>
                   <span
-                    className="inline-flex shrink-0 items-center bg-white/10 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider text-canvas-white/80"
-                    style={{ borderRadius: 9999 }}
+                    className="inline-flex shrink-0 items-center bg-midnight-ink/[0.06] px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-muted-ash rounded-[6px]"
                   >
                     {v.depositSymbol}
                   </span>
                 </div>
-                <span className="truncate text-caption text-canvas-white/55">
+                <span className="truncate text-caption text-muted-ash">
                   {v.category}
                   {v.withdrawalPeriodDays
                     ? ` · ${v.withdrawalPeriodDays}d lockup`
@@ -668,10 +663,10 @@ function VaultListCard({
                 </span>
               </div>
               <div className="flex flex-col items-end leading-tight">
-                <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+                <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
                   {v.apyPct.toFixed(2)}%
                 </span>
-                <span className="text-caption text-canvas-white/55 tabular-nums">
+                <span className="text-caption text-muted-ash tabular-nums">
                   {v.tvlUsd >= 1_000_000
                     ? `$${(v.tvlUsd / 1_000_000).toFixed(1)}M`
                     : v.tvlUsd >= 1_000

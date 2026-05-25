@@ -14,8 +14,8 @@ const PROTOCOL_SLUGS: Record<string, string> = {
 
 /**
  * Brand-ish color seed for the letter fallback. Stable per-name.
+ * Dark/neutral tones with white initials — reads cleanly on canvas-white.
  */
-// Non-green palette only — cash-lime is the single accent reserved for the brand.
 const FALLBACK_PALETTE = [
   "#0b0b0f", // black
   "#1f3a8a", // navy

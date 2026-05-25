@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { cn } from "@/lib/utils";
 
 export type SparkPoint = {
   timestamp: number;
@@ -60,7 +59,7 @@ export function Sparkline({
   secondary,
   width = 280,
   height = 64,
-  color = "var(--color-cash-lime, #00d54f)",
+  color = "var(--color-deliver-green, #47d096)",
   baseline,
   variant = "line",
   format,
@@ -90,8 +89,8 @@ export function Sparkline({
   if (points.length === 0) {
     return (
       <div
-        className="w-full bg-canvas-white"
-        style={{ height, borderRadius: 10 }}
+        className="w-full bg-canvas-white rounded-[10px]"
+        style={{ height }}
       />
     );
   }
@@ -151,7 +150,7 @@ export function Sparkline({
             y1={baselineY}
             y2={baselineY}
             stroke="currentColor"
-            className="text-hinting-gray"
+            className="text-muted-ash"
             strokeWidth={1}
             strokeDasharray="3 3"
             opacity={0.6}
@@ -214,7 +213,7 @@ export function Sparkline({
               y1={PAD}
               y2={height - PAD}
               stroke="currentColor"
-              className="text-hinting-gray"
+              className="text-muted-ash"
               strokeWidth={1}
               opacity={0.4}
             />
@@ -232,19 +231,13 @@ export function Sparkline({
 
       {hoverPoint && hoverPct !== null && (
         <div
-          className={cn(
-            "pointer-events-none absolute top-0 z-10 -translate-x-1/2 -translate-y-full bg-midnight-black px-2 py-1 text-[10px] font-medium text-canvas-white",
-          )}
-          style={{
-            left: `${hoverPct}%`,
-            borderRadius: 6,
-            whiteSpace: "nowrap",
-          }}
+          className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-[6px] bg-midnight-ink px-2 py-1 text-[10px] font-medium text-canvas-white"
+          style={{ left: `${hoverPct}%` }}
         >
           <span className="tabular-nums">
             {format ? format(hoverPoint.value) : hoverPoint.value.toFixed(2)}
           </span>
-          <span className="ml-1.5 text-hinting-gray">
+          <span className="ml-1.5 text-muted-ash">
             {fmtDate(hoverPoint.timestamp)}
           </span>
         </div>

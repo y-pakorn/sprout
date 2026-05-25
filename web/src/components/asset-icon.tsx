@@ -22,16 +22,8 @@ export function AssetIcon({ src, label, size = 40 }: Props) {
     return (
       <div
         aria-hidden
-        className="inline-flex shrink-0 items-center justify-center text-canvas-white"
-        style={{
-          width: size,
-          height: size,
-          borderRadius: 14,
-          background: fallbackBg(label),
-          fontSize: Math.max(11, size * 0.36),
-          fontWeight: 600,
-          letterSpacing: "-0.015em",
-        }}
+        className="inline-flex shrink-0 items-center justify-center text-midnight-ink rounded-card text-[Math.max(11,size*0.36)] font-semibold tracking-[-0.015em]"
+        style={{ width: size, height: size, background: fallbackBg(label) }}
       >
         {initials(label)}
       </div>
@@ -47,8 +39,7 @@ export function AssetIcon({ src, label, size = 40 }: Props) {
       height={size}
       loading="lazy"
       onError={() => setErrored(true)}
-      className="shrink-0 object-cover"
-      style={{ borderRadius: 14 }}
+      className="shrink-0 object-cover rounded-card"
     />
   );
 }

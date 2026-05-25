@@ -48,8 +48,7 @@ export function ThinkingTrail({ text, streaming }: Props) {
       <button
         type="button"
         onClick={toggle}
-        className="inline-flex items-center gap-2 liquid-glass pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55 transition-opacity hover:opacity-70"
-        style={{ borderRadius: 9999 }}
+        className="inline-flex items-center gap-2 surface-card pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-muted-ash transition-opacity hover:opacity-70 rounded-button"
       >
         {streaming ? (
           <motion.span
@@ -59,11 +58,10 @@ export function ThinkingTrail({ text, streaming }: Props) {
               repeat: Infinity,
               ease: "easeInOut",
             }}
-            className="inline-block size-1.5 bg-cash-lime"
-            style={{ borderRadius: 9999 }}
+            className="inline-block size-1.5 bg-deliver-green rounded-full"
           />
         ) : (
-          <Sparkles className="size-3 text-cash-lime" strokeWidth={2.4} />
+          <Sparkles className="size-3 text-deliver-green" strokeWidth={2.4} />
         )}
         {streaming ? "Thinking…" : "Reasoning"}
         <motion.span
@@ -83,7 +81,7 @@ export function ThinkingTrail({ text, streaming }: Props) {
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <pre className="whitespace-pre-wrap break-words border-l-2 border-cash-lime/40 liquid-glass/50 px-4 py-3 font-mono text-body-sm leading-relaxed text-canvas-white/55">
+            <pre className="whitespace-pre-wrap break-words border-l-2 border-hairline surface-card px-4 py-3 font-mono text-body-sm leading-relaxed text-muted-ash">
               {text || (streaming ? "…" : "")}
             </pre>
           </motion.div>

@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Sprout } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
+import { SproutBadge } from "@/components/ui/sprout-badge";
 import { truncateCoinType } from "@/lib/client-coins";
 import { fmtAmount, fmtPct, fmtUsd, fmtPriceUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -57,8 +57,7 @@ export function WalletCard({ balances, iconLookup }: Props) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="liquid-glass px-5 py-4 text-body-sm text-canvas-white/55"
-        style={{ borderRadius: 24 }}
+        className="surface-card px-5 py-4 text-body-sm text-muted-ash rounded-card"
       >
         Wallet is empty — no token balances found.
       </motion.div>
@@ -80,19 +79,18 @@ export function WalletCard({ balances, iconLookup }: Props) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.35, bounce: 0.18 }}
-      className="liquid-glass p-2"
-      style={{ borderRadius: 24, maxWidth: 460 }}
+      className="surface-card p-2 rounded-card max-w-[460px]"
     >
       <div className="flex items-end justify-between gap-3 px-3 pt-3 pb-3">
         <div className="flex flex-col leading-tight">
-          <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+          <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
             Your wallet · {tokens.length} token
             {tokens.length === 1 ? "" : "s"}
             {positions.length > 0 &&
               ` · ${positions.length} vault position${positions.length === 1 ? "" : "s"}`}
           </span>
           {hasAnyValue && (
-            <span className="text-display-sm font-semibold tabular-nums text-canvas-white">
+            <span className="text-display-sm font-medium tabular-nums text-midnight-ink">
               {fmtUsd(totalUsd)}
             </span>
           )}
@@ -136,7 +134,7 @@ export function WalletCard({ balances, iconLookup }: Props) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-3 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-canvas-white/55">
+    <div className="px-3 pt-1 pb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-ash">
       {children}
     </div>
   );
@@ -159,10 +157,9 @@ function VaultPositionRow({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.2 }}
-      className={cn(
-        "flex items-center gap-3 liquid-glass px-3 py-2.5",
+      className={cn("rounded-card", 
+        "flex items-center gap-3 surface-panel px-3 py-2.5",
       )}
-      style={{ borderRadius: 18 }}
     >
       <div className="relative shrink-0">
         <AssetIcon
@@ -170,26 +167,21 @@ function VaultPositionRow({
           label={v.vaultName}
           size={32}
         />
-        <span
-          className="absolute -bottom-1 -right-1 inline-flex size-4 items-center justify-center bg-cash-lime text-midnight-black"
-          style={{ borderRadius: 9999 }}
-        >
-          <Sprout className="size-2.5" strokeWidth={2.6} />
-        </span>
+        <SproutBadge />
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body-sm font-semibold leading-tight text-canvas-white">
+        <span className="truncate text-body-sm font-medium leading-tight text-midnight-ink">
           {v.vaultName}
         </span>
-        <span className="truncate text-caption leading-tight text-canvas-white/55">
+        <span className="truncate text-caption leading-tight text-muted-ash">
           Vault position · {v.depositSymbol} · {fmtPct(v.apyPct)} APY
         </span>
       </div>
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
           {hasValue ? fmtUsd(b.valueUsd!) : fmtAmount(b.balance)}
         </span>
-        <span className="text-caption tabular-nums text-canvas-white/55">
+        <span className="text-caption tabular-nums text-muted-ash">
           {fmtAmount(b.balance)} shares
         </span>
       </div>
@@ -217,15 +209,14 @@ function TokenRow({
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.2 }}
-      className="flex items-center gap-3 liquid-glass px-3 py-2.5"
-      style={{ borderRadius: 18 }}
+      className="flex items-center gap-3 surface-panel px-3 py-2.5 rounded-card"
     >
       <AssetIcon src={iconLookup(b.coinType)} label={b.symbol} size={32} />
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="truncate text-body-sm font-semibold text-canvas-white">
+        <span className="truncate text-body-sm font-medium text-midnight-ink">
           {b.symbol}
         </span>
-        <span className="truncate text-caption text-canvas-white/55">
+        <span className="truncate text-caption text-muted-ash">
           {hasPrice && fmtPriceUsd(b.priceUsd!)}
           {hasPrice && !b.known ? " · " : ""}
           {!b.known && (
@@ -235,10 +226,10 @@ function TokenRow({
         </span>
       </div>
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
           {hasValue ? fmtUsd(b.valueUsd!) : fmtAmount(b.balance)}
         </span>
-        <span className="text-caption tabular-nums text-canvas-white/55">
+        <span className="text-caption tabular-nums text-muted-ash">
           {fmtAmount(b.balance)} {b.symbol}
         </span>
       </div>

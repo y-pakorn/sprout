@@ -82,7 +82,7 @@ export function ErrorBanner({
         title={`Not enough ${symbol}`}
         body={`This plan needs more ${symbol} than your wallet has on hand.`}
       >
-        <dl className="grid grid-cols-3 gap-2 text-caption text-canvas-white/55">
+        <dl className="grid grid-cols-3 gap-2 text-caption text-muted-ash">
           <Row label="Required" value={`${fmtAmount(required)} ${symbol}`} />
           <Row label="You have" value={`${fmtAmount(available)} ${symbol}`} />
           <Row
@@ -144,30 +144,28 @@ function BannerShell({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.25, bounce: 0.2 }}
-      className={cn(
+      className={cn("rounded-card", 
         "space-y-2.5 p-4",
         tone === "warn" && "bg-warning/15",
         tone === "error" && "bg-destructive/12",
       )}
-      style={{ borderRadius: 18 }}
     >
       <div className="flex items-start gap-2.5">
         <span
-          className={cn(
+          className={cn("rounded-[10px]", 
             "inline-flex size-7 shrink-0 items-center justify-center",
-            tone === "warn" && "bg-warning text-midnight-black",
+            tone === "warn" && "bg-warning text-midnight-ink",
             tone === "error" && "bg-destructive text-canvas-white",
           )}
-          style={{ borderRadius: 10 }}
         >
           {icon}
         </span>
         <div className="flex-1 space-y-0.5 pt-0.5">
-          <div className="text-body-sm font-semibold leading-tight text-canvas-white">
+          <div className="text-body-sm font-medium leading-tight text-midnight-ink">
             {title}
           </div>
           {body && (
-            <div className="text-body-sm text-canvas-white/55">{body}</div>
+            <div className="text-body-sm text-muted-ash">{body}</div>
           )}
         </div>
       </div>
@@ -187,16 +185,15 @@ function Row({
 }) {
   return (
     <div
-      className="space-y-0 liquid-glass px-3 py-2"
-      style={{ borderRadius: 12 }}
+      className="space-y-0 surface-panel px-3 py-2 rounded-card"
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
         {label}
       </div>
       <div
         className={cn(
-          "text-body-sm font-semibold tabular-nums",
-          emphasized ? "text-canvas-white" : "text-canvas-white",
+          "text-body-sm font-medium tabular-nums",
+          emphasized ? "text-midnight-ink" : "text-midnight-ink",
         )}
       >
         {value}
@@ -224,14 +221,13 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-3.5 py-1.5 text-body-sm font-semibold transition-transform",
+      className={cn("rounded-button", 
+        "inline-flex items-center gap-1.5 px-3.5 py-1.5 text-body-sm font-medium transition-transform",
         "hover:scale-[1.03] active:scale-[0.97]",
         primary
-          ? "bg-cash-lime text-midnight-black"
-          : "liquid-glass text-canvas-white",
+          ? "bg-midnight-ink text-canvas-white"
+          : "surface-panel text-midnight-ink",
       )}
-      style={{ borderRadius: 9999 }}
     >
       {icon}
       {children}

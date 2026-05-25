@@ -84,7 +84,7 @@ export function VaultInfoDialog({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  className="fixed inset-0 z-40 bg-midnight-black/30 backdrop-blur-sm"
+                  className="fixed inset-0 z-40 bg-midnight-ink/30 backdrop-blur-sm"
                 />
               }
             />
@@ -99,8 +99,7 @@ export function VaultInfoDialog({
                     visualDuration: 0.25,
                     bounce: 0.15,
                   }}
-                  className="fixed left-1/2 top-1/2 z-50 flex w-[92vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden bg-canvas-white"
-                  style={{ borderRadius: 24, maxHeight: "90vh" }}
+                  className="fixed left-1/2 top-1/2 z-50 flex w-[92vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden bg-canvas-white rounded-card max-h-[90vh]"
                 />
               }
             >
@@ -114,13 +113,12 @@ export function VaultInfoDialog({
                   size={40}
                 />
                 <div className="min-w-0 flex-1">
-                  <Dialog.Title className="text-body-lg font-semibold leading-tight text-midnight-black">
+                  <Dialog.Title className="text-body-lg font-medium leading-tight text-midnight-ink">
                     {vault.name}
                   </Dialog.Title>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-caption text-subtle-gray">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-caption text-muted-ash">
                     <span
-                      className="bg-cloud-gray px-2 py-0.5 font-medium"
-                      style={{ borderRadius: 9999 }}
+                      className="bg-whisper-gray px-2 py-0.5 font-medium rounded-card"
                     >
                       {vault.category}
                     </span>
@@ -141,8 +139,7 @@ export function VaultInfoDialog({
                     <button
                       type="button"
                       aria-label="Close"
-                      className="inline-flex size-7 items-center justify-center text-subtle-gray transition-colors hover:bg-cloud-gray hover:text-midnight-black"
-                      style={{ borderRadius: 9999 }}
+                      className="inline-flex size-7 items-center justify-center text-muted-ash transition-colors hover:bg-whisper-gray hover:text-midnight-ink rounded-full"
                     >
                       <X className="size-4" strokeWidth={2.4} />
                     </button>
@@ -177,9 +174,9 @@ export function VaultInfoDialog({
                 title="APY history"
                 right={
                   apyAvg30 != null && (
-                    <span className="text-caption text-subtle-gray">
+                    <span className="text-caption text-muted-ash">
                       30d avg{" "}
-                      <span className="font-semibold text-midnight-black tabular-nums">
+                      <span className="font-medium text-midnight-ink tabular-nums">
                         {fmtPct(apyAvg30)}
                       </span>
                     </span>
@@ -274,7 +271,7 @@ export function VaultInfoDialog({
               {/* Strategy + transparency */}
               {strategyExplainer && (
                 <Section title="Strategy">
-                  <div className="prose-sprout text-body-sm text-subtle-gray">
+                  <div className="prose-sprout text-body-sm text-muted-ash">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -282,7 +279,7 @@ export function VaultInfoDialog({
                           <p className="m-0 mb-1.5">{children}</p>
                         ),
                         strong: ({ children }) => (
-                          <strong className="font-semibold text-midnight-black">
+                          <strong className="font-medium text-midnight-ink">
                             {children}
                           </strong>
                         ),
@@ -297,13 +294,13 @@ export function VaultInfoDialog({
               {/* Withdrawal terms */}
               {vault.withdrawalPeriodDays !== undefined && (
                 <Section title="Withdrawal terms">
-                  <div className="prose-sprout text-body-sm text-subtle-gray">
+                  <div className="prose-sprout text-body-sm text-muted-ash">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         p: ({ children }) => <p className="m-0">{children}</p>,
                         strong: ({ children }) => (
-                          <strong className="font-semibold text-midnight-black">
+                          <strong className="font-medium text-midnight-ink">
                             {children}
                           </strong>
                         ),
@@ -317,13 +314,13 @@ export function VaultInfoDialog({
 
               {/* Transparency */}
               <Section title="Custody">
-                <div className="prose-sprout text-body-sm text-subtle-gray">
+                <div className="prose-sprout text-body-sm text-muted-ash">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
                       p: ({ children }) => <p className="m-0">{children}</p>,
                       strong: ({ children }) => (
-                        <strong className="font-semibold text-midnight-black">
+                        <strong className="font-medium text-midnight-ink">
                           {children}
                         </strong>
                       ),
@@ -335,14 +332,13 @@ export function VaultInfoDialog({
               </Section>
 
               {/* Footer */}
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border pt-3">
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-hairline pt-3">
                 <div className="flex flex-wrap gap-1.5 text-caption">
                   <a
                     href="https://ember.so/security"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 bg-cloud-gray px-2.5 py-1 font-medium text-midnight-black"
-                    style={{ borderRadius: 9999 }}
+                    className="inline-flex items-center gap-1 bg-whisper-gray px-2.5 py-1 font-medium text-midnight-ink rounded-card"
                   >
                     Risk disclosure
                     <ExternalLink className="size-3" strokeWidth={2.2} />
@@ -351,8 +347,7 @@ export function VaultInfoDialog({
                     href="https://learn.ember.so/"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 bg-cloud-gray px-2.5 py-1 font-medium text-midnight-black"
-                    style={{ borderRadius: 9999 }}
+                    className="inline-flex items-center gap-1 bg-whisper-gray px-2.5 py-1 font-medium text-midnight-ink rounded-card"
                   >
                     Documentation
                     <ExternalLink className="size-3" strokeWidth={2.2} />
@@ -363,8 +358,7 @@ export function VaultInfoDialog({
                     render={
                       <button
                         type="button"
-                        className="bg-cloud-gray px-3.5 py-1.5 text-body-sm font-medium text-midnight-black"
-                        style={{ borderRadius: 9999 }}
+                        className="bg-whisper-gray px-3.5 py-1.5 text-body-sm font-medium text-midnight-ink rounded-card"
                       >
                         Close
                       </button>
@@ -377,8 +371,7 @@ export function VaultInfoDialog({
                         onContinue();
                         onOpenChange(false);
                       }}
-                      className="bg-cash-lime px-4 py-1.5 text-body-sm font-semibold text-midnight-black"
-                      style={{ borderRadius: 9999 }}
+                      className="bg-midnight-ink px-4 py-1.5 text-body-sm font-medium text-canvas-white rounded-card"
                     >
                       Continue to deposit
                     </button>
@@ -405,16 +398,15 @@ function NumberTile({
 }) {
   return (
     <div
-      className="bg-cloud-gray px-3 py-2"
-      style={{ borderRadius: 14 }}
+      className="bg-whisper-gray px-3 py-2 rounded-card"
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+      <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
         {label}
       </div>
       <div
         className={cn(
-          "text-body font-semibold tabular-nums",
-          tone === "lime" && "text-midnight-black",
+          "text-body font-medium tabular-nums",
+          tone === "lime" && "text-midnight-ink",
         )}
       >
         {value}
@@ -435,7 +427,7 @@ function Section({
   return (
     <div className="mt-4">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <h3 className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+        <h3 className="text-caption font-medium uppercase tracking-wider text-muted-ash">
           {title}
         </h3>
         {right}
@@ -448,8 +440,7 @@ function Section({
 function ChartFrame({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="bg-cloud-gray p-3"
-      style={{ borderRadius: 14, minHeight: 96 }}
+      className="bg-whisper-gray p-3 rounded-card min-h-[96px]"
     >
       {children}
     </div>
@@ -459,8 +450,7 @@ function ChartFrame({ children }: { children: React.ReactNode }) {
 function Skeleton() {
   return (
     <div
-      className="flex h-24 w-full items-center justify-center text-caption text-hinting-gray"
-      style={{ borderRadius: 10 }}
+      className="flex h-24 w-full items-center justify-center text-caption text-muted-ash rounded-[10px]"
     >
       Loading…
     </div>
@@ -469,7 +459,7 @@ function Skeleton() {
 
 function Empty({ msg }: { msg: string }) {
   return (
-    <div className="flex h-24 w-full items-center justify-center text-caption text-hinting-gray">
+    <div className="flex h-24 w-full items-center justify-center text-caption text-muted-ash">
       {msg}
     </div>
   );
@@ -479,14 +469,13 @@ function GrowthChip({ label, pct }: { label: string; pct: number }) {
   const positive = pct >= 0;
   return (
     <span
-      className={cn(
+      className={cn("rounded-card", 
         "inline-flex items-center gap-1 px-2 py-0.5 text-caption font-medium tabular-nums",
-        positive ? "bg-cash-lime/20" : "bg-destructive/15",
+        positive ? "bg-deliver-green/20" : "bg-destructive/15",
       )}
-      style={{ borderRadius: 9999 }}
     >
-      <span className="text-subtle-gray">{label}</span>
-      <span className="text-midnight-black">
+      <span className="text-muted-ash">{label}</span>
+      <span className="text-midnight-ink">
         {positive ? "+" : ""}
         {pct.toFixed(2)}%
       </span>
@@ -507,18 +496,17 @@ function ApyComposition({ vault }: { vault: SuiVault }) {
   return (
     <div className="space-y-2">
       <div
-        className="flex h-2 w-full overflow-hidden bg-cloud-gray"
-        style={{ borderRadius: 9999 }}
+        className="flex h-2 w-full overflow-hidden bg-whisper-gray rounded-full"
       >
         {wLend > 0 && (
           <div
-            className="h-full bg-cash-lime"
+            className="h-full bg-deliver-green"
             style={{ width: `${Math.min(100, wLend)}%` }}
           />
         )}
         {wStrategy > 0 && (
           <div
-            className="h-full bg-midnight-black"
+            className="h-full bg-midnight-ink"
             style={{ width: `${Math.min(100, wStrategy)}%` }}
           />
         )}
@@ -530,14 +518,14 @@ function ApyComposition({ vault }: { vault: SuiVault }) {
         )}
         {total === 0 && (
           <div
-            className="h-full w-full bg-hinting-gray/40"
+            className="h-full w-full bg-light-taupe/40"
           />
         )}
       </div>
       <ul className="space-y-1 text-body-sm">
         {lendPct > 0 && (
           <CompRow
-            dot="bg-cash-lime"
+            dot="bg-deliver-green"
             label="Lending APY"
             pct={lendPct}
             hint="Interest the strategy earns on lent assets."
@@ -545,7 +533,7 @@ function ApyComposition({ vault }: { vault: SuiVault }) {
         )}
         {strategyPct > 0 && (
           <CompRow
-            dot="bg-midnight-black"
+            dot="bg-midnight-ink"
             label="Strategy yield"
             pct={strategyPct}
             hint="LP fees, funding, basis — the operator's alpha."
@@ -560,13 +548,13 @@ function ApyComposition({ vault }: { vault: SuiVault }) {
           />
         )}
         {total === 0 && (
-          <li className="text-caption text-subtle-gray">
+          <li className="text-caption text-muted-ash">
             No yield breakdown reported by the vault yet.
           </li>
         )}
         {vault.performanceFeeBps > 0 && (
           <CompRow
-            dot="bg-hinting-gray"
+            dot="bg-light-taupe"
             label="Performance fee"
             pct={-(vault.performanceFeeBps / 100)}
             hint="Applied to deposit yield only."
@@ -591,15 +579,14 @@ function CompRow({
   return (
     <li className="flex items-baseline gap-2">
       <span
-        className={cn("inline-block size-1.5 shrink-0", dot)}
-        style={{ borderRadius: 9999 }}
+        className={cn("rounded-full", "inline-block size-1.5 shrink-0", dot)}
       />
-      <span className="text-body-sm font-medium text-midnight-black">{label}</span>
-      <span className="text-body-sm font-semibold tabular-nums text-midnight-black">
+      <span className="text-body-sm font-medium text-midnight-ink">{label}</span>
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {pct >= 0 ? "+" : ""}
         {pct.toFixed(2)}%
       </span>
-      <span className="truncate text-caption text-subtle-gray">{hint}</span>
+      <span className="truncate text-caption text-muted-ash">{hint}</span>
     </li>
   );
 }

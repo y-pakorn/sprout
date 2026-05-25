@@ -96,8 +96,7 @@ export function ChatInput({
 
   return (
     <div
-      className="flex items-center gap-2 bg-cloud-gray pl-6 pr-2 py-2 transition-colors focus-within:bg-canvas-white"
-      style={{ borderRadius: 9999 }}
+      className="flex items-center gap-2 bg-canvas-white pl-6 pr-2 py-2 shadow-button ring-1 ring-hairline transition-[box-shadow] focus-within:ring-midnight-ink/20 rounded-card"
     >
       <div className="relative flex-1">
         {/* Mirror — invisible draft + visible suggestion. Sits behind the
@@ -105,13 +104,13 @@ export function ChatInput({
         <div
           aria-hidden
           className={cn(
-            "pointer-events-none absolute inset-0 select-none text-midnight-black",
+            "pointer-events-none absolute inset-0 select-none text-midnight-ink",
             typeAndPad,
           )}
         >
           <span className="invisible">{value}</span>
           {ghostText && (
-            <span className="text-hinting-gray">{ghostText}</span>
+            <span className="text-muted-ash/70">{ghostText}</span>
           )}
         </div>
         <textarea
@@ -124,7 +123,7 @@ export function ChatInput({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKey}
           className={cn(
-            "relative w-full resize-none border-0 bg-transparent text-midnight-black placeholder:text-hinting-gray focus:outline-none disabled:opacity-50",
+            "relative w-full resize-none border-0 bg-transparent text-midnight-ink placeholder:text-muted-ash/70 focus:outline-none disabled:opacity-50",
             typeAndPad,
           )}
         />
@@ -137,8 +136,7 @@ export function ChatInput({
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.92 }}
         transition={{ type: "spring", visualDuration: 0.2, bounce: 0.4 }}
-        className="inline-flex size-10 shrink-0 items-center justify-center bg-cash-lime text-midnight-black disabled:bg-hinting-gray disabled:text-canvas-white"
-        style={{ borderRadius: 9999 }}
+        className="inline-flex size-10 shrink-0 items-center justify-center bg-midnight-ink text-canvas-white disabled:bg-light-taupe disabled:text-muted-ash rounded-button"
       >
         <ArrowUp className="size-5" strokeWidth={2.5} />
       </motion.button>

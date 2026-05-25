@@ -34,7 +34,7 @@ const VERDICT_LABEL: Record<RiskVerdict, string> = {
 function VerdictIcon({ v }: { v: RiskVerdict }) {
   if (v === "pass") {
     return (
-      <Check className="size-3.5 text-cash-lime" strokeWidth={3} />
+      <Check className="size-3.5 text-deliver-green" strokeWidth={3} />
     );
   }
   if (v === "flag") {
@@ -83,18 +83,18 @@ export function VaultRiskDetail({
       >
         <VerdictIcon v={verdict} />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="text-body-sm font-medium text-canvas-white">
+          <div className="text-body-sm font-medium text-midnight-ink">
             {title}
           </div>
-          <div className="truncate text-caption text-canvas-white/55">
+          <div className="truncate text-caption text-muted-ash">
             {summary}
           </div>
         </div>
         {expandable && (
           <ChevronDown
             className={cn(
-              "size-3.5 shrink-0 text-canvas-white/40 transition-transform duration-200",
-              open && "rotate-180 text-canvas-white/70",
+              "size-3.5 shrink-0 text-muted-ash transition-transform duration-200",
+              open && "rotate-180 text-muted-ash",
             )}
             strokeWidth={2.4}
           />
@@ -110,7 +110,7 @@ export function VaultRiskDetail({
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div className="mb-2 ml-7 mr-1 rounded-[10px] bg-white/[0.04] px-3 py-2.5 text-body-sm text-canvas-white/70 ring-1 ring-white/[0.06]">
+            <div className="mb-2 ml-7 mr-1 rounded-[10px] bg-whisper-gray px-3 py-2.5 text-body-sm text-muted-ash ring-1 ring-hairline">
               {detail && (
                 <div className="prose-sprout space-y-2">
                   <ReactMarkdown
@@ -124,7 +124,7 @@ export function VaultRiskDetail({
                         <li className="my-0.5">{children}</li>
                       ),
                       strong: ({ children }) => (
-                        <strong className="font-semibold text-canvas-white">
+                        <strong className="font-medium text-midnight-ink">
                           {children}
                         </strong>
                       ),
@@ -144,7 +144,7 @@ export function VaultRiskDetail({
                     e.stopPropagation();
                     onAskAgent();
                   }}
-                  className="mt-3 inline-flex items-center gap-1 rounded-pill bg-white/[0.10] px-2.5 py-1 text-caption font-medium text-canvas-white ring-1 ring-white/[0.08] transition-colors hover:bg-white/[0.16]"
+                  className="mt-3 inline-flex items-center gap-1 rounded-pill bg-whisper-gray px-2.5 py-1 text-caption font-medium text-midnight-ink ring-1 ring-hairline transition-colors hover:bg-light-taupe"
                 >
                   Ask Sprout to explain →
                 </button>

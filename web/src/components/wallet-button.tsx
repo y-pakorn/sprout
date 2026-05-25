@@ -21,6 +21,8 @@ import {
   X,
 } from "lucide-react";
 import { SPRING_BOUNCY } from "@/lib/motion";
+import { cn } from "@/lib/utils";
+import { PillButton } from "@/components/ui/pill-button";
 
 function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -33,13 +35,18 @@ function avatarLetter(name: string | null | undefined, addr: string): string {
   return (addr[2] ?? "?").toUpperCase();
 }
 
-/** Stable lime variant for the avatar background */
+/** Stable neutral/pillar tone for the avatar background (Amplemarket). */
+const AVATAR_TONES = [
+  "#272625", // surface charcoal
+  "#10054d", // deep indigo
+  "#2e2460", // midnight violet
+  "#328efa", // intelligence blue
+  "#e16540", // lead-gen red
+];
 function avatarTone(addr: string): string {
-  // Hash the address into a hue range that stays near lime
   let h = 0;
   for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) | 0;
-  const shift = (Math.abs(h) % 40) - 20; // ±20° from base
-  return `hsl(${135 + shift} 100% 42%)`;
+  return AVATAR_TONES[Math.abs(h) % AVATAR_TONES.length];
 }
 
 export function WalletButton({
@@ -67,24 +74,16 @@ export function WalletButton({
     const glass = tone === "glass";
     return (
       <>
-        <motion.button
+        <PillButton
           onClick={() => setConnectOpen(true)}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-          className={
-            glass
-              ? "liquid-glass inline-flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-canvas-white hover:text-canvas-white"
-              : "inline-flex items-center gap-2 bg-cash-lime px-5 py-2.5 text-body-sm font-semibold text-midnight-black"
-          }
-          style={{ borderRadius: 9999 }}
+          className={glass ? "gap-1.5" : "gap-2 px-5 py-2.5"}
         >
           <WalletIcon
             className={glass ? "size-3.5" : "size-4"}
             strokeWidth={2.4}
           />
           {glass ? "Connect" : "Connect wallet"}
-        </motion.button>
+        </PillButton>
         <ConnectDialog
           open={connectOpen}
           onClose={() => setConnectOpen(false)}
@@ -103,20 +102,11 @@ export function WalletButton({
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-        className={
-          tone === "glass"
-            ? "liquid-glass inline-flex items-center gap-2 pl-1.5 pr-3 py-1 text-body-sm font-semibold text-canvas-white"
-            : "inline-flex items-center gap-2 bg-cloud-gray pl-1.5 pr-3 py-1 text-body-sm font-semibold text-midnight-black"
-        }
-        style={{ borderRadius: 9999 }}
+        className="inline-flex items-center gap-2 bg-whisper-gray pl-1.5 pr-3 py-1 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline rounded-button"
       >
         <span
-          className="inline-flex size-7 items-center justify-center text-canvas-white text-caption font-bold"
-          style={{
-            borderRadius: 9999,
-            background: avatarTone(account.address),
-            letterSpacing: 0,
-          }}
+          className="inline-flex size-7 items-center justify-center text-canvas-white text-caption font-semibold rounded-full tracking-[0]"
+          style={{ background: avatarTone(account.address) }}
         >
           {avatarLetter(suins, account.address)}
         </span>
@@ -169,36 +159,30 @@ function WalletMenu({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -6, scale: 0.97 }}
       transition={{ type: "spring", visualDuration: 0.25, bounce: 0.2 }}
-      style={{ borderRadius: 20, zIndex: 50, transformOrigin: "top right" }}
-      className="absolute right-0 top-[calc(100%+8px)] w-72 bg-canvas-white p-2 shadow-[0_18px_60px_-20px_rgba(0,0,0,0.25)]"
+      className="absolute right-0 top-[calc(100%+8px)] z-50 w-72 origin-top-right rounded-card bg-canvas-white p-2 ring-1 ring-hairline shadow-header"
     >
       <div
-        className="flex items-center gap-3 bg-cloud-gray px-3 py-3"
-        style={{ borderRadius: 14 }}
+        className="flex items-center gap-3 bg-whisper-gray px-3 py-3 rounded-card"
       >
         <span
-          className="inline-flex size-10 shrink-0 items-center justify-center text-canvas-white text-body font-bold"
-          style={{
-            borderRadius: 14,
-            background: avatarTone(address),
-            letterSpacing: 0,
-          }}
+          className="inline-flex size-10 shrink-0 items-center justify-center text-canvas-white text-body font-semibold rounded-full tracking-[0]"
+          style={{ background: avatarTone(address) }}
         >
           {avatarLetter(suins, address)}
         </span>
         <div className="min-w-0 flex-1 space-y-0.5">
           {suins ? (
             <>
-              <div className="truncate text-body font-semibold leading-tight">
+              <div className="truncate text-body font-medium leading-tight">
                 {suins}
               </div>
-              <div className="truncate font-mono text-body-sm text-subtle-gray">
+              <div className="truncate font-mono text-body-sm text-muted-ash">
                 {shortAddr(address)}
               </div>
             </>
           ) : (
             <>
-              <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+              <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
                 Connected
               </div>
               <div className="break-all font-mono text-body-sm leading-tight">
@@ -219,7 +203,7 @@ function WalletMenu({
           label="View on Suiscan"
           href={`https://suiscan.xyz/mainnet/account/${address}`}
         />
-        <div className="my-1 h-px bg-ghost-border" />
+        <div className="my-1 h-px bg-hairline" />
         <MenuItem
           Icon={LogOut}
           label="Disconnect"
@@ -247,11 +231,12 @@ function MenuItem({
   href?: string;
   danger?: boolean;
 }) {
-  const cls = `flex w-full items-center gap-2.5 px-3 py-2 text-left text-body-sm font-medium transition-colors ${
+  const cls = cn(
+    "flex w-full items-center gap-2.5 rounded-button px-3 py-2 text-left text-body-sm font-medium transition-colors",
     danger
       ? "text-destructive hover:bg-destructive/10"
-      : "text-midnight-black hover:bg-cloud-gray"
-  }`;
+      : "text-midnight-ink hover:bg-whisper-gray",
+  );
   const inner = (
     <>
       <Icon className="size-4" strokeWidth={2.2} />
@@ -265,7 +250,6 @@ function MenuItem({
         target="_blank"
         rel="noreferrer"
         className={cls}
-        style={{ borderRadius: 12 }}
       >
         {inner}
       </a>
@@ -276,7 +260,6 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={cls}
-      style={{ borderRadius: 12 }}
     >
       {inner}
     </button>
@@ -307,7 +290,7 @@ function ConnectDialog({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-midnight-black/35"
+            className="fixed inset-0 z-50 bg-midnight-ink/30 backdrop-blur-sm"
           />
           <motion.div
             role="dialog"
@@ -316,18 +299,17 @@ function ConnectDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 6 }}
             transition={SPRING_BOUNCY}
-            style={{ borderRadius: 24 }}
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 bg-canvas-white p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.35)]"
+            className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card bg-canvas-white p-6 ring-1 ring-hairline shadow-header"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+                <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
                   Sui
                 </div>
-                <div className="text-body-lg font-semibold leading-tight">
+                <div className="text-body-lg font-medium leading-tight">
                   Connect a wallet
                 </div>
-                <div className="text-body-sm text-subtle-gray">
+                <div className="text-body-sm text-muted-ash">
                   Pick how you want to sign in.
                 </div>
               </div>
@@ -336,8 +318,7 @@ function ConnectDialog({
                 whileTap={{ scale: 0.92 }}
                 onClick={onClose}
                 aria-label="Close"
-                className="inline-flex size-8 items-center justify-center bg-cloud-gray text-midnight-black"
-                style={{ borderRadius: 9999 }}
+                className="inline-flex size-8 items-center justify-center bg-whisper-gray text-midnight-ink rounded-full"
               >
                 <X className="size-4" strokeWidth={2.4} />
               </motion.button>
@@ -346,19 +327,18 @@ function ConnectDialog({
             <div className="mt-5 space-y-2">
               {wallets.length === 0 ? (
                 <div
-                  className="space-y-2 bg-cloud-gray p-6 text-center"
-                  style={{ borderRadius: 18 }}
+                  className="space-y-2 bg-whisper-gray p-6 text-center rounded-card"
                 >
-                  <div className="text-body font-semibold">
+                  <div className="text-body font-medium">
                     No wallet detected
                   </div>
-                  <div className="text-body-sm text-subtle-gray">
+                  <div className="text-body-sm text-muted-ash">
                     Install{" "}
                     <a
                       href="https://slush.app"
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-midnight-black underline"
+                      className="font-medium text-midnight-ink underline"
                     >
                       Slush
                     </a>{" "}
@@ -378,8 +358,7 @@ function ConnectDialog({
                       bounce: 0.3,
                     }}
                     onClick={() => handleConnect(wallet)}
-                    className="flex w-full items-center gap-3 bg-cloud-gray p-4 transition-colors hover:bg-canvas-white hover:ring-2 hover:ring-cash-lime"
-                    style={{ borderRadius: 18 }}
+                    className="flex w-full items-center gap-3 bg-whisper-gray p-4 ring-1 ring-hairline transition-colors hover:bg-canvas-white hover:ring-midnight-ink/20 rounded-card"
                   >
                     {wallet.icon ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -388,26 +367,25 @@ function ConnectDialog({
                         alt=""
                         width={36}
                         height={36}
-                        style={{ borderRadius: 14 }}
+                        className="rounded-card"
                       />
                     ) : (
                       <span
-                        className="inline-flex size-9 items-center justify-center bg-canvas-white text-midnight-black"
-                        style={{ borderRadius: 14 }}
+                        className="inline-flex size-9 items-center justify-center bg-canvas-white text-midnight-ink rounded-card"
                       >
                         <WalletIcon className="size-4" strokeWidth={2.4} />
                       </span>
                     )}
                     <div className="flex-1 text-left">
-                      <div className="text-body font-semibold leading-tight">
+                      <div className="text-body font-medium leading-tight">
                         {wallet.name}
                       </div>
-                      <div className="text-body-sm text-subtle-gray">
+                      <div className="text-body-sm text-muted-ash">
                         Tap to connect
                       </div>
                     </div>
                     <ChevronDown
-                      className="size-4 -rotate-90 text-subtle-gray"
+                      className="size-4 -rotate-90 text-muted-ash"
                       strokeWidth={2.2}
                     />
                   </motion.button>

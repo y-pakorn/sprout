@@ -152,10 +152,9 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
   return (
     <Dialog.Root open={open} onOpenChange={onChange}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-40 bg-midnight-black/55 backdrop-blur-sm data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 transition-opacity duration-200" />
+        <Dialog.Backdrop className="fixed inset-0 z-40 bg-midnight-ink/30 backdrop-blur-sm data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 transition-opacity duration-200" />
         <Dialog.Popup
-          className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-canvas-white shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] data-[ending-style]:opacity-0 data-[ending-style]:scale-95 data-[starting-style]:opacity-0 data-[starting-style]:scale-95 transition-[opacity,transform] duration-200"
-          style={{ borderRadius: 24 }}
+          className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-canvas-white shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] data-[ending-style]:opacity-0 data-[ending-style]:scale-95 data-[starting-style]:opacity-0 data-[starting-style]:scale-95 transition-[opacity,transform] duration-200 rounded-card"
         >
           {/* Header */}
           <div className="flex items-start gap-3 px-5 pb-3 pt-5">
@@ -165,18 +164,17 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
               size={40}
             />
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="truncate text-body-lg font-semibold leading-tight text-midnight-black">
+              <Dialog.Title className="truncate text-body-lg font-medium leading-tight text-midnight-ink">
                 Withdraw from {v.vaultName}
               </Dialog.Title>
-              <p className="mt-0.5 text-caption text-subtle-gray">
+              <p className="mt-0.5 text-caption text-muted-ash">
                 {lockupDays > 0
                   ? `Processed in up to ${lockupDays} days · cancel anytime before`
                   : "Processed shortly"}
               </p>
             </div>
             <Dialog.Close
-              className="-mr-1 -mt-1 inline-flex size-7 items-center justify-center text-subtle-gray hover:bg-cloud-gray hover:text-midnight-black"
-              style={{ borderRadius: 9999 }}
+              className="-mr-1 -mt-1 inline-flex size-7 items-center justify-center text-muted-ash hover:bg-whisper-gray hover:text-midnight-ink rounded-full"
               disabled={isBusy}
             >
               <XIcon className="size-4" strokeWidth={2.4} />
@@ -186,11 +184,10 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
           <div className="space-y-3 px-5 pb-5">
             {/* Shares input */}
             <div
-              className="space-y-1 bg-cloud-gray px-4 py-3"
-              style={{ borderRadius: 18 }}
+              className="space-y-1 bg-whisper-gray px-4 py-3 rounded-card"
             >
               <div className="flex items-center justify-between">
-                <label className="text-caption font-medium uppercase tracking-wider text-subtle-gray">
+                <label className="text-caption font-medium uppercase tracking-wider text-muted-ash">
                   Shares to redeem
                 </label>
                 <button
@@ -198,8 +195,7 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
                   onClick={() =>
                     setSharesInput(String(Number(v.shares.toFixed(6))))
                   }
-                  className="bg-canvas-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-midnight-black hover:bg-canvas-white/70"
-                  style={{ borderRadius: 9999 }}
+                  className="bg-canvas-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-midnight-ink hover:bg-canvas-white/70 rounded-button"
                   disabled={isBusy}
                 >
                   Max
@@ -214,9 +210,9 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
                 onChange={(e) => setSharesInput(e.target.value)}
                 placeholder="0.0"
                 disabled={isBusy}
-                className="w-full bg-transparent text-title font-semibold tabular-nums text-midnight-black outline-none placeholder:text-hinting-gray"
+                className="w-full bg-transparent text-title font-medium tabular-nums text-midnight-ink outline-none placeholder:text-muted-ash"
               />
-              <div className="flex items-center justify-between text-caption text-subtle-gray">
+              <div className="flex items-center justify-between text-caption text-muted-ash">
                 <span>
                   Balance: {fmtAmount(v.shares)}{" "}
                   {v.receiptCoinSymbol ?? "shares"}
@@ -229,18 +225,17 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
 
             {/* Lockup callout */}
             <div
-              className="flex items-start gap-2.5 bg-warning/12 px-3.5 py-2.5"
-              style={{ borderRadius: 14 }}
+              className="flex items-start gap-2.5 bg-warning/12 px-3.5 py-2.5 rounded-card"
             >
               <AlertTriangle
                 className="mt-0.5 size-4 shrink-0 text-warning"
                 strokeWidth={2.4}
               />
-              <p className="text-caption leading-snug text-midnight-black">
+              <p className="text-caption leading-snug text-midnight-ink">
                 {lockupDays > 0 ? (
                   <>
                     Funds arrive after up to{" "}
-                    <strong className="font-semibold">
+                    <strong className="font-medium">
                       {lockupDays} days
                     </strong>
                     . You can cancel from the Pending tab anytime before
@@ -286,8 +281,7 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
                 type="button"
                 onClick={() => onChange(false)}
                 disabled={isBusy}
-                className="bg-cloud-gray px-4 py-2 text-body-sm font-medium text-midnight-black hover:bg-cloud-gray/80 disabled:opacity-50"
-                style={{ borderRadius: 9999 }}
+                className="bg-whisper-gray px-4 py-2 text-body-sm font-medium text-midnight-ink hover:bg-whisper-gray/80 disabled:opacity-50 rounded-button"
               >
                 {isDone ? "Close" : "Cancel"}
               </button>
@@ -298,13 +292,12 @@ export function RedeemDialog({ position, open, onOpenChange, onSuccess }: Props)
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   disabled={isBusy || !sharesValid}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 px-5 py-2 text-body-sm font-semibold",
+                  className={cn("rounded-card", 
+                    "inline-flex items-center gap-1.5 px-5 py-2 text-body-sm font-medium",
                     sharesValid && !isBusy
-                      ? "bg-cash-lime text-midnight-black"
-                      : "bg-hinting-gray text-canvas-white",
+                      ? "bg-midnight-ink text-canvas-white"
+                      : "bg-light-taupe text-midnight-ink",
                   )}
-                  style={{ borderRadius: 9999 }}
                 >
                   {state.kind === "signing" && (
                     <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
@@ -333,13 +326,12 @@ function StateBanner({
 }) {
   return (
     <div
-      className={cn(
+      className={cn("rounded-card", 
         "flex items-center gap-2 px-3.5 py-2 text-caption font-medium",
-        tone === "info" && "bg-cloud-gray text-midnight-black",
-        tone === "ok" && "bg-cash-lime/20 text-midnight-black",
+        tone === "info" && "bg-whisper-gray text-midnight-ink",
+        tone === "ok" && "bg-deliver-green/20 text-midnight-ink",
         tone === "err" && "bg-destructive/15 text-destructive",
       )}
-      style={{ borderRadius: 12 }}
     >
       {icon}
       <span className="flex-1 truncate">{label}</span>
@@ -348,7 +340,7 @@ function StateBanner({
           href={`https://suiscan.xyz/mainnet/tx/${digest}`}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-subtle-gray hover:text-midnight-black"
+          className="inline-flex items-center gap-1 text-muted-ash hover:text-midnight-ink"
         >
           {digest.slice(0, 6)}…
           <ExternalLink className="size-3" strokeWidth={2.2} />

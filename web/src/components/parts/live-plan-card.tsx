@@ -174,8 +174,7 @@ export function LivePlanCard({
             <button
               type="button"
               onClick={walletHoldings.refresh}
-              className="inline-flex cursor-pointer items-center gap-1 bg-white/[0.08] px-2.5 py-1 text-caption font-medium text-canvas-white transition-colors hover:bg-white/[0.14]"
-              style={{ borderRadius: 9999 }}
+              className="inline-flex cursor-pointer items-center gap-1 bg-whisper-gray px-2.5 py-1 text-caption font-medium text-midnight-ink transition-colors hover:bg-light-taupe rounded-button"
             >
               <RefreshCw className="size-3" strokeWidth={2.4} />
               Refresh balance
@@ -210,17 +209,16 @@ export function LivePlanCard({
       variants={scaleIn}
       initial="initial"
       animate="animate"
-      className="space-y-3 liquid-glass p-4"
-      style={{ borderRadius: 20 }}
+      className="space-y-3 surface-card p-4 rounded-card"
     >
       <div className="flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2">
-          <span className="text-caption font-medium uppercase tracking-wider text-cash-lime">
+          <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
             Plan
           </span>
           {hasSwapSteps && onRefresh && (
             <span
-              className="flex items-center gap-1.5 text-caption text-canvas-white/55"
+              className="flex items-center gap-1.5 text-caption text-muted-ash"
               title={
                 refreshing
                   ? "Refreshing quote"
@@ -239,11 +237,10 @@ export function LivePlanCard({
                     ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
                     : { duration: 0 }
                 }
-                className={cn(
+                className={cn("rounded-full", 
                   "inline-block size-1.5",
-                  refreshing ? "bg-cash-lime" : "bg-cash-lime/60",
+                  refreshing ? "bg-deliver-green" : "bg-deliver-green/60",
                 )}
-                style={{ borderRadius: 9999 }}
               />
               {refreshing
                 ? "Live"
@@ -255,12 +252,11 @@ export function LivePlanCard({
         </div>
         {depositSteps.length > 0 && (
           <div className="flex items-baseline gap-1.5">
-            <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+            <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
               Blended APY
             </span>
             <span
-              className="font-bold tabular-nums text-cash-lime"
-              style={{ fontSize: "17px", letterSpacing: "-0.005em" }}
+              className="font-semibold tabular-nums text-midnight-ink text-[17px] tracking-[-0.005em]"
             >
               {fmtPct(cached.summary.blendedApyPct)}
             </span>
@@ -305,27 +301,26 @@ export function LivePlanCard({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span
-              className={cn(
+              className={cn("rounded-[9px]", 
                 "inline-flex size-5 items-center justify-center",
                 blocking
                   ? "bg-destructive text-canvas-white"
                   : flagCount > 0
-                    ? "bg-warning text-midnight-black"
-                    : "bg-cash-lime text-midnight-black",
+                    ? "bg-warning text-midnight-ink"
+                    : "bg-deliver-green text-midnight-ink",
               )}
-              style={{ borderRadius: 9 }}
             >
               <ShieldCheck className="size-2.5" strokeWidth={2.6} />
             </span>
-            <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+            <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
               Guardian
             </span>
           </div>
-          <p className="text-body-sm leading-snug text-canvas-white">
+          <p className="text-body-sm leading-snug text-midnight-ink">
             {guardianVerdict}
           </p>
         </div>
-        <div className="divide-y divide-ghost-border/60">
+        <div className="divide-y divide-hairline/60">
           {risks.map((r, i) => (
             <VaultRiskDetail
               key={r.id}
@@ -344,10 +339,10 @@ export function LivePlanCard({
 
       {/* Action row */}
       {!executed && !confirming && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ghost-border/60 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline/60 pt-3">
           {hasSwapSteps && onSlippageChange ? (
             <div className="flex items-center gap-2">
-              <span className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+              <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
                 Slippage
               </span>
               <div className="flex flex-wrap gap-1">
@@ -366,11 +361,12 @@ export function LivePlanCard({
                         bounce: 0.3,
                       }}
                       disabled={signing || confirming}
-                      className={cn(
-                        "px-2.5 py-1 text-caption font-semibold text-canvas-white disabled:opacity-50",
-                        active ? "bg-cash-lime !text-midnight-black" : "liquid-glass",
+                      className={cn("rounded-card", 
+                        "px-2.5 py-1 text-caption font-medium text-midnight-ink disabled:opacity-50",
+                        active
+                          ? "bg-midnight-ink !text-canvas-white"
+                          : "surface-panel ring-1 ring-hairline",
                       )}
-                      style={{ borderRadius: 9999 }}
                     >
                       {opt}%
                     </motion.button>
@@ -387,8 +383,7 @@ export function LivePlanCard({
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
             disabled={signing || confirming}
-            className="liquid-glass px-3.5 py-1.5 text-body-sm font-medium text-canvas-white disabled:opacity-50"
-            style={{ borderRadius: 9999 }}
+            className="surface-panel px-3.5 py-1.5 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline disabled:opacity-50 rounded-button"
           >
             Cancel
           </motion.button>
@@ -399,15 +394,14 @@ export function LivePlanCard({
             disabled={
               signing || confirming || !walletConnected || insufficient
             }
-            className={cn(
-              "inline-flex items-center gap-1.5 px-4 py-1.5 text-body-sm font-semibold disabled:bg-hinting-gray disabled:text-canvas-white",
+            className={cn("rounded-button", 
+              "inline-flex items-center gap-1.5 px-4 py-1.5 text-body-sm font-medium disabled:bg-light-taupe disabled:text-muted-ash",
               insufficient
                 ? "bg-destructive text-canvas-white"
                 : blocking
                   ? "bg-destructive text-canvas-white"
-                  : "bg-cash-lime text-midnight-black",
+                  : "bg-midnight-ink text-canvas-white",
             )}
-            style={{ borderRadius: 9999 }}
           >
             {signing && (
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
@@ -470,13 +464,12 @@ function ExpandableStep({
 
   return (
     <div
-      className="liquid-glass overflow-hidden"
-      style={{ borderRadius: 14 }}
+      className="surface-panel overflow-hidden ring-1 ring-hairline rounded-card"
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04]"
+        className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-whisper-gray"
       >
         <StepIndex n={idx + 1} lit={step.kind === "deposit"} />
         <div className="min-w-0 flex-1">
@@ -484,8 +477,8 @@ function ExpandableStep({
         </div>
         <ChevronDown
           className={cn(
-            "size-4 shrink-0 text-canvas-white/40 transition-transform duration-200",
-            open && "rotate-180 text-canvas-white",
+            "size-4 shrink-0 text-muted-ash transition-transform duration-200",
+            open && "rotate-180 text-midnight-ink",
           )}
           strokeWidth={2.4}
         />
@@ -500,12 +493,11 @@ function ExpandableStep({
             transition={EXPAND}
             className="overflow-hidden"
           >
-            {/* Inset recess — nested liquid-glass so the detail panel
-             *  carries its own rim + sheen instead of reading as a flat
-             *  tint. globals.css `.liquid-glass .liquid-glass` softens
-             *  the frost so we don't double-blur. */}
+            {/* Inset recess — whisper-gray sub-panel so the detail reads as
+             *  a compartment of the card, distinct from the canvas-white
+             *  row above it. */}
             <div className="px-2 pb-2">
-              <div className="liquid-glass rounded-[12px] px-4 py-3.5">
+              <div className="surface-panel rounded-[12px] px-4 py-3.5">
                 <StepDetail
                   step={step}
                   cached={cached}
@@ -526,7 +518,7 @@ function ExpandableStep({
  * ───────────────────────────────────────────────────────── */
 
 /** Tile-style chip. Significantly more presence than the previous flat
- *  treatment — bg-white/[0.10] + 1px ring carves it out of the dark panel
+ *  treatment — bg-whisper-gray + 1px ring carves it out of the dark panel
  *  background. Min-width 8rem so values don't get squeezed. */
 function DetailChip({
   label,
@@ -539,19 +531,18 @@ function DetailChip({
 }) {
   return (
     <div
-      className={cn(
+      className={cn("rounded-card", 
         "flex min-w-[8rem] flex-col gap-1 px-3.5 py-2.5 ring-1",
         tone === "warn" && "bg-warning/15 ring-warning/40",
         tone === "block" && "bg-destructive/15 ring-destructive/40",
-        tone === "lime" && "bg-cash-lime/10 ring-cash-lime/30",
-        tone === "default" && "bg-white/[0.10] ring-white/[0.10]",
+        tone === "lime" && "bg-deliver-green/10 ring-deliver-green/30",
+        tone === "default" && "bg-whisper-gray ring-hairline",
       )}
-      style={{ borderRadius: 12 }}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
         {label}
       </span>
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {value}
       </span>
     </div>
@@ -573,17 +564,16 @@ function NumericHero({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
         {label}
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2.5">
         <span
-          className="font-semibold tabular-nums text-canvas-white"
-          style={{ fontSize: "28px", lineHeight: 1, letterSpacing: "-0.02em" }}
+          className="font-medium tabular-nums text-midnight-ink text-[28px] leading-none tracking-[-0.02em]"
         >
           {value}
         </span>
-        <span className="text-body-sm font-medium text-canvas-white/55">
+        <span className="text-body-sm font-medium text-muted-ash">
           {unit}
         </span>
       </div>
@@ -606,12 +596,11 @@ function DetailHero({
   return (
     <div className="flex items-start justify-between gap-4">
       <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+        <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
           {label}
         </div>
         <div
-          className="truncate font-semibold tabular-nums leading-none text-canvas-white"
-          style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
+          className="truncate font-medium tabular-nums leading-none text-midnight-ink text-[22px] tracking-[-0.015em]"
         >
           {value}
         </div>
@@ -641,32 +630,30 @@ function VerdictChip({
       ? "bg-destructive/20 ring-destructive/50"
       : verdict === "warn"
         ? "bg-warning/20 ring-warning/50"
-        : "bg-white/[0.10] ring-white/[0.10]";
+        : "bg-whisper-gray ring-hairline";
   const dotColor =
     verdict === "block"
       ? "bg-destructive"
       : verdict === "warn"
         ? "bg-warning"
-        : "bg-cash-lime";
+        : "bg-deliver-green";
   return (
     <div
       className={cn(
-        "flex shrink-0 flex-col items-start gap-1.5 px-3.5 py-2 ring-1",
+        "flex min-w-[7rem] shrink-0 flex-col items-start gap-1.5 rounded-card px-3.5 py-2 ring-1",
         palette,
       )}
-      style={{ borderRadius: 12, minWidth: "7rem" }}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
         {label}
       </span>
       <span className="flex items-baseline gap-2">
         <span
-          className="font-semibold tabular-nums leading-none text-canvas-white"
-          style={{ fontSize: "20px", letterSpacing: "-0.015em" }}
+          className="font-medium tabular-nums leading-none text-midnight-ink text-[20px] tracking-[-0.015em]"
         >
           {value}
         </span>
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/85">
+        <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
           <span className={cn("inline-block size-1.5 rounded-full", dotColor)} />
           {caption}
         </span>
@@ -685,11 +672,11 @@ function DetailSectionLabel({
 }) {
   return (
     <div className="flex items-baseline justify-between">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-ash">
         {label}
       </span>
       {meta && (
-        <span className="text-caption text-canvas-white/55">{meta}</span>
+        <span className="text-caption text-muted-ash">{meta}</span>
       )}
     </div>
   );
@@ -753,18 +740,18 @@ function RedeemSummary({
         label={s.vault.name}
         size={20}
       />
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {fmtAmount(s.sharesHuman)}
       </span>
-      <span className="text-caption text-canvas-white/55">{s.receiptSymbol}</span>
+      <span className="text-caption text-muted-ash">{s.receiptSymbol}</span>
       <ArrowRight
-        className="size-3 shrink-0 text-canvas-white/40"
+        className="size-3 shrink-0 text-muted-ash"
         strokeWidth={2.4}
       />
-      <span className="truncate text-body-sm font-medium text-canvas-white">
+      <span className="truncate text-body-sm font-medium text-midnight-ink">
         {s.vault.name}
       </span>
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
         <Repeat className="size-3 -scale-x-100" strokeWidth={2.4} />
         {s.vault.withdrawalPeriodDays
           ? `≤${s.vault.withdrawalPeriodDays}d`
@@ -777,13 +764,13 @@ function RedeemSummary({
 function CancelSummary({ s }: { s: ResolvedCancelRedeemStep }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="truncate text-body-sm font-semibold text-canvas-white">
+      <span className="truncate text-body-sm font-medium text-midnight-ink">
         Cancel withdrawal · {s.vault.name}
       </span>
-      <span className="text-caption text-canvas-white/55">
+      <span className="text-caption text-muted-ash">
         req #{s.sequenceNumber}
       </span>
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
         <X className="size-3" strokeWidth={2.4} />
         Cancel
       </span>
@@ -794,13 +781,12 @@ function CancelSummary({ s }: { s: ResolvedCancelRedeemStep }) {
 function StepIndex({ n, lit }: { n: number; lit?: boolean }) {
   return (
     <span
-      className={cn(
-        "inline-flex size-6 shrink-0 items-center justify-center text-caption font-semibold tabular-nums transition-colors",
+      className={cn("rounded-button", 
+        "inline-flex size-6 shrink-0 items-center justify-center text-caption font-medium tabular-nums transition-colors",
         lit
-          ? "bg-midnight-black/5 text-canvas-white group-hover:bg-cash-lime"
-          : "bg-midnight-black/5 text-canvas-white",
+          ? "bg-whisper-gray text-midnight-ink group-hover:bg-deliver-green"
+          : "bg-whisper-gray text-midnight-ink",
       )}
-      style={{ borderRadius: 8 }}
     >
       {n}
     </span>
@@ -820,23 +806,22 @@ function MergeSummary({
         {s.sources.map((src, i) => (
           <span
             key={i}
-            className="inline-flex items-center bg-white/[0.08] px-1.5 py-0 text-caption tabular-nums text-canvas-white"
-            style={{ borderRadius: 9999 }}
+            className="inline-flex items-center bg-whisper-gray px-1.5 py-0 text-caption tabular-nums text-midnight-ink rounded-card"
           >
             {fmtAmount(src.human)}
           </span>
         ))}
       </span>
       <ArrowRight
-        className="size-3 shrink-0 text-canvas-white/40"
+        className="size-3 shrink-0 text-muted-ash"
         strokeWidth={2.4}
       />
       <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {fmtAmount(s.totalHuman)}
       </span>
-      <span className="text-caption text-canvas-white/55">{s.symbol}</span>
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="text-caption text-muted-ash">{s.symbol}</span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
         <Merge className="size-3" strokeWidth={2.4} />
         Merge
       </span>
@@ -864,12 +849,12 @@ function SwapSummary({
         label={s.fromSymbol}
         size={20}
       />
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {fmtAmount(s.fromAmountHuman)}
       </span>
-      <span className="text-caption text-canvas-white/55">{s.fromSymbol}</span>
+      <span className="text-caption text-muted-ash">{s.fromSymbol}</span>
       <ArrowRight
-        className="size-3 shrink-0 text-canvas-white/40"
+        className="size-3 shrink-0 text-muted-ash"
         strokeWidth={2.4}
       />
       <AssetIcon
@@ -877,11 +862,11 @@ function SwapSummary({
         label={s.toSymbol}
         size={20}
       />
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         ≈ {fmtAmount(s.toAmountHuman)}
       </span>
-      <span className="text-caption text-canvas-white/55">{s.toSymbol}</span>
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="text-caption text-muted-ash">{s.toSymbol}</span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
         <Repeat className="size-3" strokeWidth={2.4} />
         {impact ? `Swap · ${impact}` : "Swap"}
       </span>
@@ -903,26 +888,25 @@ function SplitSummary({
         label={s.sourceSymbol}
         size={20}
       />
-      <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
         {fmtAmount(s.totalHuman)}
       </span>
-      <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
+      <span className="text-caption text-muted-ash">{s.sourceSymbol}</span>
       <ArrowRight
-        className="size-3 shrink-0 text-canvas-white/40"
+        className="size-3 shrink-0 text-muted-ash"
         strokeWidth={2.4}
       />
       <span className="flex flex-wrap items-center gap-1">
         {s.portions.map((p, i) => (
           <span
             key={i}
-            className="inline-flex items-center bg-white/[0.08] px-2 py-0 text-caption font-semibold tabular-nums text-canvas-white"
-            style={{ borderRadius: 9999 }}
+            className="inline-flex items-center bg-whisper-gray px-2 py-0 text-caption font-medium tabular-nums text-midnight-ink rounded-card"
           >
             {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
           </span>
         ))}
       </span>
-      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
         <Split className="size-3" strokeWidth={2.4} />
         Split
       </span>
@@ -948,29 +932,29 @@ function DepositSummary({
           label={s.sourceSymbol}
           size={20}
         />
-        <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
           {fmtAmount(s.amountHuman)}
         </span>
-        <span className="text-caption text-canvas-white/55">{s.sourceSymbol}</span>
+        <span className="text-caption text-muted-ash">{s.sourceSymbol}</span>
       </div>
       <ArrowRight
-        className="size-3 shrink-0 text-canvas-white/40"
+        className="size-3 shrink-0 text-muted-ash"
         strokeWidth={2.4}
       />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-body-sm font-semibold leading-tight text-canvas-white">
+        <div className="truncate text-body-sm font-medium leading-tight text-midnight-ink">
           {s.vault.name}
         </div>
-        <div className="truncate text-caption leading-tight text-canvas-white/55">
+        <div className="truncate text-caption leading-tight text-muted-ash">
           {s.vault.category}
           {lockup ? ` · ${lockup}` : ""}
         </div>
       </div>
       <div className="text-right leading-tight">
-        <div className="text-[10px] font-medium uppercase tracking-wider text-canvas-white/55">
+        <div className="text-[10px] font-medium uppercase tracking-wider text-muted-ash">
           APY
         </div>
-        <div className="text-body-sm font-semibold tabular-nums text-canvas-white">
+        <div className="text-body-sm font-medium tabular-nums text-midnight-ink">
           {fmtPct(s.vault.apyPct)}
         </div>
       </div>
@@ -1007,16 +991,15 @@ function Stat({
 }) {
   return (
     <div
-      className={cn(
-        "liquid-glass px-3 py-2",
-        tone === "lime" && "bg-cash-lime/15",
+      className={cn("rounded-card", 
+        "surface-panel px-3 py-2",
+        tone === "lime" && "bg-deliver-green/15",
       )}
-      style={{ borderRadius: 14 }}
     >
-      <div className="text-caption font-medium uppercase tracking-wider text-canvas-white/55">
+      <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
         {label}
       </div>
-      <div className="text-body font-semibold tabular-nums text-canvas-white">
+      <div className="text-body font-medium tabular-nums text-midnight-ink">
         {value}
       </div>
     </div>
@@ -1344,16 +1327,15 @@ function PlanReceipt({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className={cn(
+      className={cn("rounded-card", 
         "space-y-2 px-3 py-2.5",
-        confirming && "liquid-glass",
-        success && "bg-cash-lime/15",
+        confirming && "surface-panel",
+        success && "bg-deliver-green/15",
         failure && "bg-destructive/15",
       )}
-      style={{ borderRadius: 14 }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-body-sm font-semibold text-canvas-white">
+        <div className="flex items-center gap-2 text-body-sm font-medium text-midnight-ink">
           {confirming ? (
             <>
               <Loader2 className="size-4 animate-spin" strokeWidth={2.4} />
@@ -1362,8 +1344,7 @@ function PlanReceipt({
           ) : success ? (
             <>
               <span
-                className="inline-flex size-5 items-center justify-center bg-cash-lime text-midnight-black"
-                style={{ borderRadius: 9999 }}
+                className="inline-flex size-5 items-center justify-center bg-deliver-green text-midnight-ink rounded-full"
               >
                 <Check className="size-3" strokeWidth={2.8} />
               </span>
@@ -1372,8 +1353,7 @@ function PlanReceipt({
           ) : (
             <>
               <span
-                className="inline-flex size-5 items-center justify-center bg-destructive text-canvas-white"
-                style={{ borderRadius: 9999 }}
+                className="inline-flex size-5 items-center justify-center bg-destructive text-canvas-white rounded-full"
               >
                 ✕
               </span>
@@ -1386,8 +1366,7 @@ function PlanReceipt({
             href={`https://suiscan.xyz/mainnet/tx/${txDigest}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 liquid-glass px-2.5 py-1 font-mono text-caption text-canvas-white"
-            style={{ borderRadius: 9999 }}
+            className="inline-flex items-center gap-1 surface-panel px-2.5 py-1 font-mono text-caption text-midnight-ink ring-1 ring-hairline rounded-card"
           >
             {txDigest.slice(0, 6)}…{txDigest.slice(-4)}
             <ExternalLink className="size-3" strokeWidth={2.2} />
@@ -1396,14 +1375,14 @@ function PlanReceipt({
       </div>
 
       {success && receivedShares && receivedShares.length > 0 && (
-        <ul className="space-y-1 text-caption text-canvas-white/55">
+        <ul className="space-y-1 text-caption text-muted-ash">
           {deposits.map((d, i) => (
             <li
               key={d.id}
               className="flex items-center justify-between gap-2"
             >
               <span className="truncate">{d.vault.name}</span>
-              <span className="tabular-nums font-semibold text-canvas-white">
+              <span className="tabular-nums font-medium text-midnight-ink">
                 +{fmtAmount(receivedShares[i] ?? 0)} shares
               </span>
             </li>
@@ -1411,7 +1390,7 @@ function PlanReceipt({
           {gasUsedSui !== undefined && (
             <li className="flex items-center justify-between gap-2 pt-1">
               <span>Gas</span>
-              <span className="tabular-nums font-semibold text-canvas-white">
+              <span className="tabular-nums font-medium text-midnight-ink">
                 {gasUsedSui.toFixed(4)} SUI
               </span>
             </li>
@@ -1515,7 +1494,7 @@ function FlowConnector() {
   return (
     <div className="relative flex h-3 w-full justify-start pl-[1.375rem]">
       <span
-        className="h-full w-px bg-gradient-to-b from-cash-lime/60 to-cash-lime/20"
+        className="h-full w-px bg-gradient-to-b from-deliver-green/60 to-deliver-green/20"
         aria-hidden
       />
     </div>
@@ -1604,10 +1583,10 @@ function RouteBreakdown({
   return (
     <div className="space-y-3 pt-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+        <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
           Route
         </span>
-        <span className="text-caption tabular-nums text-canvas-white/70">
+        <span className="text-caption tabular-nums text-muted-ash">
           {sorted.length === 0
             ? "Direct route"
             : `${sorted.length} split${sorted.length === 1 ? "" : "s"} · ${s.hops} hop${s.hops === 1 ? "" : "s"}`}
@@ -1615,7 +1594,7 @@ function RouteBreakdown({
       </div>
       <div className="space-y-2">
         {sorted.length === 0 ? (
-          <div className="text-body-sm text-canvas-white/70">
+          <div className="text-body-sm text-muted-ash">
             Direct {s.fromSymbol} → {s.toSymbol} via Bluefin7K.
           </div>
         ) : (
@@ -1659,12 +1638,11 @@ function SplitRow({
     <div className="flex flex-wrap items-center gap-2.5">
       <span
         className={cn(
-          "inline-flex shrink-0 items-center justify-center py-1 px-2.5 text-caption font-bold tabular-nums ring-1",
+          "inline-flex min-w-[52px] shrink-0 items-center justify-center rounded-card px-2.5 py-1 text-caption font-semibold tabular-nums ring-1",
           dominant
-            ? "bg-cash-lime text-midnight-black ring-cash-lime"
-            : "bg-white/[0.10] text-canvas-white/85 ring-white/[0.08]",
+            ? "bg-midnight-ink text-canvas-white ring-midnight-ink"
+            : "bg-whisper-gray text-muted-ash ring-hairline",
         )}
-        style={{ borderRadius: 9999, minWidth: 52 }}
       >
         {pct}%
       </span>
@@ -1679,13 +1657,12 @@ function SplitRow({
             <Fragment key={i}>
               {i > 0 && (
                 <ArrowRight
-                  className="size-3.5 shrink-0 text-canvas-white/40"
+                  className="size-3.5 shrink-0 text-muted-ash"
                   strokeWidth={2.4}
                 />
               )}
               <span
-                className="inline-flex shrink-0 items-center gap-2 bg-white/[0.10] py-1 pl-1.5 pr-3 text-body-sm font-medium text-canvas-white ring-1 ring-white/[0.08]"
-                style={{ borderRadius: 9999 }}
+                className="inline-flex shrink-0 items-center gap-2 bg-whisper-gray py-1 pl-1.5 pr-3 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline rounded-card"
                 title={`${inSym} → ${outSym} via ${type ?? "unknown"}`}
               >
                 <span className="inline-flex items-center">
@@ -1723,12 +1700,11 @@ function DepositDetail({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+          <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
             APY · 30-day average
           </div>
           <div
-            className="font-semibold tabular-nums leading-none text-canvas-white"
-            style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
+            className="font-medium tabular-nums leading-none text-midnight-ink text-[28px] tracking-[-0.02em]"
           >
             {fmtPct(v.apyPct)}
           </div>
@@ -1739,8 +1715,7 @@ function DepositDetail({
             e.stopPropagation();
             onOpenVault(v.id);
           }}
-          className="inline-flex shrink-0 items-center gap-1.5 self-start bg-white/[0.10] px-3 py-1.5 text-caption font-semibold text-canvas-white ring-1 ring-white/[0.10] transition-colors hover:bg-white/[0.16]"
-          style={{ borderRadius: 9999 }}
+          className="inline-flex shrink-0 items-center gap-1.5 self-start bg-whisper-gray px-3 py-1.5 text-caption font-medium text-midnight-ink ring-1 ring-hairline transition-colors hover:bg-light-taupe rounded-button"
         >
           Full vault info
           <ExternalLink className="size-3" strokeWidth={2.4} />
@@ -1749,7 +1724,7 @@ function DepositDetail({
       {composedFromBoth ? (
         <ApyComposition lendApy={lendApy} rewardApy={rewardApy} />
       ) : (
-        <div className="text-caption text-canvas-white/70">
+        <div className="text-caption text-muted-ash">
           {rewardApy === 0
             ? "100% from deposit yield — no reward emissions."
             : "100% from reward emissions — no underlying yield."}
@@ -1774,8 +1749,7 @@ function DepositDetail({
       </div>
       {rewardHeavy && (
         <div
-          className="flex items-start gap-2 border-l-2 border-warning bg-warning/10 px-3 py-2 text-caption text-canvas-white/85"
-          style={{ borderRadius: 8 }}
+          className="flex items-start gap-2 border-l-2 border-warning bg-warning/10 px-3 py-2 text-caption text-muted-ash rounded-button"
         >
           <span className="mt-0.5 inline-block size-1.5 shrink-0 rounded-full bg-warning" />
           {Math.round(rewardShare * 100)}% of headline APY is reward emissions
@@ -1803,32 +1777,31 @@ function ApyComposition({
   return (
     <div className="space-y-2">
       <div
-        className="h-1.5 w-full overflow-hidden bg-white/[0.06]"
-        style={{ borderRadius: 9999 }}
+        className="h-1.5 w-full overflow-hidden bg-whisper-gray rounded-full"
       >
         <div className="flex h-full">
           <div
-            className="bg-cash-lime"
+            className="bg-deliver-green"
             style={{ width: `${yieldShare}%` }}
           />
           <div
-            className="bg-white/40"
+            className="bg-muted-ash/40"
             style={{ width: `${100 - yieldShare}%` }}
           />
         </div>
       </div>
       <div className="flex items-baseline gap-4 text-caption">
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block size-2 rounded-full bg-cash-lime" />
-          <span className="text-canvas-white/55">Yield</span>
-          <span className="tabular-nums text-canvas-white">
+          <span className="inline-block size-2 rounded-full bg-deliver-green" />
+          <span className="text-muted-ash">Yield</span>
+          <span className="tabular-nums text-midnight-ink">
             {fmtPct(lendApy)}
           </span>
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="inline-block size-2 rounded-full bg-white/40" />
-          <span className="text-canvas-white/55">Rewards</span>
-          <span className="tabular-nums text-canvas-white">
+          <span className="inline-block size-2 rounded-full bg-muted-ash/40" />
+          <span className="text-muted-ash">Rewards</span>
+          <span className="tabular-nums text-midnight-ink">
             {fmtPct(rewardApy)}
           </span>
         </span>
@@ -1846,17 +1819,16 @@ function PortionsBar({ values }: { values: number[] }) {
   if (sum <= 0) return null;
   return (
     <div
-      className="flex h-1.5 w-full overflow-hidden bg-white/[0.06]"
-      style={{ borderRadius: 9999 }}
+      className="flex h-1.5 w-full overflow-hidden bg-whisper-gray rounded-full"
     >
       {values.map((v, i) => (
         <div
           key={i}
           className={cn(
-            i === 0 && "bg-cash-lime",
-            i === 1 && "bg-cash-lime/65",
-            i === 2 && "bg-cash-lime/40",
-            i >= 3 && "bg-cash-lime/25",
+            i === 0 && "bg-deliver-green",
+            i === 1 && "bg-deliver-green/65",
+            i === 2 && "bg-deliver-green/40",
+            i >= 3 && "bg-deliver-green/25",
           )}
           style={{ width: `${(v / sum) * 100}%` }}
         />
@@ -1870,10 +1842,10 @@ function SegmentDot({ index }: { index: number }) {
     <span
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
-        index === 0 && "bg-cash-lime",
-        index === 1 && "bg-cash-lime/65",
-        index === 2 && "bg-cash-lime/40",
-        index >= 3 && "bg-cash-lime/25",
+        index === 0 && "bg-deliver-green",
+        index === 1 && "bg-deliver-green/65",
+        index === 2 && "bg-deliver-green/40",
+        index >= 3 && "bg-deliver-green/25",
       )}
     />
   );
@@ -1884,17 +1856,16 @@ function SplitDetail({ s }: { s: ResolvedSplitStep }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+          <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
             Source
           </div>
           <div
-            className="font-semibold tabular-nums leading-none text-canvas-white"
-            style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
+            className="font-medium tabular-nums leading-none text-midnight-ink text-[22px] tracking-[-0.015em]"
           >
             {fmtAmount(s.totalHuman)} {s.sourceSymbol}
           </div>
         </div>
-        <span className="shrink-0 self-start text-caption text-canvas-white/55">
+        <span className="shrink-0 self-start text-caption text-muted-ash">
           {s.portions.length}-way split
         </span>
       </div>
@@ -1905,17 +1876,17 @@ function SplitDetail({ s }: { s: ResolvedSplitStep }) {
           return (
             <div
               key={i}
-              className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
+              className="flex items-center justify-between border-t border-hairline py-2 first:border-t-0 first:pt-0"
             >
-              <span className="flex items-center gap-2 text-body-sm text-canvas-white/70">
+              <span className="flex items-center gap-2 text-body-sm text-muted-ash">
                 <SegmentDot index={i} />
                 Portion {i + 1}
               </span>
               <span className="flex items-baseline gap-2 text-body-sm">
-                <span className="font-semibold text-canvas-white">
+                <span className="font-medium text-midnight-ink">
                   {pct}%
                 </span>
-                <span className="tabular-nums text-canvas-white/70">
+                <span className="tabular-nums text-muted-ash">
                   {fmtAmount(p.human)} {s.sourceSymbol}
                 </span>
               </span>
@@ -1963,17 +1934,16 @@ function MergeDetail({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-canvas-white/55">
+          <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
             Combined
           </div>
           <div
-            className="font-semibold tabular-nums leading-none text-canvas-white"
-            style={{ fontSize: "22px", letterSpacing: "-0.015em" }}
+            className="font-medium tabular-nums leading-none text-midnight-ink text-[22px] tracking-[-0.015em]"
           >
             {fmtAmount(s.totalHuman)} {s.symbol}
           </div>
         </div>
-        <span className="shrink-0 self-start text-caption text-canvas-white/55">
+        <span className="shrink-0 self-start text-caption text-muted-ash">
           {s.sources.length} sources
         </span>
       </div>
@@ -1984,17 +1954,17 @@ function MergeDetail({
           return (
             <div
               key={i}
-              className="flex items-center justify-between border-t border-white/[0.06] py-2 first:border-t-0 first:pt-0"
+              className="flex items-center justify-between border-t border-hairline py-2 first:border-t-0 first:pt-0"
             >
-              <span className="flex items-center gap-2 text-body-sm text-canvas-white/70">
+              <span className="flex items-center gap-2 text-body-sm text-muted-ash">
                 <SegmentDot index={i} />
                 {describeMergeSource(src.label, cached)}
               </span>
               <span className="flex items-baseline gap-2 text-body-sm">
-                <span className="font-semibold text-canvas-white">
+                <span className="font-medium text-midnight-ink">
                   {pct.toFixed(pct % 1 === 0 ? 0 : 1)}%
                 </span>
-                <span className="tabular-nums text-canvas-white/70">
+                <span className="tabular-nums text-muted-ash">
                   {fmtAmount(src.human)} {s.symbol}
                 </span>
               </span>
@@ -2030,8 +2000,7 @@ function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
         }
       />
       <div
-        className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-canvas-white/80"
-        style={{ borderRadius: 10 }}
+        className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-muted-ash rounded-[10px]"
       >
         Funds arrive after the operator unwinds — not in this transaction.
       </div>
@@ -2046,7 +2015,7 @@ function CancelDetail({ s }: { s: ResolvedCancelRedeemStep }) {
         label={`Cancel withdrawal · ${s.vault.name}`}
         value={<>req #{s.sequenceNumber}</>}
       />
-      <div className="text-caption text-canvas-white/55">
+      <div className="text-caption text-muted-ash">
         Shares return to your wallet on confirmation. No fees beyond gas.
       </div>
     </div>

@@ -21,17 +21,15 @@ export function ToolCallRow({ label, status }: Props) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="inline-flex items-center gap-2 liquid-glass px-4 py-2 text-body-sm font-medium text-canvas-white"
-      style={{ borderRadius: 9999 }}
+      className="inline-flex items-center gap-2 surface-card px-4 py-2 text-body-sm font-medium text-midnight-ink rounded-card"
     >
       <span
         className={cn(
-          "inline-flex size-5 items-center justify-center",
-          isDone && "bg-cash-lime text-canvas-white",
+          "inline-flex size-5 items-center justify-center rounded-full",
+          isDone && "bg-deliver-green text-midnight-ink",
           isError && "bg-destructive text-canvas-white",
-          !isDone && !isError && "liquid-glass text-canvas-white/55",
+          !isDone && !isError && "surface-panel text-muted-ash",
         )}
-        style={{ borderRadius: 9999 }}
       >
         {isDone ? (
           <Check className="size-3" strokeWidth={2.8} />
@@ -43,7 +41,7 @@ export function ToolCallRow({ label, status }: Props) {
       </span>
       <span>{label}</span>
       {isWorking && (
-        <span className="text-canvas-white/55">…</span>
+        <span className="text-muted-ash">…</span>
       )}
     </motion.div>
   );

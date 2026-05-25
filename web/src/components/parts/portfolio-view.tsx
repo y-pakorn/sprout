@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import {
-  Sprout,
   Clock,
   ArrowDownLeft,
   Check,
@@ -19,6 +18,9 @@ import {
 } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { AssetIcon } from "@/components/asset-icon";
+import { SproutBadge } from "@/components/ui/sprout-badge";
+import { StatusDisk } from "@/components/ui/status-disk";
+import { Tag } from "@/components/ui/tag";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
 import { useVaultBalance } from "@/lib/client-vault-balance";
@@ -116,28 +118,24 @@ export function PortfolioView() {
           transition={{ type: "spring", visualDuration: 0.55, bounce: 0.15 }}
           className="space-y-2 text-center"
         >
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-canvas-white/55">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-ash">
             Your garden
           </p>
           <h1
-            className="display-tight font-medium leading-[1.05] tracking-tight text-canvas-white tabular-nums"
-            style={{
-              fontSize: "clamp(48px, 7vw, 88px)",
-              textShadow: "0 2px 24px rgba(0,0,0,0.4)",
-            }}
+            className="display-tight font-medium leading-[1.05] tracking-tight text-midnight-ink tabular-nums text-[clamp(48px,7vw,88px)]"
           >
             {fmtUsd(totals.totalUsd)}
           </h1>
-          <p className="text-body-sm text-canvas-white/70">
+          <p className="text-body-sm text-muted-ash">
             {fmtUsd(totals.holdingsUsd)} in wallet ·{" "}
-            <span className="text-canvas-white/90">
+            <span className="text-midnight-ink">
               {fmtUsd(totals.positionsUsd)} earning
             </span>
             {totals.blendedApy > 0 && (
               <>
                 {" "}
                 @{" "}
-                <span className="font-semibold text-cash-lime">
+                <span className="font-medium text-midnight-ink">
                   {fmtPct(totals.blendedApy)} APY
                 </span>
               </>
@@ -148,26 +146,25 @@ export function PortfolioView() {
         {/* ───── States ───── */}
         {!account && (
           <EmptyCard>
-            <span className="text-canvas-white">
+            <span className="text-midnight-ink">
               Connect your wallet to see your full portfolio.
             </span>
           </EmptyCard>
         )}
         {account && loading && (
           <EmptyCard>
-            <Loader2 className="size-4 animate-spin text-canvas-white/70" />
-            <span className="text-canvas-white/70">Loading portfolio…</span>
+            <Loader2 className="size-4 animate-spin text-muted-ash" />
+            <span className="text-muted-ash">Loading portfolio…</span>
           </EmptyCard>
         )}
         {account && error && (
           <EmptyCard tone="warn">
             <AlertTriangle className="size-4 text-warning" strokeWidth={2.4} />
-            <span className="text-canvas-white">Couldn't load: {error}</span>
+            <span className="text-midnight-ink">Couldn't load: {error}</span>
             <button
               type="button"
               onClick={refresh}
-              className="ml-auto bg-canvas-white/10 px-3 py-1 text-caption font-semibold text-canvas-white hover:bg-canvas-white/20"
-              style={{ borderRadius: 9999 }}
+              className="ml-auto bg-whisper-gray px-3 py-1 text-caption font-medium text-midnight-ink hover:bg-light-taupe rounded-button"
             >
               Retry
             </button>
@@ -239,8 +236,7 @@ export function PortfolioView() {
               <button
                 type="button"
                 onClick={() => setShowAllActivity((v) => !v)}
-                className="mt-1 w-full bg-canvas-white/8 px-3 py-2 text-caption font-medium text-canvas-white/70 transition-colors hover:bg-canvas-white/15 hover:text-canvas-white"
-                style={{ borderRadius: 12 }}
+                className="mt-1 w-full bg-whisper-gray px-3 py-2 text-caption font-medium text-muted-ash transition-colors hover:bg-light-taupe hover:text-midnight-ink rounded-card"
               >
                 {showAllActivity
                   ? "Show less"
@@ -258,7 +254,7 @@ export function PortfolioView() {
           holdings.length === 0 &&
           activity.length === 0 && (
             <EmptyCard>
-              <span className="text-canvas-white/55">
+              <span className="text-muted-ash">
                 Nothing in your garden yet. Plant a seed →
               </span>
             </EmptyCard>
@@ -302,14 +298,14 @@ function Section({
     >
       <div className="flex items-baseline justify-between gap-3 px-1">
         <div className="space-y-0.5">
-          <h2 className="text-body-lg font-semibold text-canvas-white">
+          <h2 className="text-body-lg font-medium text-midnight-ink">
             {title}{" "}
-            <span className="text-canvas-white/40 tabular-nums">
+            <span className="text-muted-ash tabular-nums">
               · {count}
             </span>
           </h2>
           {subtitle && (
-            <p className="text-caption text-canvas-white/55">{subtitle}</p>
+            <p className="text-caption text-muted-ash">{subtitle}</p>
           )}
         </div>
       </div>
@@ -326,15 +322,14 @@ function HoldingRow({ h, i }: { h: TokenHolding; i: number }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.03 * i, duration: 0.2 }}
-      className="liquid-glass flex items-center gap-3 px-4 py-3"
-      style={{ borderRadius: 18 }}
+      className="surface-card flex items-center gap-3 px-4 py-3 rounded-card"
     >
       <AssetIcon src={h.iconUrl} label={h.symbol} size={40} />
       <div className="flex min-w-0 flex-1 flex-col leading-tight">
-        <span className="truncate text-body font-semibold text-canvas-white">
+        <span className="truncate text-body font-medium text-midnight-ink">
           {h.symbol}
         </span>
-        <span className="truncate text-caption text-canvas-white/55">
+        <span className="truncate text-caption text-muted-ash">
           {hasPrice && fmtPriceUsd(h.priceUsd!)}
           {hasPrice && !h.known ? " · " : ""}
           {!h.known && (
@@ -344,10 +339,10 @@ function HoldingRow({ h, i }: { h: TokenHolding; i: number }) {
         </span>
       </div>
       <div className="flex flex-col items-end leading-tight">
-        <span className="text-body font-semibold tabular-nums text-canvas-white">
+        <span className="text-body font-medium tabular-nums text-midnight-ink">
           {hasValue ? fmtUsd(h.valueUsd!) : fmtAmount(h.balance)}
         </span>
-        <span className="text-caption tabular-nums text-canvas-white/55">
+        <span className="text-caption tabular-nums text-muted-ash">
           {fmtAmount(h.balance)} {h.symbol}
         </span>
       </div>
@@ -364,11 +359,10 @@ function EmptyCard({
 }) {
   return (
     <div
-      className={cn(
-        "liquid-glass flex items-center gap-2.5 px-4 py-4 text-body-sm",
+      className={cn("rounded-card", 
+        "surface-card flex items-center gap-2.5 px-4 py-4 text-body-sm",
         tone === "warn" && "ring-1 ring-warning/35",
       )}
-      style={{ borderRadius: 18 }}
     >
       {children}
     </div>
@@ -389,8 +383,7 @@ function PositionRow({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.25 }}
-      className="liquid-glass flex items-center gap-3 px-4 py-3"
-      style={{ borderRadius: 18 }}
+      className="surface-card flex items-center gap-3 px-4 py-3 rounded-card"
     >
       <div className="relative shrink-0">
         <AssetIcon
@@ -398,27 +391,17 @@ function PositionRow({
           label={p.vaultName}
           size={40}
         />
-        <span
-          className="absolute -bottom-1 -right-1 inline-flex size-4 items-center justify-center bg-cash-lime text-midnight-black"
-          style={{ borderRadius: 9999 }}
-        >
-          <Sprout className="size-2.5" strokeWidth={2.6} />
-        </span>
+        <SproutBadge />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-body font-semibold text-canvas-white">
+          <span className="truncate text-body font-medium text-midnight-ink">
             {p.vaultName}
           </span>
-          <span
-            className="shrink-0 bg-cash-lime/20 px-1.5 py-0 text-[10px] font-semibold tabular-nums text-cash-lime"
-            style={{ borderRadius: 9999 }}
-          >
-            {fmtPct(p.apyPct)}
-          </span>
+          <Tag tone="green">{fmtPct(p.apyPct)}</Tag>
         </div>
-        <span className="truncate text-caption tabular-nums text-canvas-white/55">
+        <span className="truncate text-caption tabular-nums text-muted-ash">
           {fmtAmount(p.shares)} shares · {p.depositSymbol}
           {p.withdrawalPeriodDays
             ? ` · ${p.withdrawalPeriodDays}d lockup`
@@ -427,14 +410,13 @@ function PositionRow({
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="text-body font-semibold tabular-nums text-canvas-white">
+        <span className="text-body font-medium tabular-nums text-midnight-ink">
           {fmtUsd(p.positionValueUsd)}
         </span>
         <button
           type="button"
           onClick={onWithdraw}
-          className="bg-canvas-white/10 px-3 py-1 text-caption font-semibold text-canvas-white transition-colors hover:bg-canvas-white/20"
-          style={{ borderRadius: 9999 }}
+          className="bg-whisper-gray px-3 py-1 text-caption font-medium text-midnight-ink transition-colors hover:bg-light-taupe rounded-button"
         >
           Withdraw
         </button>
@@ -522,41 +504,26 @@ function PendingRow({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.04 * i, duration: 0.25 }}
-      className="liquid-glass flex items-center gap-3 px-4 py-3"
-      style={{ borderRadius: 18 }}
+      className="surface-card flex items-center gap-3 px-4 py-3 rounded-card"
     >
-      <span
-        className={cn(
-          "inline-flex size-9 shrink-0 items-center justify-center",
-          ready ? "bg-cash-lime/20 text-cash-lime" : "bg-warning/15 text-warning",
-        )}
-        style={{ borderRadius: 9999 }}
-      >
+      <StatusDisk tone={ready ? "green" : "gold"}>
         {ready ? (
           <Check className="size-4" strokeWidth={2.6} />
         ) : (
           <Clock className="size-4" strokeWidth={2.4} />
         )}
-      </span>
+      </StatusDisk>
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-body font-semibold text-canvas-white">
+          <span className="truncate text-body font-medium text-midnight-ink">
             {w.vault.name}
           </span>
-          <span
-            className={cn(
-              "shrink-0 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider",
-              ready
-                ? "bg-cash-lime/20 text-cash-lime"
-                : "bg-warning/15 text-warning",
-            )}
-            style={{ borderRadius: 9999 }}
-          >
+          <Tag tone={ready ? "green" : "gold"}>
             {ready ? "Ready" : "Pending"}
-          </span>
+          </Tag>
         </div>
-        <span className="truncate text-caption tabular-nums text-canvas-white/55">
+        <span className="truncate text-caption tabular-nums text-muted-ash">
           {fmtAmount(w.requestedShares)} {w.receiptCoin.symbol} ·{" "}
           {ready ? "processing window open" : fmtCountdown(availableAt, now)}{" "}
           · requested {fmtRelative(w.requestedAt)}
@@ -570,7 +537,7 @@ function PendingRow({
 
       <div className="flex shrink-0 flex-col items-end gap-1">
         {Number.isFinite(usd) && usd > 0 && (
-          <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+          <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
             ≈{fmtUsd(usd)}
           </span>
         )}
@@ -579,7 +546,7 @@ function PendingRow({
             href={`https://suiscan.xyz/mainnet/tx/${w.txDigest}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-0.5 text-caption text-canvas-white/55 hover:text-canvas-white"
+            className="inline-flex items-center gap-0.5 text-caption text-muted-ash hover:text-midnight-ink"
           >
             {w.txDigest.slice(0, 6)}…
             <ExternalLink className="size-3" strokeWidth={2.2} />
@@ -588,8 +555,7 @@ function PendingRow({
             type="button"
             onClick={cancel}
             disabled={cancelling === "signing" || cancelling === "confirming"}
-            className="inline-flex items-center gap-0.5 bg-canvas-white/10 px-2.5 py-1 text-caption font-semibold text-canvas-white transition-colors hover:bg-canvas-white/20 disabled:opacity-50"
-            style={{ borderRadius: 9999 }}
+            className="inline-flex items-center gap-0.5 bg-whisper-gray px-2.5 py-1 text-caption font-medium text-midnight-ink transition-colors hover:bg-light-taupe disabled:opacity-50 rounded-button"
           >
             {cancelling === "signing" || cancelling === "confirming" ? (
               <Loader2 className="size-3 animate-spin" strokeWidth={2.4} />
@@ -617,36 +583,32 @@ function ActivityRow({
     initial: { opacity: 0, y: 8 },
     animate: { opacity: 1, y: 0 },
     transition: { delay: 0.03 * i, duration: 0.2 },
-    className: "liquid-glass flex items-center gap-3 px-4 py-3",
-    style: { borderRadius: 18 },
+    className: "surface-card flex items-center gap-3 rounded-card px-4 py-3",
   };
 
   if (item.type === "Deposit") {
     const usd = item.depositAmount * item.depositCoin.priceUsd;
     return (
       <motion.div {...common}>
-        <span
-          className="inline-flex size-9 shrink-0 items-center justify-center bg-cash-lime/20 text-cash-lime"
-          style={{ borderRadius: 9999 }}
-        >
+        <StatusDisk tone="green">
           <ArrowDownLeft className="size-4" strokeWidth={2.4} />
-        </span>
+        </StatusDisk>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-semibold text-canvas-white">
+          <span className="truncate text-body-sm font-medium text-midnight-ink">
             Deposit · {item.vault.name}
           </span>
-          <span className="truncate text-caption tabular-nums text-canvas-white/55">
+          <span className="truncate text-caption tabular-nums text-muted-ash">
             {fmtAmount(item.depositAmount)} {item.depositCoin.symbol} →{" "}
             {fmtAmount(item.receivedShares)} {item.receiptCoin.symbol}
           </span>
         </div>
         <div className="flex flex-col items-end leading-tight">
           {usd > 0 && (
-            <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
               {fmtUsd(usd)}
             </span>
           )}
-          <span className="text-caption text-canvas-white/55">
+          <span className="text-caption text-muted-ash">
             {fmtRelative(item.timestamp)}
           </span>
         </div>
@@ -658,27 +620,24 @@ function ActivityRow({
     const usd = item.shares * item.receiptCoin.priceUsd;
     return (
       <motion.div {...common}>
-        <span
-          className="inline-flex size-9 shrink-0 items-center justify-center bg-warning/15 text-warning"
-          style={{ borderRadius: 9999 }}
-        >
+        <StatusDisk tone="gold">
           <Clock className="size-4" strokeWidth={2.4} />
-        </span>
+        </StatusDisk>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-semibold text-canvas-white">
+          <span className="truncate text-body-sm font-medium text-midnight-ink">
             Withdraw request · {item.vault.name}
           </span>
-          <span className="truncate text-caption tabular-nums text-canvas-white/55">
+          <span className="truncate text-caption tabular-nums text-muted-ash">
             {fmtAmount(item.shares)} {item.receiptCoin.symbol}
           </span>
         </div>
         <div className="flex flex-col items-end leading-tight">
           {usd > 0 && (
-            <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
               ≈{fmtUsd(usd)}
             </span>
           )}
-          <span className="text-caption text-canvas-white/55">
+          <span className="text-caption text-muted-ash">
             {fmtRelative(item.timestamp)}
           </span>
         </div>
@@ -690,28 +649,25 @@ function ActivityRow({
     const usd = item.receivedAmount * item.receivedCoin.priceUsd;
     return (
       <motion.div {...common}>
-        <span
-          className="inline-flex size-9 shrink-0 items-center justify-center bg-cash-lime/20 text-cash-lime"
-          style={{ borderRadius: 9999 }}
-        >
+        <StatusDisk tone="green">
           <Check className="size-4" strokeWidth={2.6} />
-        </span>
+        </StatusDisk>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-semibold text-canvas-white">
+          <span className="truncate text-body-sm font-medium text-midnight-ink">
             Withdrawal completed · {item.vault.name}
           </span>
-          <span className="truncate text-caption tabular-nums text-canvas-white/55">
+          <span className="truncate text-caption tabular-nums text-muted-ash">
             {fmtAmount(item.redeemedShares)} {item.receiptCoin.symbol} →{" "}
             {fmtAmount(item.receivedAmount)} {item.receivedCoin.symbol}
           </span>
         </div>
         <div className="flex flex-col items-end leading-tight">
           {usd > 0 && (
-            <span className="text-body-sm font-semibold tabular-nums text-canvas-white">
+            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
               {fmtUsd(usd)}
             </span>
           )}
-          <span className="text-caption text-canvas-white/55">
+          <span className="text-caption text-muted-ash">
             {fmtRelative(item.timestamp)}
           </span>
         </div>
