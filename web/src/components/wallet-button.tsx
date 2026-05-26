@@ -53,7 +53,11 @@ export function WalletButton({
         <PillButton
           variant={glass ? "secondary" : "primary"}
           onClick={() => setConnectOpen(true)}
-          className={glass ? "gap-1.5" : "gap-2 px-5 py-2.5"}
+          className={
+            glass
+              ? "gap-1.5 bg-canvas-white shadow-button hover:bg-whisper-gray"
+              : "gap-2 px-5 py-2.5"
+          }
         >
           <WalletIcon
             className={glass ? "size-3.5" : "size-4"}

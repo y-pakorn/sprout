@@ -22,6 +22,7 @@ import { SproutBadge } from "@/components/ui/sprout-badge";
 import { StatusDisk } from "@/components/ui/status-disk";
 import { Tag } from "@/components/ui/tag";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
+import { WalletButton } from "@/components/wallet-button";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
 import { CoinFlow } from "@/components/parts/coin-flow";
 import { useVaultBalance } from "@/lib/client-vault-balance";
@@ -120,46 +121,44 @@ export function PortfolioView() {
   return (
     <CinematicShell mode="dim">
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 pb-24 pt-28">
+        {/* ───── Connect gate (signed out) ───── */}
+        {!account && <ConnectGate />}
+
         {/* ───── Hero — total value ───── */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", visualDuration: 0.55, bounce: 0.15 }}
-          className="space-y-2 text-center"
-        >
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-ash">
-            Your garden
-          </p>
-          <h1
-            className="display-tight font-medium leading-[1.05] tracking-tight text-midnight-ink tabular-nums text-[clamp(48px,7vw,88px)]"
+        {account && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", visualDuration: 0.55, bounce: 0.15 }}
+            className="space-y-2 text-center"
           >
-            {fmtUsd(totals.totalUsd)}
-          </h1>
-          <p className="text-body-sm text-muted-ash">
-            {fmtUsd(totals.holdingsUsd)} in wallet ·{" "}
-            <span className="text-midnight-ink">
-              {fmtUsd(totals.positionsUsd)} earning
-            </span>
-            {totals.blendedApy > 0 && (
-              <>
-                {" "}
-                @{" "}
-                <span className="font-medium text-midnight-ink">
-                  {fmtPct(totals.blendedApy)} APY
-                </span>
-              </>
-            )}
-          </p>
-        </motion.div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-ash">
+              Your garden
+            </p>
+            <h1
+              className="display-tight font-medium leading-[1.05] tracking-tight text-midnight-ink tabular-nums text-[clamp(48px,7vw,88px)]"
+            >
+              {fmtUsd(totals.totalUsd)}
+            </h1>
+            <p className="text-body-sm text-muted-ash">
+              {fmtUsd(totals.holdingsUsd)} in wallet ·{" "}
+              <span className="text-midnight-ink">
+                {fmtUsd(totals.positionsUsd)} earning
+              </span>
+              {totals.blendedApy > 0 && (
+                <>
+                  {" "}
+                  @{" "}
+                  <span className="font-medium text-midnight-ink">
+                    {fmtPct(totals.blendedApy)} APY
+                  </span>
+                </>
+              )}
+            </p>
+          </motion.div>
+        )}
 
         {/* ───── States ───── */}
-        {!account && (
-          <EmptyCard>
-            <span className="text-midnight-ink">
-              Connect your wallet to see your full portfolio.
-            </span>
-          </EmptyCard>
-        )}
         {account && loading && (
           <EmptyCard>
             <Loader2 className="size-4 animate-spin text-muted-ash" />
@@ -315,6 +314,30 @@ export function PortfolioView() {
 // ─────────────────────────────────────────────────────────
 // Sub-components
 // ─────────────────────────────────────────────────────────
+
+/** Signed-out gate — mirrors the connected hero rhythm (bare on canvas). */
+function ConnectGate() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", visualDuration: 0.55, bounce: 0.15 }}
+      className="mx-auto my-auto flex w-full max-w-sm flex-col items-center gap-6 text-center"
+    >
+      <div className="space-y-2">
+        <h1 className="font-alt text-title font-medium tracking-tight text-midnight-ink">
+          Connect your wallet
+        </h1>
+        <p className="mx-auto max-w-xs text-body-sm text-muted-ash">
+          See your holdings, vault positions, and the yield they earn — all in
+          one place.
+        </p>
+      </div>
+
+      <WalletButton />
+    </motion.div>
+  );
+}
 
 function Section({
   title,

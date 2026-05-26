@@ -76,14 +76,14 @@ function NavTabs() {
               <motion.span
                 layoutId="nav-active-pill"
                 transition={SPRING_BOUNCY}
-                className="absolute inset-0 rounded-button bg-canvas-white ring-1 ring-hairline shadow-button"
+                className="absolute inset-0 rounded-button bg-canvas-white/15 backdrop-blur-sm ring-1 ring-hairline shadow-button"
               />
             )}
             <span
               className={cn(
                 "relative z-10",
                 active
-                  ? "text-midnight-ink font-semibold"
+                  ? "text-canvas-white font-semibold"
                   : "text-canvas-white/55 hover:text-canvas-white"
               )}
             >
