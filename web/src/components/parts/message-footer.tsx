@@ -9,6 +9,7 @@ export type MessageUsage = {
   outputTokens?: number;
   cachedInputTokens?: number;
   totalTokens?: number;
+  model: string;
 };
 
 export type MessageMeta = {
@@ -74,9 +75,7 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
     >
       {duration && <span>{duration}</span>}
       {duration && cost && <span aria-hidden>·</span>}
-      {cost && (
-        <span title={costLabel || undefined}>{cost}</span>
-      )}
+      {cost && <span title={costLabel || undefined}>{cost}</span>}
       {canRegenerate && (
         <>
           {hasStats && <span aria-hidden>·</span>}

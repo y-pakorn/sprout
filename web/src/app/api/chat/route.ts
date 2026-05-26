@@ -84,6 +84,7 @@ export async function POST(req: Request) {
             outputTokens: part.totalUsage?.outputTokens,
             cachedInputTokens: part.totalUsage?.cachedInputTokens,
             totalTokens: part.totalUsage?.totalTokens,
+            model: aiModel.modelId.replace(":free", ""),
           },
           durationMs: Date.now() - startedAt,
         };
