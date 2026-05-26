@@ -2,12 +2,12 @@
 
 import type { ReactNode } from "react";
 import { motion } from "motion/react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, MessageCircle } from "lucide-react";
 import { Identicon } from "@/components/ui/identicon";
-import { Tag } from "@/components/ui/tag";
+import { RelativeTime } from "@/components/ui/relative-time";
 import { cn } from "@/lib/utils";
-import { fmtRelative } from "@/lib/format";
 import { shortAddr } from "@/lib/avatar";
+import { askSprout } from "@/lib/ask-sprout";
 
 function explorerTxUrl(digest: string): string {
   return `https://suiscan.xyz/mainnet/tx/${digest}`;
@@ -18,32 +18,33 @@ type Props = {
   senderName: string | null;
   timestampMs: number;
   digest: string;
-  /** Small glyph anchored to the avatar's bottom-right (action indicator). */
-  badge: ReactNode;
+  /** Natural-language question the "Ask Sprout" action sends into the chat. */
+  askPrompt: string;
   /** True when the row's actor is the connected wallet. */
   isSelf?: boolean;
   /** True for rows that just arrived live — flashes a brief highlight. */
   fresh?: boolean;
-  /** Body rows rendered below the identity line. */
+  /** The post body — a human sentence narrating the action. */
   children: ReactNode;
 };
 
 /**
- * Shared chrome for a feed row: avatar + action badge, the identity / time /
- * tx-link line, and the live-arrival + self highlights. Vault events and DEX
- * swaps both render through this — only the badge and body differ.
+ * A social-feed "post": avatar, a tweet-style header line (name · time), the
+ * narrated action as the body, and a muted action row (Ask Sprout · View tx).
+ * Vault events and DEX swaps both render through this — only the body differs.
  */
 export function FeedRow({
   sender,
   senderName,
   timestampMs,
   digest,
-  badge,
+  askPrompt,
   isSelf = false,
   fresh = false,
   children,
 }: Props) {
-  const name = senderName ?? shortAddr(sender);
+  const name = isSelf ? "You" : senderName ?? shortAddr(sender);
+  const mono = !isSelf && !senderName;
 
   return (
     <motion.article
@@ -51,7 +52,7 @@ export function FeedRow({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
       className={cn(
-        "relative overflow-hidden border-b border-hairline px-5 py-3.5 transition-colors hover:bg-whisper-gray/50",
+        "relative overflow-hidden border-b border-hairline px-5 py-4 transition-colors hover:bg-whisper-gray/50",
         isSelf && "bg-deliver-green/[0.06]",
       )}
     >
@@ -65,65 +66,51 @@ export function FeedRow({
         />
       )}
 
-      <div className="relative flex items-center gap-3">
-        {/* Avatar + action badge */}
-        <div className="relative shrink-0">
-          <Identicon address={sender} size={40} />
-          {badge}
-        </div>
+      <div className="relative flex gap-3">
+        <Identicon address={sender} size={40} />
 
-        {/* Body */}
         <div className="min-w-0 flex-1">
-          {/* Identity · time · tx */}
-          <div className="flex items-center gap-1.5">
+          {/* Header — name · time */}
+          <div className="flex items-center gap-1.5 text-caption text-muted-ash">
             <span
               className={cn(
                 "truncate text-body-sm font-medium text-midnight-ink",
-                !senderName && "font-mono",
+                mono && "font-mono",
               )}
             >
               {name}
             </span>
-            {isSelf && <Tag tone="green">You</Tag>}
-            <span className="ml-auto flex shrink-0 items-center gap-1 text-caption text-muted-ash tabular-nums">
-              {fmtRelative(timestampMs)}
-              {digest && (
-                <a
-                  href={explorerTxUrl(digest)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="View transaction"
-                  className="text-muted-ash transition-colors hover:text-midnight-ink"
-                >
-                  <ExternalLink className="size-3" strokeWidth={2.2} />
-                </a>
-              )}
-            </span>
+            <span aria-hidden>·</span>
+            <RelativeTime ms={timestampMs} />
           </div>
 
-          {children}
+          {/* Body — the narrated action */}
+          <div className="mt-0.5">{children}</div>
+
+          {/* Action row */}
+          <div className="mt-2 flex items-center gap-4 text-caption text-muted-ash">
+            <button
+              type="button"
+              onClick={() => askSprout(askPrompt)}
+              className="inline-flex items-center gap-1 transition-colors hover:text-midnight-ink"
+            >
+              <MessageCircle className="size-3.5" strokeWidth={2.2} />
+              Ask Sprout
+            </button>
+            {digest && (
+              <a
+                href={explorerTxUrl(digest)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 transition-colors hover:text-midnight-ink"
+              >
+                <ExternalLink className="size-3.5" strokeWidth={2.2} />
+                View tx
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </motion.article>
-  );
-}
-
-/** The circular action badge anchored to a row avatar. */
-export function FeedRowBadge({
-  className,
-  children,
-}: {
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <span
-      className={cn(
-        "absolute -bottom-0.5 -right-0.5 inline-flex size-4 items-center justify-center rounded-full ring-2 ring-canvas-white",
-        className,
-      )}
-    >
-      {children}
-    </span>
   );
 }

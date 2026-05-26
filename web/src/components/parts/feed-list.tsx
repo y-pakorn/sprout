@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, ArrowDownLeft, ArrowUpRight, Repeat } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { useEventFeed } from "@/lib/use-event-feed";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/sui-events";
 import { FeedEventCard } from "@/components/parts/feed-event-card";
 import { DexSwapCard } from "@/components/parts/dex-swap-card";
+import { PillButton } from "@/components/ui/pill-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SPRING_BOUNCY } from "@/lib/motion";
 
@@ -36,6 +37,19 @@ type Row =
   | { type: "header"; id: string; label: string }
   | { type: "event"; id: string; event: FeedItem };
 
+type FilterKey = "swap" | "deposit" | "redeem";
+
+const FILTERS: { key: FilterKey; label: string; Icon: typeof Repeat }[] = [
+  { key: "swap", label: "Swap", Icon: Repeat },
+  { key: "deposit", label: "Vault Deposit", Icon: ArrowDownLeft },
+  { key: "redeem", label: "Vault Withdraw", Icon: ArrowUpRight },
+];
+
+/** Which filter bucket a feed item belongs to. */
+function categoryOf(item: FeedItem): FilterKey {
+  return item.source === "dex" ? "swap" : item.kind;
+}
+
 export function FeedList() {
   const {
     events,
@@ -50,6 +64,23 @@ export function FeedList() {
   } = useEventFeed();
   const account = useCurrentAccount();
   const selfAddr = account ? canonicalCoinType(account.address) : null;
+
+  const [activeFilters, setActiveFilters] = useState<Set<FilterKey>>(
+    () => new Set(FILTERS.map((f) => f.key)),
+  );
+  const toggleFilter = useCallback((key: FilterKey) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const visibleEvents = useMemo(
+    () => events.filter((e) => activeFilters.has(categoryOf(e))),
+    [events, activeFilters],
+  );
 
   const coinMap = useCoinMap();
   const coinIndex = useMemo(() => buildCoinIndex(coinMap), [coinMap]);
@@ -70,11 +101,11 @@ export function FeedList() {
     return m;
   }, [vaults]);
 
-  // Flatten events into rows with time-group headers.
+  // Flatten the visible (filtered) events into rows with time-group headers.
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
     let last: string | null = null;
-    for (const ev of events) {
+    for (const ev of visibleEvents) {
       const bucket = timeBucket(ev.timestampMs);
       if (bucket !== last) {
         out.push({ type: "header", id: `header:${bucket}`, label: bucket });
@@ -83,14 +114,14 @@ export function FeedList() {
       out.push({ type: "event", id: ev.id, event: ev });
     }
     return out;
-  }, [events]);
+  }, [visibleEvents]);
 
   const parentRef = useRef<HTMLDivElement>(null);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (rows[i]?.type === "header" ? 37 : 84),
+    estimateSize: (i) => (rows[i]?.type === "header" ? 37 : 112),
     overscan: 6,
     getItemKey: (i) => rows[i]?.id ?? i,
   });
@@ -161,15 +192,34 @@ export function FeedList() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Live header */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-5 py-3.5">
-        <span className="relative flex size-2">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-deliver-green/60" />
-          <span className="relative inline-flex size-2 rounded-full bg-deliver-green" />
-        </span>
-        <span className="text-body-sm font-medium text-midnight-ink">
-          Live activity
-        </span>
+      {/* Live header + activity filters */}
+      <div className="shrink-0 border-b border-hairline px-5 py-3">
+        <div className="flex items-center gap-2">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-deliver-green/60" />
+            <span className="relative inline-flex size-2 rounded-full bg-deliver-green" />
+          </span>
+          <span className="text-body-sm font-medium text-midnight-ink">
+            Live activity
+          </span>
+        </div>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          {FILTERS.map(({ key, label, Icon }) => {
+            const on = activeFilters.has(key);
+            return (
+              <PillButton
+                key={key}
+                variant={on ? "primary" : "secondary"}
+                onClick={() => toggleFilter(key)}
+                aria-pressed={on}
+                className="gap-1 rounded-card px-2.5 py-1 text-caption"
+              >
+                <Icon className="size-3" strokeWidth={2.4} />
+                {label}
+              </PillButton>
+            );
+          })}
+        </div>
       </div>
 
       <div className="relative min-h-0 flex-1">
@@ -179,6 +229,11 @@ export function FeedList() {
           className="h-full overflow-y-auto"
         >
           <div className="w-full pb-24">
+            {rows.length === 0 && (
+              <p className="px-5 pt-16 text-center text-body-sm text-muted-ash">
+                No activity for the selected filters.
+              </p>
+            )}
             <div
               className="relative"
               style={{ height: virtualizer.getTotalSize() }}
@@ -230,7 +285,7 @@ export function FeedList() {
                 );
               })}
             </div>
-            {hasMore && (
+            {hasMore && rows.length > 0 && (
               <p className="pt-1 text-center text-caption text-muted-ash">
                 Loading older activity…
               </p>

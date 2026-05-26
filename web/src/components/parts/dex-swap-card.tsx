@@ -1,9 +1,8 @@
 "use client";
 
-import { ArrowRight, Repeat } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import { fmtAmount } from "@/lib/format";
-import { FeedRow, FeedRowBadge } from "@/components/parts/feed-row";
+import { FeedRow } from "@/components/parts/feed-row";
 import type { DexSwapEvent, SwapLeg } from "@/lib/dex-activity";
 
 type Props = {
@@ -14,19 +13,27 @@ type Props = {
   fresh?: boolean;
 };
 
-function Leg({ leg }: { leg: SwapLeg }) {
+/** An inline "147.16 WAL" token mention — icon + emphasized amount. */
+function Mention({ leg }: { leg: SwapLeg }) {
   return (
-    <span className="flex min-w-0 items-center gap-1">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
       <AssetIcon src={leg.iconUrl} label={leg.symbol} size={16} />
-      <span className="truncate">
-        {fmtAmount(leg.amount)} {leg.symbol}
+      <span className="font-medium tabular-nums text-midnight-ink">
+        {fmtAmount(leg.amount, 2)} {leg.symbol}
       </span>
     </span>
   );
 }
 
 export function DexSwapCard({ event, isSelf = false, fresh = false }: Props) {
-  const project = event.projectName;
+  const { soldLeg: sold, boughtLeg: bought, projectName: project } = event;
+
+  const askPrompt = `What do you make of this swap — ${fmtAmount(
+    sold.amount,
+    2,
+  )} ${sold.symbol} for ${fmtAmount(bought.amount, 2)} ${bought.symbol}${
+    project ? ` on ${project}` : ""
+  }?`;
 
   return (
     <FeedRow
@@ -34,30 +41,20 @@ export function DexSwapCard({ event, isSelf = false, fresh = false }: Props) {
       senderName={event.senderName}
       timestampMs={event.timestampMs}
       digest={event.digest}
+      askPrompt={askPrompt}
       isSelf={isSelf}
       fresh={fresh}
-      badge={
-        <FeedRowBadge className="bg-midnight-ink">
-          <Repeat className="size-2.5 text-canvas-white" strokeWidth={2.6} />
-        </FeedRowBadge>
-      }
     >
-      {/* Swap pair — the hero line */}
-      <div className="mt-0.5 flex items-center gap-1.5 text-body font-medium text-midnight-ink tabular-nums">
-        <Leg leg={event.soldLeg} />
-        <ArrowRight className="size-3 shrink-0 text-muted-ash" strokeWidth={2.2} />
-        <Leg leg={event.boughtLeg} />
-      </div>
-
-      {/* Protocol meta */}
-      <div className="mt-1 flex items-center gap-1.5 text-caption text-muted-ash">
-        {project ? (
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-body text-muted-ash">
+        <span>Swapped</span>
+        <Mention leg={sold} />
+        <span>for</span>
+        <Mention leg={bought} />
+        {project && (
           <>
-            <AssetIcon src={event.projectImg ?? undefined} label={project} size={14} />
-            <span className="truncate">Swapped on {project}</span>
+            <span>on</span>
+            <span className="text-midnight-ink">{project}</span>
           </>
-        ) : (
-          <span className="truncate">Swapped</span>
         )}
       </div>
     </FeedRow>
