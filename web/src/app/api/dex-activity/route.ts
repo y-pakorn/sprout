@@ -25,9 +25,17 @@ export const dynamic = "force-dynamic";
 
 const UPSTREAM = "https://suiscan.xyz/api/sui-backend/mainnet/api/dex/activity";
 
+const ALLOWED_ACTIONS = new Set(["SWAP", "ADD_LIQUIDITY", "REMOVE_LIQUIDITY"]);
+
 export async function GET(req: NextRequest) {
-  const page = req.nextUrl.searchParams.get("page") ?? "0";
-  const size = req.nextUrl.searchParams.get("size") ?? "20";
+  const sp = req.nextUrl.searchParams;
+  const page = sp.get("page") ?? "0";
+  const size = sp.get("size") ?? "20";
+  const actions = (sp.get("actions") ?? "SWAP")
+    .split(",")
+    .map((a) => a.trim().toUpperCase())
+    .filter((a) => ALLOWED_ACTIONS.has(a));
+  const body = { actions: actions.length ? actions : ["SWAP"] };
 
   const url = `${UPSTREAM}?page=${encodeURIComponent(
     page,
@@ -41,7 +49,7 @@ export async function GET(req: NextRequest) {
         "content-type": "application/json",
         ...signSuiscanHeaders("activity"),
       },
-      body: JSON.stringify({ actions: ["SWAP"] }),
+      body: JSON.stringify(body),
     });
 
     if (!upstream.ok) {

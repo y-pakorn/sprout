@@ -11,7 +11,7 @@ import {
   canonicalCoinType,
   type CoinMap,
 } from "@/lib/client-coins";
-import type { DexSwapEvent } from "@/lib/dex-activity";
+import type { DexEvent } from "@/lib/dex-activity";
 
 export const SUI_GRAPHQL_URL = "https://graphql.mainnet.sui.io/graphql";
 
@@ -248,7 +248,7 @@ export function byNewest(
 }
 
 /** A feed row — either one of our vault events or a global DEX swap. */
-export type FeedItem = FeedEvent | DexSwapEvent;
+export type FeedItem = FeedEvent | DexEvent;
 
 // ---- display derivation ----------------------------------------------------
 

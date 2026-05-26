@@ -13,6 +13,8 @@ import { fetchDexActivity } from "@/lib/dex-activity";
 
 const PAGE_SIZE = 50;
 const DEX_PAGE_SIZE = 25;
+// Fetch all DEX action types; the list filters by category client-side.
+const DEX_ACTIONS = ["SWAP", "ADD_LIQUIDITY", "REMOVE_LIQUIDITY"];
 const POLL_MS = 15000;
 const FRESH_MS = 2600;
 
@@ -124,7 +126,11 @@ export function useEventFeed(): UseEventFeed {
           })
         : Promise.resolve(null),
       dexActive
-        ? fetchDexActivity({ page: dexPage, size: DEX_PAGE_SIZE })
+        ? fetchDexActivity({
+            page: dexPage,
+            size: DEX_PAGE_SIZE,
+            actions: DEX_ACTIONS,
+          })
         : Promise.resolve(null),
     ])
       .then(([vaultRes, dexRes]) => {
@@ -200,7 +206,7 @@ export function useEventFeed(): UseEventFeed {
       );
       Promise.allSettled([
         fetchFeedPage({ before, limit: PAGE_SIZE, defs: EVENT_DEFS }),
-        fetchDexActivity({ page: 0, size: DEX_PAGE_SIZE }),
+        fetchDexActivity({ page: 0, size: DEX_PAGE_SIZE, actions: DEX_ACTIONS }),
       ]).then(([vaultRes, dexRes]) => {
         const incoming: FeedItem[] = [];
         if (vaultRes.status === "fulfilled") {

@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowUp, ArrowDownLeft, ArrowUpRight, Repeat } from "lucide-react";
+import {
+  ArrowUp,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Repeat,
+  Plus,
+  Minus,
+} from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { useEventFeed } from "@/lib/use-event-feed";
@@ -15,7 +22,7 @@ import {
   type VaultInfo,
 } from "@/lib/sui-events";
 import { FeedEventCard } from "@/components/parts/feed-event-card";
-import { DexSwapCard } from "@/components/parts/dex-swap-card";
+import { DexEventCard } from "@/components/parts/dex-event-card";
 import { PillButton } from "@/components/ui/pill-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SPRING_BOUNCY } from "@/lib/motion";
@@ -37,17 +44,24 @@ type Row =
   | { type: "header"; id: string; label: string }
   | { type: "event"; id: string; event: FeedItem };
 
-type FilterKey = "swap" | "deposit" | "redeem";
+type FilterKey =
+  | "swap"
+  | "add_liquidity"
+  | "remove_liquidity"
+  | "deposit"
+  | "redeem";
 
 const FILTERS: { key: FilterKey; label: string; Icon: typeof Repeat }[] = [
   { key: "swap", label: "Swap", Icon: Repeat },
+  { key: "add_liquidity", label: "Add Liquidity", Icon: Plus },
+  { key: "remove_liquidity", label: "Remove Liquidity", Icon: Minus },
   { key: "deposit", label: "Vault Deposit", Icon: ArrowDownLeft },
   { key: "redeem", label: "Vault Withdraw", Icon: ArrowUpRight },
 ];
 
-/** Which filter bucket a feed item belongs to. */
+/** Which filter bucket a feed item belongs to (vault kind or dex kind). */
 function categoryOf(item: FeedItem): FilterKey {
-  return item.source === "dex" ? "swap" : item.kind;
+  return item.kind;
 }
 
 export function FeedList() {
@@ -254,7 +268,7 @@ export function FeedList() {
                         {row.label}
                       </div>
                     ) : row.event.source === "dex" ? (
-                      <DexSwapCard
+                      <DexEventCard
                         event={row.event}
                         isSelf={
                           !!selfAddr &&
