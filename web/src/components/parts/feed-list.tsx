@@ -11,10 +11,11 @@ import { useCoinMap, canonicalCoinType } from "@/lib/client-coins";
 import {
   buildCoinIndex,
   deriveEventDisplay,
-  type FeedEvent,
+  type FeedItem,
   type VaultInfo,
 } from "@/lib/sui-events";
 import { FeedEventCard } from "@/components/parts/feed-event-card";
+import { DexSwapCard } from "@/components/parts/dex-swap-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SPRING_BOUNCY } from "@/lib/motion";
 
@@ -33,7 +34,7 @@ function timeBucket(ms: number): string {
 
 type Row =
   | { type: "header"; id: string; label: string }
-  | { type: "event"; id: string; event: FeedEvent };
+  | { type: "event"; id: string; event: FeedItem };
 
 export function FeedList() {
   const {
@@ -197,6 +198,15 @@ export function FeedList() {
                       <div className="border-b border-hairline bg-whisper-gray/40 px-5 py-2 text-caption font-medium uppercase tracking-wider text-muted-ash">
                         {row.label}
                       </div>
+                    ) : row.event.source === "dex" ? (
+                      <DexSwapCard
+                        event={row.event}
+                        isSelf={
+                          !!selfAddr &&
+                          canonicalCoinType(row.event.sender) === selfAddr
+                        }
+                        fresh={freshIds.has(row.event.id)}
+                      />
                     ) : (
                       <FeedEventCard
                         event={row.event}

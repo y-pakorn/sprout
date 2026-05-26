@@ -11,6 +11,7 @@ import {
   canonicalCoinType,
   type CoinMap,
 } from "@/lib/client-coins";
+import type { DexSwapEvent } from "@/lib/dex-activity";
 
 export const SUI_GRAPHQL_URL = "https://graphql.mainnet.sui.io/graphql";
 
@@ -51,6 +52,7 @@ export type CursorMap = Record<string, string | null>;
  *  ticker, vault) are derived later via `deriveEventDisplay`, once the vault
  *  list is available. */
 export type FeedEvent = {
+  source: "vault";
   /** Stable dedupe key. */
   id: string;
   kind: FeedEventKind;
@@ -222,6 +224,7 @@ export function normalizeEvent(
   const timestampMs = new Date(node.timestamp).getTime();
 
   return {
+    source: "vault",
     id: `${digest}:${def.kind}:${seq}`,
     kind: def.kind,
     label: def.label,
@@ -237,9 +240,15 @@ export function normalizeEvent(
 }
 
 /** Newest-first comparator. The server returns ascending — always re-sort. */
-export function byNewest(a: FeedEvent, b: FeedEvent): number {
+export function byNewest(
+  a: { timestampMs: number },
+  b: { timestampMs: number },
+): number {
   return b.timestampMs - a.timestampMs;
 }
+
+/** A feed row — either one of our vault events or a global DEX swap. */
+export type FeedItem = FeedEvent | DexSwapEvent;
 
 // ---- display derivation ----------------------------------------------------
 
