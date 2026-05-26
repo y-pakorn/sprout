@@ -49,20 +49,24 @@ export function ThinkingTrail({ text, streaming }: Props) {
       <button
         type="button"
         onClick={toggle}
-        className="inline-flex items-center gap-2 surface-card pl-2 pr-3 py-1 text-caption font-medium uppercase tracking-wider text-muted-ash transition-opacity hover:opacity-70 rounded-button"
+        className="inline-flex items-center gap-2.5 surface-card px-3.5 py-2 text-body-sm font-medium transition-opacity hover:opacity-70 rounded-card"
       >
         {streaming ? (
-          <LiquidBlob size={16} />
+          <LiquidBlob size={20} />
         ) : (
-          <Sparkles className="size-3 text-deliver-green" strokeWidth={2.4} />
+          <span className="inline-flex size-5 items-center justify-center rounded-full bg-deliver-green text-midnight-ink">
+            <Sparkles className="size-3" strokeWidth={2.4} />
+          </span>
         )}
-        {streaming ? "Thinking…" : "Reasoning"}
+        <span className={streaming ? "shimmer-text" : "text-midnight-ink"}>
+          {streaming ? "Thinking…" : "Reasoning"}
+        </span>
         <motion.span
           animate={{ rotate: open ? 180 : 0 }}
           transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-          className="inline-flex"
+          className="inline-flex text-muted-ash"
         >
-          <ChevronDown className="size-3" strokeWidth={2.4} />
+          <ChevronDown className="size-3.5" strokeWidth={2.4} />
         </motion.span>
       </button>
       <AnimatePresence initial={false}>
