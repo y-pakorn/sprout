@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useCurrentAccount, useCurrentClient } from "@mysten/dapp-kit-react";
 import { fetchAllBalances, type CoreClientLike } from "@/lib/grpc-balances";
 import { fetchVaults } from "@/lib/client-vaults";
+import { signedFetch } from "@/lib/api-client";
 import { canonicalCoinType } from "@/lib/client-coins";
 import type {
   VaultBalance,
@@ -26,7 +27,7 @@ export async function fetchVaultBalanceClient(
   type RawBal = { coinType: string; totalBalance: string };
 
   const [serverRes, allBalances, vaults] = await Promise.all([
-    fetch(`/api/vault-balance/${address}`, { cache: "no-store" }),
+    signedFetch(`/api/vault-balance/${address}`, { cache: "no-store" }),
     fetchAllBalances(client, address),
     fetchVaults(),
   ]);

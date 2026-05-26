@@ -4,6 +4,8 @@
 // proxy at /api/dex-activity. Supports swaps + liquidity (SWAP / ADD_LIQUIDITY
 // / REMOVE_LIQUIDITY). See app/api/dex-activity/route.ts for the signing.
 
+import { signedFetch } from "@/lib/api-client";
+
 /** A coin leg (amounts arrive pre-decimalized; liquidity amounts are signed). */
 type RawDexCoin = {
   amount: number;
@@ -118,7 +120,7 @@ export async function fetchDexActivity(opts: {
   signal?: AbortSignal;
 }): Promise<{ events: DexEvent[]; totalPages: number }> {
   const actions = (opts.actions ?? ["SWAP"]).join(",");
-  const res = await fetch(
+  const res = await signedFetch(
     `/api/dex-activity?page=${opts.page}&size=${opts.size}&actions=${actions}`,
     { signal: opts.signal },
   );

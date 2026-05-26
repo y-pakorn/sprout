@@ -29,6 +29,7 @@ import {
   canonicalCoinType,
 } from "@/lib/client-coins";
 import { useVaults, fetchVaults } from "@/lib/client-vaults";
+import { signedFetch } from "@/lib/api-client";
 import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
@@ -131,7 +132,7 @@ export function Conversation({
   vaultsRef.current = vaults;
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/chat" }),
+    () => new DefaultChatTransport({ api: "/api/chat", fetch: signedFetch }),
     []
   );
 
@@ -571,7 +572,7 @@ export function Conversation({
       //  2. on-chain token balances (active positions = receipt-coin balances)
       //  3. vault receipt index (vault metadata + canonical share price)
       const [serverRes, allBalances, vaultByReceipt] = await Promise.all([
-        fetch(`/api/vault-balance/${target}`, { cache: "no-store" }),
+        signedFetch(`/api/vault-balance/${target}`, { cache: "no-store" }),
         fetchAllBalances(client, target),
         loadVaultReceiptIndex(),
       ]);
@@ -750,7 +751,7 @@ export function Conversation({
         actionType: actionType ?? "ALL",
         size: String(limit ?? 10),
       });
-      const res = await fetch(`/api/tx-history?${params.toString()}`);
+      const res = await signedFetch(`/api/tx-history?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         count?: number;
@@ -863,7 +864,7 @@ export function Conversation({
         participation: participation ?? "SENDER",
         size: String(limit ?? 10),
       });
-      const res = await fetch(`/api/account-transactions?${params.toString()}`);
+      const res = await signedFetch(`/api/account-transactions?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         count?: number;
@@ -966,7 +967,7 @@ export function Conversation({
         };
       });
     try {
-      const res = await fetch(
+      const res = await signedFetch(
         `/api/transaction-detail?digest=${encodeURIComponent(d)}`
       );
       const body = (await res.json()) as TransactionDetail & {
@@ -1033,7 +1034,7 @@ export function Conversation({
         sortBy: sortBy ?? "MARKET_CAP",
         size: String(limit ?? 10),
       });
-      const res = await fetch(`/api/coin-list?${params.toString()}`);
+      const res = await signedFetch(`/api/coin-list?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         items?: CoinListItem[];
@@ -1086,7 +1087,7 @@ export function Conversation({
       return;
     }
     try {
-      const res = await fetch(
+      const res = await signedFetch(
         `/api/coin-metadata?coinType=${encodeURIComponent(ct)}`
       );
       const body = (await res.json()) as CoinMetadata & { error?: string };
@@ -1134,7 +1135,7 @@ export function Conversation({
         coinType: ct,
         size: String(limit ?? 10),
       });
-      const res = await fetch(`/api/coin-holders?${params.toString()}`);
+      const res = await signedFetch(`/api/coin-holders?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         items?: CoinHolder[];

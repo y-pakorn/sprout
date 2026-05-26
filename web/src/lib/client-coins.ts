@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signedFetch } from "@/lib/api-client";
 
 export type ClientCoin = {
   coin_type: string;
@@ -22,7 +23,7 @@ let inflight: Promise<CoinMap> | null = null;
 export async function fetchCoinMap(): Promise<CoinMap> {
   if (cachedMap) return cachedMap;
   if (inflight) return inflight;
-  inflight = fetch("/api/coins", { cache: "no-store" })
+  inflight = signedFetch("/api/coins", { cache: "no-store" })
     .then((r) => {
       if (!r.ok) throw new Error(`coins fetch failed: ${r.status}`);
       return r.json() as Promise<CoinMap>;

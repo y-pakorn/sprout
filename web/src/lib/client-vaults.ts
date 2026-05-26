@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signedFetch } from "@/lib/api-client";
 import type {
   SuiVault,
   VaultDeployment,
@@ -18,7 +19,7 @@ let inflight: Promise<SuiVault[]> | null = null;
 export async function fetchVaults(): Promise<SuiVault[]> {
   if (cached) return cached;
   if (inflight) return inflight;
-  inflight = fetch("/api/vaults", { cache: "no-store" })
+  inflight = signedFetch("/api/vaults", { cache: "no-store" })
     .then((r) => {
       if (!r.ok) throw new Error(`vaults fetch failed: ${r.status}`);
       return r.json() as Promise<SuiVault[]>;
@@ -69,7 +70,7 @@ let inflightDeployment: Promise<VaultDeployment> | null = null;
 export async function fetchDeployment(): Promise<VaultDeployment> {
   if (cachedDeployment) return cachedDeployment;
   if (inflightDeployment) return inflightDeployment;
-  inflightDeployment = fetch("/api/vaults/info", { cache: "no-store" })
+  inflightDeployment = signedFetch("/api/vaults/info", { cache: "no-store" })
     .then((r) => {
       if (!r.ok) throw new Error(`deployment fetch failed: ${r.status}`);
       return r.json() as Promise<VaultDeployment>;
@@ -115,7 +116,7 @@ export function useVaultHistory(
       limit: String(limit),
       interval,
     });
-    fetch(`/api/vaults/${vaultId}/history?${params}`, { cache: "no-store" })
+    signedFetch(`/api/vaults/${vaultId}/history?${params}`, { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw new Error(`history ${r.status}`);
         return (await r.json()) as VaultHistoryResponse;

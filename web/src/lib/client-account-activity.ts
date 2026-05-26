@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit-react";
+import { signedFetch } from "@/lib/api-client";
 import type { TxActivity } from "@/lib/tx-history";
 
 /**
@@ -18,7 +19,7 @@ export function useAccountActivity(limit = 12): TxActivity[] {
   useEffect(() => {
     if (!address) return;
     let cancelled = false;
-    fetch(`/api/tx-history?address=${address}&actionType=ALL&size=${limit}`)
+    signedFetch(`/api/tx-history?address=${address}&actionType=ALL&size=${limit}`)
       .then((r) => r.json())
       .then((body: { items?: TxActivity[]; error?: string }) => {
         if (!cancelled && !body.error) setItems(body.items ?? []);
