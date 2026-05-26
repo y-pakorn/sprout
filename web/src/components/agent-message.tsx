@@ -12,6 +12,9 @@ import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
 import { VaultBalanceCard } from "@/components/parts/vault-balance-card";
 import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
+import { TxHistoryCard } from "@/components/parts/tx-history-card";
+import { AccountTransactionsCard } from "@/components/parts/account-transactions-card";
+import { TransactionDetailCard } from "@/components/parts/transaction-detail-card";
 import type { VaultBalance } from "@/lib/vault-balance";
 import { AssetIcon } from "@/components/asset-icon";
 import {
@@ -21,6 +24,9 @@ import {
 import {
   actionPlanCache,
   vaultsListCache,
+  txHistoryCache,
+  accountTxCache,
+  txDetailCache,
 } from "@/lib/ai/action-plan-cache";
 import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
@@ -575,6 +581,189 @@ export function AgentMessage({
               status="output-available"
             />
           );
+        }
+
+        if (part.type === "tool-getAccountActivity") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { address?: string };
+            output?: {
+              error?: string;
+              address?: string;
+              count?: number;
+              hasNextPage?: boolean;
+            };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Tx history failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Reading recent activity…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          // Rich rows (with icon URLs) come from the client cache; the agent's
+          // output is a pruned, URL-free summary.
+          const cached = txHistoryCache.get(p.toolCallId);
+          const items = cached?.items ?? [];
+          if (items.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="No recent activity found"
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <TxHistoryCard
+              key={key}
+              items={items}
+              address={cached?.address ?? p.output?.address ?? ""}
+              hasNextPage={cached?.hasNextPage}
+            />
+          );
+        }
+
+        if (part.type === "tool-getAccountTransactions") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { address?: string };
+            output?: {
+              error?: string;
+              address?: string;
+              count?: number;
+              hasNextPage?: boolean;
+            };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Transactions failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Reading transactions…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const cached = accountTxCache.get(p.toolCallId);
+          const items = cached?.items ?? [];
+          if (items.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="No transactions found"
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <AccountTransactionsCard
+              key={key}
+              items={items}
+              address={cached?.address ?? p.output?.address ?? ""}
+              hasNextPage={cached?.hasNextPage}
+            />
+          );
+        }
+
+        if (part.type === "tool-getTransactionDetail") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Transaction lookup failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Reading transaction…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const detail = txDetailCache.get(p.toolCallId);
+          if (!detail) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Transaction detail unavailable"
+                status="output-available"
+              />
+            );
+          }
+          return <TransactionDetailCard key={key} detail={detail} />;
         }
 
         return null;

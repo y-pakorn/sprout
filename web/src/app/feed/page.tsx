@@ -17,7 +17,7 @@ export default function FeedPage() {
           </div>
           {/* Chat right rail */}
           <aside className="hidden min-h-0 w-[400px] shrink-0 md:flex lg:w-[460px]">
-            <Conversation embedded />
+            <Conversation embedded surface="rail" />
           </aside>
         </div>
       </div>

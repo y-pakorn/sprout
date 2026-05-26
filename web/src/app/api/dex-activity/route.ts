@@ -1,5 +1,5 @@
-import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { signSuiscanHeaders, SUISCAN_BASE_HEADERS } from "@/lib/suiscan-sign";
 
 /**
  * Server proxy for Suiscan's DEX-activity firehose (every swap across all Sui
@@ -24,32 +24,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UPSTREAM = "https://suiscan.xyz/api/sui-backend/mainnet/api/dex/activity";
-const SEG = "activity"; // last path segment the signature is computed over
-const CHECKER_KEY = "wpTujoYEJUqhalFjhioogmrdG";
-const APPGEN_KEY = "NWcEQUlBRY";
-
-function hmacHex(message: string, key: string): string {
-  return crypto.createHmac("sha256", key).update(message).digest("hex");
-}
-
-function md5Hex(input: string): string {
-  return crypto.createHash("md5").update(input).digest("hex");
-}
-
-/** Reproduces Suiscan's `fj` request signer for our fixed endpoint. */
-function signHeaders(): Record<string, string> {
-  const ts = Math.floor(Date.now() / 1000);
-  const checker = md5Hex(hmacHex(`${SEG}:${ts}`, CHECKER_KEY));
-  const genHex = hmacHex(`2024-${ts}`, APPGEN_KEY);
-  let odd = "";
-  for (let i = 0; i < genHex.length; i++) if (i % 2 === 1) odd += genHex[i];
-  const appGen = md5Hex(odd);
-  return {
-    "X-API-Random": String(ts),
-    "X-API-Checker": checker,
-    "X-APP-Gen": appGen,
-  };
-}
 
 export async function GET(req: NextRequest) {
   const page = req.nextUrl.searchParams.get("page") ?? "0";
@@ -63,13 +37,9 @@ export async function GET(req: NextRequest) {
     const upstream = await fetch(url, {
       method: "POST",
       headers: {
-        accept: "application/json, text/plain, */*",
+        ...SUISCAN_BASE_HEADERS,
         "content-type": "application/json",
-        origin: "https://suiscan.xyz",
-        referer: "https://suiscan.xyz/",
-        "user-agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
-        ...signHeaders(),
+        ...signSuiscanHeaders("activity"),
       },
       body: JSON.stringify({ actions: ["SWAP"] }),
     });

@@ -38,7 +38,7 @@ export function FeedEventCard({
   const connector = isRedeem ? "from" : "into";
   const vaultName = display.vaultName ?? "a vault";
 
-  const askPrompt = `Someone just ${verb.toLowerCase()} ${valueText} ${connector} ${vaultName}. What can you tell me about this vault?`;
+  const askPrompt = `What happened in transaction ${event.digest}?`;
 
   return (
     <FeedRow

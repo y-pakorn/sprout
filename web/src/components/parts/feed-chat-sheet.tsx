@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import { Conversation } from "@/components/conversation";
+import { subscribeAskSprout } from "@/lib/ask-sprout";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,6 +15,15 @@ import { cn } from "@/lib/utils";
  */
 export function FeedChatSheet({ className }: { className?: string }) {
   const [expanded, setExpanded] = useState(false);
+
+  // Auto-expand when a feed post asks Sprout something (mobile only).
+  useEffect(
+    () =>
+      subscribeAskSprout(() => {
+        if (!window.matchMedia("(min-width: 768px)").matches) setExpanded(true);
+      }),
+    [],
+  );
 
   return (
     <div
@@ -47,7 +57,7 @@ export function FeedChatSheet({ className }: { className?: string }) {
         )}
       </button>
       <div className="min-h-0 flex-1 overflow-hidden border-t border-hairline">
-        <Conversation embedded />
+        <Conversation embedded surface="sheet" />
       </div>
     </div>
   );

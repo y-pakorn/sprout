@@ -2,6 +2,9 @@
 
 import type { Transaction } from "@mysten/sui/transactions";
 import type { SuiVault } from "@/lib/vaults";
+import type { TxActivity } from "@/lib/tx-history";
+import type { AccountTxView } from "@/lib/account-transactions";
+import type { TransactionDetailView } from "@/lib/transaction-detail";
 
 // ───────────────────────────────────────────────────────────────────────
 // Generic action plan cache. Built by `runExecutePlan`, consumed by the
@@ -213,5 +216,54 @@ export const vaultsListCache = {
   },
   get(toolCallId: string): CachedVaultsList | undefined {
     return listCache.get(toolCallId);
+  },
+};
+
+// Rich tx-history kept client-side (with icon URLs the CARD needs) so the
+// agent's tool output can stay a pruned, URL-free summary. Keyed by toolCallId.
+export type CachedTxHistory = {
+  items: TxActivity[];
+  address: string;
+  hasNextPage: boolean;
+};
+
+const txCache = new Map<string, CachedTxHistory>();
+
+export const txHistoryCache = {
+  set(toolCallId: string, entry: CachedTxHistory) {
+    txCache.set(toolCallId, entry);
+  },
+  get(toolCallId: string): CachedTxHistory | undefined {
+    return txCache.get(toolCallId);
+  },
+};
+
+// Same split for the raw transaction list (humanized coin chips the card needs).
+export type CachedAccountTxs = {
+  items: AccountTxView[];
+  address: string;
+  hasNextPage: boolean;
+};
+
+const accountTxsCache = new Map<string, CachedAccountTxs>();
+
+export const accountTxCache = {
+  set(toolCallId: string, entry: CachedAccountTxs) {
+    accountTxsCache.set(toolCallId, entry);
+  },
+  get(toolCallId: string): CachedAccountTxs | undefined {
+    return accountTxsCache.get(toolCallId);
+  },
+};
+
+// Single-transaction detail (humanized net change + activities w/ icons).
+const txDetailMap = new Map<string, TransactionDetailView>();
+
+export const txDetailCache = {
+  set(toolCallId: string, entry: TransactionDetailView) {
+    txDetailMap.set(toolCallId, entry);
+  },
+  get(toolCallId: string): TransactionDetailView | undefined {
+    return txDetailMap.get(toolCallId);
   },
 };

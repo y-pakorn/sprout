@@ -13,22 +13,99 @@ import { z } from "zod";
 export const swapTools = {
   getBalance: tool({
     description:
-      "Read the connected wallet's balance for a single token. Use this BEFORE executePlan whenever the user phrases the amount relative to their holdings — e.g. 'half my USDC', 'all my SUI', '25% of my WAL', 'a quarter of my BUCK'. Returns the balance in human units. Errors if no wallet is connected.",
+      "Read a token balance for a single token. Defaults to the connected wallet; pass `address` to read ANOTHER address's balance. Use this BEFORE executePlan whenever the user phrases the amount relative to THEIR holdings — e.g. 'half my USDC', 'all my SUI', '25% of my WAL'. Returns the balance in human units. Errors only if no `address` is given and no wallet is connected.",
     inputSchema: z.object({
       symbol: z
         .string()
         .describe("Token symbol to read — e.g. USDC, SUI, WAL"),
+      address: z
+        .string()
+        .optional()
+        .describe(
+          "Sui address (0x…) to read. Omit to use the connected wallet.",
+        ),
     }),
   }),
   getBalances: tool({
     description:
-      "Read ALL non-zero token balances in the connected wallet. Use when the user asks 'what do I have', 'what's in my wallet', 'show my portfolio', or when picking a source token requires seeing what they own. Errors if no wallet is connected.",
-    inputSchema: z.object({}),
+      "Read ALL non-zero token balances for an address. Defaults to the connected wallet; pass `address` to inspect ANOTHER address's holdings. Use when the user asks 'what do I have', 'what's in my wallet', 'what does 0x… hold', 'show my portfolio', or when picking a source token requires seeing what they own. Errors only if no `address` is given and no wallet is connected.",
+    inputSchema: z.object({
+      address: z
+        .string()
+        .optional()
+        .describe(
+          "Sui address (0x…) to read. Omit to use the connected wallet.",
+        ),
+    }),
   }),
   getVaultBalance: tool({
     description:
-      "Read the connected wallet's Ember vault balance: current vault positions (with shares, position value in USD, total/unrealized/realized yield), any pending withdrawal requests, and recent vault history (deposits, redeem requests, processed redemptions). Use whenever the user asks 'how are my vaults doing', 'show my vault balance', 'what's my P&L on vaults', 'what vaults am I in', 'pending withdrawals', 'my yield', 'vault history'. Errors if no wallet is connected.",
-    inputSchema: z.object({}),
+      "Read an address's Ember vault balance: current vault positions (with shares, position value in USD, total/unrealized/realized yield), any pending withdrawal requests, and recent vault history (deposits, redeem requests, processed redemptions). Defaults to the connected wallet; pass `address` for ANOTHER address. Use whenever the user asks 'how are my vaults doing', 'show my vault balance', 'what's my P&L on vaults', 'what vaults am I in', 'pending withdrawals', 'my yield', 'vault history'. Errors only if no `address` is given and no wallet is connected.",
+    inputSchema: z.object({
+      address: z
+        .string()
+        .optional()
+        .describe(
+          "Sui address (0x…) to read. Omit to use the connected wallet.",
+        ),
+    }),
+  }),
+  getAccountActivity: tool({
+    description:
+      "Fetch recent on-chain activity for a Sui address (swaps, sends, receives, stakes, etc.) via Blockberry. Use when the user asks about their recent transactions / activity / history — 'what have I done', 'my recent txs', 'my activity', 'last few transactions' — or about a SPECIFIC address they name ('what has 0x… been doing'). OMIT `address` to use the connected wallet (the client fills it in). Returns the most recent activities newest-first: each has signed coin movements (negative = out, positive = in), the protocol/counterparty, status, gas, and the tx digest. Errors if no address is given and no wallet is connected.",
+    inputSchema: z.object({
+      address: z
+        .string()
+        .optional()
+        .describe(
+          "Sui address (0x…) to query. Omit to use the connected wallet.",
+        ),
+      actionType: z
+        .enum(["ALL", "SEND", "RECEIVE"])
+        .optional()
+        .describe("Filter by direction. Default ALL."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe("Max number of activities to return."),
+    }),
+  }),
+  getTransactionDetail: tool({
+    description:
+      "Look up the full detail of ONE transaction by its digest (hash) via Suiscan. Returns basic detail (status, sender, timestamp, gas fee paid, checkpoint, command/event counts, the net balance change for the sender) plus the decoded per-step activities (e.g. each hop of a multi-DEX swap route, with signed coin amounts and the protocol). Use when the user pastes/quotes a tx digest, asks 'what happened in this tx', 'explain this transaction', 'what did 0x… do in <digest>', or wants to inspect a specific tx from a feed/history result.",
+    inputSchema: z.object({
+      digest: z
+        .string()
+        .describe("The transaction digest (base58 hash), e.g. from a feed/history row."),
+    }),
+  }),
+  getAccountTransactions: tool({
+    description:
+      "Fetch the raw transaction list for a Sui address via Blockberry, newest-first — the tx-level view (vs getAccountActivity's decoded swaps/sends). Each tx has its type, the Move functions called, the protocol/packages touched, fee, command count, and net balance changes. Use when the user wants their transactions / tx list / tx history by hash, asks which protocols/contracts they (or an address) interacted with, or wants SENDER vs RECEIVER txs. Prefer getAccountActivity when they ask about swaps/transfers/amounts in plain terms. OMIT `address` to use the connected wallet. Errors if no address is given and no wallet is connected.",
+    inputSchema: z.object({
+      address: z
+        .string()
+        .optional()
+        .describe(
+          "Sui address (0x…) to query. Omit to use the connected wallet.",
+        ),
+      participation: z
+        .enum(["SENDER", "RECEIVER"])
+        .optional()
+        .describe(
+          "Whether to list txs where the address was the SENDER or the RECEIVER. Default SENDER.",
+        ),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe("Max number of transactions to return."),
+    }),
   }),
   listVaults: tool({
     description:

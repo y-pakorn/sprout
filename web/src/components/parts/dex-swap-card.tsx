@@ -28,12 +28,7 @@ function Mention({ leg }: { leg: SwapLeg }) {
 export function DexSwapCard({ event, isSelf = false, fresh = false }: Props) {
   const { soldLeg: sold, boughtLeg: bought, projectName: project } = event;
 
-  const askPrompt = `What do you make of this swap — ${fmtAmount(
-    sold.amount,
-    2,
-  )} ${sold.symbol} for ${fmtAmount(bought.amount, 2)} ${bought.symbol}${
-    project ? ` on ${project}` : ""
-  }?`;
+  const askPrompt = `What happened in transaction ${event.digest}?`;
 
   return (
     <FeedRow

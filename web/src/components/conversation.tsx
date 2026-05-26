@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
@@ -22,6 +22,7 @@ import { ErrorBanner } from "@/components/parts/error-banner";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { LiquidBlob } from "@/components/parts/liquid-blob";
 import { SPRING_BOUNCY } from "@/lib/motion";
+import { subscribeAskSprout, takePendingAsk } from "@/lib/ask-sprout";
 import {
   useCoinMap,
   resolveSymbol,
@@ -32,6 +33,9 @@ import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
   vaultsListCache,
+  txHistoryCache,
+  accountTxCache,
+  txDetailCache,
   type CachedActionPlan,
   type PlanRisk,
   type ResolvedSwapStep,
@@ -41,6 +45,13 @@ import {
   type ResolvedCancelRedeemStep,
   type RawStep,
 } from "@/lib/ai/action-plan-cache";
+import { pruneForModel } from "@/lib/ai/prune-output";
+import type { TxActivity, TxCoin } from "@/lib/tx-history";
+import type { AccountTx, AccountTxView } from "@/lib/account-transactions";
+import type {
+  TransactionDetail,
+  TransactionDetailView,
+} from "@/lib/transaction-detail";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
@@ -59,7 +70,8 @@ type VaultPositionInfo = VaultReceiptEntry;
 
 export function Conversation({
   embedded = false,
-}: { embedded?: boolean } = {}) {
+  surface,
+}: { embedded?: boolean; surface?: "rail" | "sheet" } = {}) {
   const account = useCurrentAccount();
   const coinMap = useCoinMap();
   const suiClient = useCurrentClient();
@@ -215,12 +227,49 @@ export function Conversation({
           void runExplainConcept(toolCall, addToolResultRef);
           return;
         }
+        if (toolCall.toolName === "getAccountActivity") {
+          void runGetTxHistory(
+            toolCall,
+            accountRef.current,
+            addToolResultRef
+          );
+          return;
+        }
+        if (toolCall.toolName === "getAccountTransactions") {
+          void runGetAccountTransactions(
+            toolCall,
+            coinMap,
+            accountRef.current,
+            addToolResultRef
+          );
+          return;
+        }
+        if (toolCall.toolName === "getTransactionDetail") {
+          void runGetTransactionDetail(toolCall, coinMap, addToolResultRef);
+          return;
+        }
       },
     });
 
   // Keep the ref pointed at the latest addToolResult
   addToolResultRef.current =
     addToolResult as unknown as typeof addToolResultRef.current;
+
+  // "Ask Sprout" handoff from the feed. Both chat panes (desktop rail + the
+  // always-mounted mobile sheet) subscribe, so we gate on the breakpoint and
+  // atomically claim the question — exactly one pane (the visible one) sends.
+  const sendRef = useRef(sendMessage);
+  sendRef.current = sendMessage;
+  useEffect(() => {
+    if (!surface) return;
+    return subscribeAskSprout(() => {
+      const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+      const mine = isDesktop ? surface === "rail" : surface === "sheet";
+      if (!mine) return;
+      const text = takePendingAsk();
+      if (text) sendRef.current({ text });
+    });
+  }, [surface]);
 
   // Background work fired by onToolCall — runs to completion after the
   // SDK's streaming step finishes, then dispatches addToolResult which
@@ -240,18 +289,22 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    if (!acct) {
+    const { symbol, address } = toolCall.input as {
+      symbol: string;
+      address?: string;
+    };
+    const target = (address?.trim() || acct?.address || "").trim();
+    if (!target) {
       await addResult({
         tool: "getBalance",
         toolCallId: toolCall.toolCallId,
         output: {
           error:
-            "Wallet not connected. The user needs to connect a wallet (button in the top-right) before I can read balances.",
+            "No wallet connected and no address given. Ask the user to connect a wallet (button top-right) or name an address.",
         },
       });
       return;
     }
-    const { symbol } = toolCall.input as { symbol: string };
     const coin = resolveSymbol(map, symbol);
     if (!coin) {
       await addResult({
@@ -266,7 +319,7 @@ export function Conversation({
     try {
       const totalBalanceRaw = await fetchBalance(
         client,
-        acct.address,
+        target,
         coin.coin_type
       );
       // If the caller is asking about a vault receipt token, attach the
@@ -296,7 +349,9 @@ export function Conversation({
       await addResult({
         tool: "getBalance",
         toolCallId: toolCall.toolCallId,
-        output: {
+        // Prune image/URL fields + nulls — the card resolves icons via
+        // iconLookup(coinType), so the agent never needs them.
+        output: pruneForModel({
           symbol: symbol.toUpperCase(),
           balance: floorToDecimals(human),
           decimals,
@@ -304,7 +359,7 @@ export function Conversation({
           priceUsd,
           valueUsd,
           vaultPosition: vaultMatch?.position,
-        },
+        }),
       });
     } catch (e) {
       await addResult({
@@ -324,19 +379,21 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    if (!acct) {
+    const { address } = (toolCall.input ?? {}) as { address?: string };
+    const target = (address?.trim() || acct?.address || "").trim();
+    if (!target) {
       await addResult({
         tool: "getBalances",
         toolCallId: toolCall.toolCallId,
         output: {
           error:
-            "Wallet not connected. The user needs to connect a wallet (button in the top-right) before I can read balances.",
+            "No wallet connected and no address given. Ask the user to connect a wallet (button top-right) or name an address.",
         },
       });
       return;
     }
     try {
-      const all = await fetchAllBalances(client, acct.address);
+      const all = await fetchAllBalances(client, target);
       // Reverse-index coinType → {symbol, decimals} from the known coin map
       const byType = new Map<string, { symbol: string; decimals: number }>();
       if (map) {
@@ -454,7 +511,8 @@ export function Conversation({
       await addResult({
         tool: "getBalances",
         toolCallId: toolCall.toolCallId,
-        output: { balances },
+        // Prune image/URL fields + nulls (icons come from iconLookup).
+        output: pruneForModel({ balances }),
       });
     } catch (e) {
       await addResult({
@@ -473,13 +531,15 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    if (!acct) {
+    const { address } = (toolCall.input ?? {}) as { address?: string };
+    const target = (address?.trim() || acct?.address || "").trim();
+    if (!target) {
       await addResult({
         tool: "getVaultBalance",
         toolCallId: toolCall.toolCallId,
         output: {
           error:
-            "Wallet not connected. The user needs to connect a wallet before I can read their vault balance.",
+            "No wallet connected and no address given. Ask the user to connect a wallet (button top-right) or name an address.",
         },
       });
       return;
@@ -490,8 +550,8 @@ export function Conversation({
       //  2. on-chain token balances (active positions = receipt-coin balances)
       //  3. vault receipt index (vault metadata + canonical share price)
       const [serverRes, allBalances, vaultByReceipt] = await Promise.all([
-        fetch(`/api/vault-balance/${acct.address}`, { cache: "no-store" }),
-        fetchAllBalances(client, acct.address),
+        fetch(`/api/vault-balance/${target}`, { cache: "no-store" }),
+        fetchAllBalances(client, target),
         loadVaultReceiptIndex(),
       ]);
       if (!serverRes.ok) {
@@ -538,7 +598,9 @@ export function Conversation({
       await addResult({
         tool: "getVaultBalance",
         toolCallId: toolCall.toolCallId,
-        output: { data },
+        // Prune image/URL fields + nulls; the card resolves logos via
+        // iconLookup(depositCoinType) fallback.
+        output: pruneForModel({ data }),
       });
     } catch (e) {
       await addResult({
@@ -635,6 +697,304 @@ export function Conversation({
       toolCallId: toolCall.toolCallId,
       output: text ? { key, text } : { error: `Unknown glossary key: ${key}` },
     });
+  }
+
+  async function runGetTxHistory(
+    toolCall: { toolCallId: string; input: unknown },
+    acct: ReturnType<typeof useCurrentAccount>,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { address, actionType, limit } = (toolCall.input ?? {}) as {
+      address?: string;
+      actionType?: "ALL" | "SEND" | "RECEIVE";
+      limit?: number;
+    };
+    const addr = (address?.trim() || acct?.address || "").trim();
+    if (!addr) {
+      await addResult({
+        tool: "getAccountActivity",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "No wallet connected and no address given. Ask the user to connect a wallet (button top-right) or name an address.",
+        },
+      });
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        address: addr,
+        actionType: actionType ?? "ALL",
+        size: String(limit ?? 10),
+      });
+      const res = await fetch(`/api/tx-history?${params.toString()}`);
+      const body = (await res.json()) as {
+        error?: string;
+        count?: number;
+        hasNextPage?: boolean;
+        items?: TxActivity[];
+      };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `tx history failed: ${res.status}`);
+      }
+      const richItems = body.items ?? [];
+      // Rich items (with icon URLs) stay client-side for the card; the agent
+      // gets a compact, URL-free summary so its context isn't bloated.
+      txHistoryCache.set(toolCall.toolCallId, {
+        items: richItems,
+        address: addr,
+        hasNextPage: !!body.hasNextPage,
+      });
+      const modelItems = richItems.map((it) => {
+        const o: Record<string, unknown> = {
+          activity: it.activity,
+          when: new Date(it.timestampMs).toISOString(),
+          digest: it.digest,
+        };
+        if (it.coins.length) {
+          o.coins = it.coins.map((c) => ({ symbol: c.symbol, amount: c.amount }));
+        }
+        if (it.protocol?.name) o.protocol = it.protocol.name;
+        if (it.status && it.status !== "SUCCESS") o.status = it.status;
+        if (it.gasFee > 0) o.gasFee = it.gasFee;
+        return o;
+      });
+      await addResult({
+        tool: "getAccountActivity",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          address: addr,
+          count: richItems.length,
+          hasNextPage: !!body.hasNextPage,
+          items: modelItems,
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getAccountActivity",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Tx history failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetAccountTransactions(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { address, participation, limit } = (toolCall.input ?? {}) as {
+      address?: string;
+      participation?: "SENDER" | "RECEIVER";
+      limit?: number;
+    };
+    const addr = (address?.trim() || acct?.address || "").trim();
+    if (!addr) {
+      await addResult({
+        tool: "getAccountTransactions",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "No wallet connected and no address given. Ask the user to connect a wallet (button top-right) or name an address.",
+        },
+      });
+      return;
+    }
+    // Reverse-index coinType → {symbol, decimals, icon} to humanize the raw
+    // signed balance changes the endpoint returns.
+    const byType = new Map<
+      string,
+      { symbol: string; decimals: number; icon?: string }
+    >();
+    if (map) {
+      for (const [symbol, info] of Object.entries(map)) {
+        byType.set(canonicalCoinType(info.coin_type), {
+          symbol,
+          decimals: info.decimals,
+          icon: info.icon_url,
+        });
+      }
+    }
+    const humanizeCoins = (changes: AccountTx["balanceChanges"]): TxCoin[] =>
+      changes.map((c) => {
+        const info = byType.get(canonicalCoinType(c.coinType));
+        const decimals = info?.decimals ?? 9;
+        let amount = 0;
+        try {
+          amount = Number(BigInt(c.rawAmount)) / 10 ** decimals;
+        } catch {
+          amount = Number(c.rawAmount) / 10 ** decimals;
+        }
+        return {
+          symbol: info?.symbol ?? c.coinType.split("::").pop() ?? "?",
+          amount,
+          iconUrl: info?.icon,
+        };
+      });
+    try {
+      const params = new URLSearchParams({
+        address: addr,
+        participation: participation ?? "SENDER",
+        size: String(limit ?? 10),
+      });
+      const res = await fetch(`/api/account-transactions?${params.toString()}`);
+      const body = (await res.json()) as {
+        error?: string;
+        count?: number;
+        hasNextPage?: boolean;
+        items?: AccountTx[];
+      };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `tx list failed: ${res.status}`);
+      }
+      const richItems: AccountTxView[] = (body.items ?? []).map((it) => {
+        const { balanceChanges, ...rest } = it;
+        return { ...rest, coins: humanizeCoins(balanceChanges) };
+      });
+      accountTxCache.set(toolCall.toolCallId, {
+        items: richItems,
+        address: addr,
+        hasNextPage: !!body.hasNextPage,
+      });
+      const modelItems = richItems.map((it) => {
+        const o: Record<string, unknown> = {
+          txType: it.txType,
+          when: new Date(it.timestampMs).toISOString(),
+          digest: it.digest,
+        };
+        if (it.functions.length) o.functions = it.functions;
+        if (it.protocol?.name) o.protocol = it.protocol.name;
+        if (it.status && it.status !== "SUCCESS") o.status = it.status;
+        if (it.feeSui > 0) o.feeSui = it.feeSui;
+        if (it.txsCount) o.commands = it.txsCount;
+        if (it.coins.length) {
+          o.coins = it.coins.map((c) => ({ symbol: c.symbol, amount: c.amount }));
+        }
+        return o;
+      });
+      await addResult({
+        tool: "getAccountTransactions",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          address: addr,
+          count: richItems.length,
+          hasNextPage: !!body.hasNextPage,
+          items: modelItems,
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getAccountTransactions",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Transaction list failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetTransactionDetail(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { digest } = (toolCall.input ?? {}) as { digest?: string };
+    const d = (digest ?? "").trim();
+    if (!d) {
+      await addResult({
+        tool: "getTransactionDetail",
+        toolCallId: toolCall.toolCallId,
+        output: { error: "No transaction digest given." },
+      });
+      return;
+    }
+    const byType = new Map<
+      string,
+      { symbol: string; decimals: number; icon?: string }
+    >();
+    if (map) {
+      for (const [symbol, info] of Object.entries(map)) {
+        byType.set(canonicalCoinType(info.coin_type), {
+          symbol,
+          decimals: info.decimals,
+          icon: info.icon_url,
+        });
+      }
+    }
+    const humanize = (
+      changes: TransactionDetail["netBalanceChanges"]
+    ): TxCoin[] =>
+      changes.map((c) => {
+        const info = byType.get(canonicalCoinType(c.coinType));
+        const decimals = info?.decimals ?? 9;
+        let amount = 0;
+        try {
+          amount = Number(BigInt(c.rawAmount)) / 10 ** decimals;
+        } catch {
+          amount = Number(c.rawAmount) / 10 ** decimals;
+        }
+        return {
+          symbol: info?.symbol ?? c.coinType.split("::").pop() ?? "?",
+          amount,
+          iconUrl: info?.icon,
+        };
+      });
+    try {
+      const res = await fetch(
+        `/api/transaction-detail?digest=${encodeURIComponent(d)}`
+      );
+      const body = (await res.json()) as TransactionDetail & {
+        error?: string;
+      };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `tx detail failed: ${res.status}`);
+      }
+      const { netBalanceChanges, ...rest } = body;
+      const view: TransactionDetailView = {
+        ...rest,
+        netChange: humanize(netBalanceChanges),
+      };
+      txDetailCache.set(toolCall.toolCallId, view);
+      // Pruned, URL-free summary for the agent (the card reads the cache).
+      const output = pruneForModel({
+        digest: view.digest,
+        status: view.status,
+        network: view.network,
+        timestampMs: view.timestampMs,
+        checkpoint: view.checkpoint,
+        sender: view.sender,
+        gasFeeSui: view.gasFeeSui,
+        gasBudgetSui: view.gasBudgetSui,
+        commandCount: view.commandCount,
+        eventCount: view.eventCount,
+        objectChangeCount: view.objectChangeCount,
+        netChange: view.netChange.map((c) => ({
+          symbol: c.symbol,
+          amount: c.amount,
+        })),
+        activities: view.activities.map((a) => ({
+          activity: a.activity,
+          protocol: a.protocol?.name,
+          coins: a.coins.map((c) => ({ symbol: c.symbol, amount: c.amount })),
+        })),
+      });
+      await addResult({
+        tool: "getTransactionDetail",
+        toolCallId: toolCall.toolCallId,
+        output,
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getTransactionDetail",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Transaction detail failed: ${(e as Error).message}` },
+      });
+    }
   }
 
   async function runExecutePlan(
@@ -1070,11 +1430,12 @@ export function Conversation({
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="surface-card inline-flex items-center self-start px-3 py-2 rounded-button"
+                  className="surface-card inline-flex items-center gap-2.5 self-start px-3.5 py-2 text-body-sm font-medium rounded-card"
                   role="status"
                   aria-label="Sprout is thinking"
                 >
-                  <LiquidBlob size={22} />
+                  <LiquidBlob size={20} />
+                  <span className="shimmer-text">Thinking…</span>
                 </motion.div>
               )}
 
