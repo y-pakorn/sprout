@@ -84,7 +84,7 @@ export function AgentMessage({
         className="flex justify-end"
       >
         <div
-          className="max-w-[80%] bg-surface-charcoal px-3.5 py-2 text-body-sm text-canvas-white rounded-card"
+          className="max-w-[80%] break-words [overflow-wrap:anywhere] bg-surface-charcoal px-3.5 py-2 text-body-sm text-canvas-white rounded-card"
         >
           {message.parts
             .filter((p) => p.type === "text")

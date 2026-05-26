@@ -43,6 +43,19 @@ export async function GET(req: NextRequest) {
     const raw = (await upstream.json()) as RawTxDetailResponse;
     const detail = cleanTransactionDetail(raw, digest);
 
+    // Not-found / invalid digest: Suiscan returns an empty result envelope
+    // ({ rawTransaction: { result: {} } }). Don't render a hollow "FAILED /
+    // 1970" card — surface a clear error so the agent can ask for a valid one.
+    if (!detail.sender && detail.timestampMs === 0 && detail.activities.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Transaction not found — double-check the digest (Sui digests are ~44-char base58).",
+        },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
     return NextResponse.json(detail, {
       // A finalized transaction never changes.
       headers: {
