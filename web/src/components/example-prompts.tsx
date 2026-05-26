@@ -25,7 +25,7 @@ export function ExamplePrompts({ onPick }: Props) {
           transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
           type="button"
           onClick={() => onPick(p.text)}
-          className="bg-canvas-white px-4 py-2 text-body-sm font-medium text-midnight-ink shadow-button ring-1 ring-hairline transition-colors hover:bg-whisper-gray rounded-button"
+          className="bg-surface-charcoal px-3 py-1.5 text-caption font-medium text-canvas-white shadow-button ring-1 ring-white/10 transition-colors hover:ring-white/20 rounded-button"
         >
           {p.label}
         </motion.button>
