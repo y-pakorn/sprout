@@ -7,6 +7,7 @@ import {
   NONCE_HEADER,
   hmacHex,
   buildSigPayload,
+  canonicalPath,
   randomHex,
 } from "@/lib/app-token";
 
@@ -38,7 +39,7 @@ export async function signedFetch(
         ? input.href
         : asRequest!.url;
   const url = new URL(urlStr, window.location.origin);
-  const pathWithSearch = url.pathname + url.search;
+  const pathWithSearch = canonicalPath(url.pathname, url.searchParams);
 
   const headers = new Headers(init?.headers ?? asRequest?.headers);
 

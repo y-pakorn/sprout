@@ -62,6 +62,14 @@ export function buildSigPayload(
   return `${method.toUpperCase()}\n${pathWithSearch}\n${ts}\n${nonce}`;
 }
 
+// Canonical path+query that both sides HMAC over. Normalizes query encoding via
+// the URLSearchParams serializer so signing (client) and verifying (server) agree
+// even when characters like "," are serialized differently on the wire.
+export function canonicalPath(pathname: string, search: URLSearchParams): string {
+  const qs = search.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
 export function randomHex(byteLen: number): string {
   const bytes = new Uint8Array(byteLen);
   crypto.getRandomValues(bytes);

@@ -11,6 +11,7 @@ import {
   hmacHex,
   timingSafeEqual,
   buildSigPayload,
+  canonicalPath,
   randomHex,
 } from "@/lib/app-token";
 import { getSigningSecret, allowedHosts } from "@/lib/env";
@@ -104,7 +105,12 @@ async function verifyApiRequest(
   const key = await deriveSessionKey(session.sid, session.iat, secret);
   const expected = await hmacHex(
     key,
-    buildSigPayload(req.method, req.nextUrl.pathname + req.nextUrl.search, ts, nonce),
+    buildSigPayload(
+      req.method,
+      canonicalPath(req.nextUrl.pathname, req.nextUrl.searchParams),
+      ts,
+      nonce,
+    ),
   );
   if (!timingSafeEqual(expected, sig)) return { ok: false, reason: "bad-sig" };
 
