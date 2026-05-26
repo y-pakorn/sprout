@@ -56,8 +56,8 @@ export function FeedEventCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
       className={cn(
-        "relative overflow-hidden surface-card rounded-card px-4 py-3",
-        isSelf && "ring-[1.5px] ring-inset ring-deliver-green"
+        "relative overflow-hidden border-b border-hairline px-5 py-3.5 transition-colors hover:bg-whisper-gray/50",
+        isSelf && "bg-deliver-green/[0.06]"
       )}
     >
       {fresh && (

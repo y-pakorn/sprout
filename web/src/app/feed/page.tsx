@@ -10,11 +10,13 @@ export default function FeedPage() {
   return (
     <CinematicShell mode="dim">
       <div className="flex h-dvh flex-col pt-16">
-        <div className="flex min-h-0 flex-1">
-          <div className="min-h-0 flex-1 overflow-hidden md:border-r md:border-hairline">
+        <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1">
+          {/* Timeline column — fixed-width white panel, like a Twitter feed */}
+          <div className="min-h-0 flex-1 overflow-hidden border-x border-hairline bg-canvas-white">
             <FeedList />
           </div>
-          <aside className="hidden min-h-0 shrink-0 md:flex md:w-[440px] lg:w-[480px]">
+          {/* Chat right rail */}
+          <aside className="hidden min-h-0 w-96 shrink-0 md:flex">
             <Conversation embedded />
           </aside>
         </div>

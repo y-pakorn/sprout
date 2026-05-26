@@ -89,7 +89,7 @@ export function FeedList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (rows[i]?.type === "header" ? 40 : 96),
+    estimateSize: (i) => (rows[i]?.type === "header" ? 37 : 84),
     overscan: 6,
     getItemKey: (i) => rows[i]?.id ?? i,
   });
@@ -116,26 +116,33 @@ export function FeedList() {
   // ---- non-list states ----
   if (status === "loading" && events.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-xl px-4 pt-4">
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-[76px] w-full rounded-card" />
-          ))}
-        </div>
+      <div className="w-full">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-3 border-b border-hairline px-5 py-3.5"
+          >
+            <Skeleton className="size-10 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3 w-24 rounded-card" />
+              <Skeleton className="h-4 w-32 rounded-card" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   if (status === "error" && events.length === 0) {
     return (
-      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 pt-16 text-center">
+      <div className="flex w-full flex-col items-center gap-3 px-5 pt-16 text-center">
         <p className="text-body-sm text-muted-ash">
           Couldn’t load the feed.{error ? ` ${error}` : ""}
         </p>
         <button
           type="button"
           onClick={loadOlder}
-          className="rounded-button surface-card px-4 py-2 text-body-sm font-medium text-midnight-ink shadow-button"
+          className="rounded-button surface-panel px-4 py-2 text-body-sm font-medium text-midnight-ink shadow-button"
         >
           Retry
         </button>
@@ -145,7 +152,7 @@ export function FeedList() {
 
   if (status === "ready" && events.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-xl px-4 pt-16 text-center">
+      <div className="w-full px-5 pt-16 text-center">
         <p className="text-body-sm text-muted-ash">No activity yet.</p>
       </div>
     );
@@ -154,7 +161,7 @@ export function FeedList() {
   return (
     <div className="flex h-full flex-col">
       {/* Live header */}
-      <div className="flex shrink-0 items-center gap-2 px-5 py-3">
+      <div className="flex shrink-0 items-center gap-2 border-b border-hairline px-5 py-3.5">
         <span className="relative flex size-2">
           <span className="absolute inline-flex size-full animate-ping rounded-full bg-deliver-green/60" />
           <span className="relative inline-flex size-2 rounded-full bg-deliver-green" />
@@ -170,7 +177,7 @@ export function FeedList() {
           onScroll={onScroll}
           className="h-full overflow-y-auto"
         >
-          <div className="mx-auto w-full max-w-xl px-4 pb-24">
+          <div className="w-full pb-24">
             <div
               className="relative"
               style={{ height: virtualizer.getTotalSize() }}
@@ -187,29 +194,27 @@ export function FeedList() {
                     style={{ transform: `translateY(${vi.start}px)` }}
                   >
                     {row.type === "header" ? (
-                      <div className="px-1 pb-1.5 pt-3 text-caption font-medium uppercase tracking-wider text-muted-ash">
+                      <div className="border-b border-hairline bg-whisper-gray/40 px-5 py-2 text-caption font-medium uppercase tracking-wider text-muted-ash">
                         {row.label}
                       </div>
                     ) : (
-                      <div className="pb-3">
-                        <FeedEventCard
-                          event={row.event}
-                          display={deriveEventDisplay(
-                            row.event,
-                            row.event.vaultId
-                              ? vaultIndex.get(
-                                  canonicalCoinType(row.event.vaultId)
-                                )
-                              : undefined,
-                            coinIndex
-                          )}
-                          isSelf={
-                            !!selfAddr &&
-                            canonicalCoinType(row.event.owner) === selfAddr
-                          }
-                          fresh={freshIds.has(row.event.id)}
-                        />
-                      </div>
+                      <FeedEventCard
+                        event={row.event}
+                        display={deriveEventDisplay(
+                          row.event,
+                          row.event.vaultId
+                            ? vaultIndex.get(
+                                canonicalCoinType(row.event.vaultId)
+                              )
+                            : undefined,
+                          coinIndex
+                        )}
+                        isSelf={
+                          !!selfAddr &&
+                          canonicalCoinType(row.event.owner) === selfAddr
+                        }
+                        fresh={freshIds.has(row.event.id)}
+                      />
                     )}
                   </div>
                 );
