@@ -1348,23 +1348,6 @@ export function Conversation({
     return -1;
   })();
 
-  // Compact the last 4 user/assistant turns into plain text for the
-  // autocomplete hook. Drop reasoning, tool calls, tool results — just
-  // the visible text. Skip empty messages (e.g. an assistant message
-  // that only emitted a tool call) so the model gets useful context.
-  const recentForAutocomplete = messages
-    .slice(-4)
-    .map((m) => {
-      const text = m.parts
-        .filter((p) => p.type === "text")
-        .map((p) => (p as { text: string }).text)
-        .join("\n")
-        .trim();
-      const role: "user" | "assistant" =
-        m.role === "user" ? "user" : "assistant";
-      return { role, text };
-    })
-    .filter((m) => m.text.length > 0);
 
   const latestPlanToolCallId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -1489,7 +1472,6 @@ export function Conversation({
                   ? "Sprout is thinking…"
                   : "Tell me a swap or a goal…"
               }
-              recentMessages={recentForAutocomplete}
             />
           </div>
         </div>

@@ -2,8 +2,13 @@ import { streamText, convertToModelMessages, type UIMessage } from "ai";
 import { aiModel, aiModels } from "@/lib/ai/openrouter";
 import { systemPrompt } from "@/lib/ai/system-prompt";
 import { swapTools } from "@/lib/ai/tools";
+import { MAX_USER_MESSAGE_CHARS } from "@/lib/chat-limits";
 
 export const maxDuration = 60;
+
+// The client (useChat) replays the whole conversation each request, so it grows
+// unbounded over a session. Only forward the most recent turns to the model.
+const MAX_MESSAGES = 10;
 
 export async function POST(req: Request) {
   if (!process.env.OPENROUTER_API_KEY) {
@@ -16,7 +21,28 @@ export async function POST(req: Request) {
     );
   }
 
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const { messages: incoming = [] }: { messages?: UIMessage[] } =
+    await req.json();
+
+  // Keep only the most recent messages, starting at a user turn so the model
+  // context begins cleanly (never on a dangling assistant/tool message).
+  let messages = incoming.slice(-MAX_MESSAGES);
+  const firstUser = messages.findIndex((m) => m.role === "user");
+  if (firstUser > 0) messages = messages.slice(firstUser);
+
+  // Clamp each user message's text so a single message can't spam the model.
+  messages = messages.map((m) =>
+    m.role !== "user"
+      ? m
+      : {
+          ...m,
+          parts: m.parts.map((p) =>
+            p.type === "text"
+              ? { ...p, text: p.text.slice(0, MAX_USER_MESSAGE_CHARS) }
+              : p
+          ),
+        }
+  );
 
   const startedAt = Date.now();
 

@@ -19,14 +19,6 @@ export const aiModel = openrouter("tencent/hy3-preview");
 // export const aiModels = ["tencent/hy3-preview"];
 export const aiModels = ["deepseek/deepseek-v4-flash"];
 
-export const autoCompleteAiModel = openrouter(
-  "nvidia/nemotron-3-nano-30b-a3b:free"
-);
-export const autoCompleteAiModels = [
-  "openai/gpt-oss-20b:nitro",
-  "tencent/hy3-preview",
-];
-
 // Pricing + cost math lives in ./pricing.ts so the client can import it
 // without pulling the server-only provider chain.
 export { MODEL_PRICING, computeMessageCost } from "./pricing";
