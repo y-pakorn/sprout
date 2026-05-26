@@ -21,31 +21,7 @@ import {
 import { SPRING_BOUNCY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { PillButton } from "@/components/ui/pill-button";
-
-function shortAddr(addr: string): string {
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-/** Stable initial for the avatar — uses SuiNS first letter or address byte */
-function avatarLetter(name: string | null | undefined, addr: string): string {
-  if (name && name.length > 0) return name[0].toUpperCase();
-  // 3rd char of address (skip "0x") tends to vary more than the leading chars
-  return (addr[2] ?? "?").toUpperCase();
-}
-
-/** Stable neutral/pillar tone for the avatar background (Amplemarket). */
-const AVATAR_TONES = [
-  "#272625", // surface charcoal
-  "#10054d", // deep indigo
-  "#2e2460", // midnight violet
-  "#328efa", // intelligence blue
-  "#e16540", // lead-gen red
-];
-function avatarTone(addr: string): string {
-  let h = 0;
-  for (let i = 0; i < addr.length; i++) h = (h * 31 + addr.charCodeAt(i)) | 0;
-  return AVATAR_TONES[Math.abs(h) % AVATAR_TONES.length];
-}
+import { shortAddr, avatarLetter, avatarTone } from "@/lib/avatar";
 
 export function WalletButton({
   tone = "default",

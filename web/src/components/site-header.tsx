@@ -58,6 +58,7 @@ function Brand({ logoSize = 22 }: { logoSize?: number }) {
 
 const TABS = [
   { href: "/", label: "Plant" },
+  { href: "/feed", label: "Feed" },
   { href: "/portfolio", label: "Portfolio" },
 ];
 

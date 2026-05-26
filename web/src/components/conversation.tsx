@@ -46,6 +46,7 @@ import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
 import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
 import { floorToDecimals } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { VaultPosition } from "@/components/parts/wallet-card";
 import {
   loadVaultReceiptIndex,
@@ -56,7 +57,9 @@ import {
 // keeps the prop-shape contract with downstream cards stable.
 type VaultPositionInfo = VaultReceiptEntry;
 
-export function Conversation() {
+export function Conversation({
+  embedded = false,
+}: { embedded?: boolean } = {}) {
   const account = useCurrentAccount();
   const coinMap = useCoinMap();
   const suiClient = useCurrentClient();
@@ -957,6 +960,16 @@ export function Conversation() {
   }
 
   if (messages.length === 0) {
+    if (embedded) {
+      return (
+        <EmbeddedEmpty
+          draft={draft}
+          onDraftChange={setDraft}
+          onSubmit={submit}
+          ready={!!coinMap}
+        />
+      );
+    }
     return (
       <IdleHero
         draft={draft}
@@ -1006,13 +1019,15 @@ export function Conversation() {
     return null;
   })();
 
-  return (
-    <CinematicShell mode="dim">
-      <div className="flex h-dvh flex-col">
+  const body = (
+      <div className={cn("flex flex-col", embedded ? "h-full" : "h-dvh")}>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div
             ref={stick.scrollRef}
-            className="min-h-0 flex-1 overflow-y-auto pt-16"
+            className={cn(
+              "min-h-0 flex-1 overflow-y-auto",
+              !embedded && "pt-16"
+            )}
           >
             <div
               ref={stick.contentRef}
@@ -1118,7 +1133,51 @@ export function Conversation() {
           </div>
         </div>
       </div>
-    </CinematicShell>
+  );
+
+  return embedded ? (
+    body
+  ) : (
+    <CinematicShell mode="dim">{body}</CinematicShell>
+  );
+}
+
+function EmbeddedEmpty({
+  draft,
+  onDraftChange,
+  onSubmit,
+  ready,
+}: {
+  draft: string;
+  onDraftChange: (v: string) => void;
+  onSubmit: (text: string) => void;
+  ready: boolean;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
+        <h2 className="font-alt text-body-lg font-medium tracking-tight text-midnight-ink">
+          Ask Sprout
+        </h2>
+        <p className="mt-1 max-w-xs text-body-sm text-muted-ash">
+          Swap, deposit, or ask about any vault you see in the feed.
+        </p>
+      </div>
+      <div className="shrink-0">
+        <div className="mx-auto w-full max-w-3xl px-4 py-4">
+          <ChatInput
+            value={draft}
+            onChange={onDraftChange}
+            onSubmit={() => onSubmit(draft)}
+            disabled={!ready}
+            placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
+          />
+          <div className="mt-3">
+            <ExamplePrompts onPick={onSubmit} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
