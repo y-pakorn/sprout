@@ -21,6 +21,7 @@ import { AssetIcon } from "@/components/asset-icon";
 import { SproutBadge } from "@/components/ui/sprout-badge";
 import { StatusDisk } from "@/components/ui/status-disk";
 import { Tag } from "@/components/ui/tag";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { WalletButton } from "@/components/wallet-button";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
@@ -125,7 +126,7 @@ export function PortfolioView() {
         {!account && <ConnectGate />}
 
         {/* ───── Hero — total value ───── */}
-        {account && (
+        {account && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -159,12 +160,7 @@ export function PortfolioView() {
         )}
 
         {/* ───── States ───── */}
-        {account && loading && (
-          <EmptyCard>
-            <Loader2 className="size-4 animate-spin text-muted-ash" />
-            <span className="text-muted-ash">Loading portfolio…</span>
-          </EmptyCard>
-        )}
+        {account && loading && <PortfolioSkeleton />}
         {account && error && (
           <EmptyCard tone="warn">
             <AlertTriangle className="size-4 text-warning" strokeWidth={2.4} />
@@ -336,6 +332,58 @@ function ConnectGate() {
 
       <WalletButton />
     </motion.div>
+  );
+}
+
+/**
+ * Loading placeholder mirroring the hero + section rows. Bars use a darker
+ * neutral than the default whisper-gray skeleton so they stay visible on the
+ * bare canvas (whisper-gray ≈ the page color).
+ */
+function Bar({ className }: { className?: string }) {
+  return <Skeleton className={cn("bg-midnight-ink/[0.07]", className)} />;
+}
+
+function RowSkeleton() {
+  return (
+    <div className="surface-card flex items-center gap-3 px-4 py-3 rounded-card">
+      <Bar className="size-10 shrink-0 rounded-full" />
+      <div className="flex-1 space-y-2">
+        <Bar className="h-3.5 w-28 rounded-card" />
+        <Bar className="h-3 w-20 rounded-card" />
+      </div>
+      <div className="flex flex-col items-end gap-2">
+        <Bar className="h-3.5 w-16 rounded-card" />
+        <Bar className="h-3 w-12 rounded-card" />
+      </div>
+    </div>
+  );
+}
+
+function PortfolioSkeleton() {
+  return (
+    <div className="space-y-8">
+      {/* Hero */}
+      <div className="flex flex-col items-center gap-3.5 pt-1 text-center">
+        <Bar className="h-3 w-24 rounded-card" />
+        <Bar className="h-14 w-56 rounded-card" />
+        <Bar className="h-4 w-64 rounded-card" />
+      </div>
+      {/* Two section blocks */}
+      {[3, 2].map((n, s) => (
+        <div key={s} className="space-y-3">
+          <div className="space-y-1.5 px-1">
+            <Bar className="h-4 w-40 rounded-card" />
+            <Bar className="h-3 w-24 rounded-card" />
+          </div>
+          <div className="space-y-1.5">
+            {Array.from({ length: n }).map((_, i) => (
+              <RowSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

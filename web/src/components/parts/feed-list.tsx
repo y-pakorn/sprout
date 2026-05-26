@@ -161,12 +161,14 @@ export function FeedList() {
 
   // ---- non-list states ----
   if (status === "loading" && events.length === 0) {
+    // Fill the full panel height — extra rows are clipped by overflow-hidden so
+    // the skeleton reaches the bottom on tall desktop viewports.
     return (
-      <div className="w-full">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="flex h-full flex-col overflow-hidden">
+        {Array.from({ length: 24 }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 border-b border-hairline px-5 py-3.5"
+            className="flex shrink-0 items-center gap-3 border-b border-hairline px-5 py-3.5"
           >
             <Skeleton className="size-10 shrink-0 rounded-full" />
             <div className="flex-1 space-y-2">
