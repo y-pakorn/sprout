@@ -9,7 +9,6 @@
 
 import {
   canonicalCoinType,
-  type ClientCoin,
   type CoinMap,
 } from "@/lib/client-coins";
 
@@ -28,8 +27,6 @@ export type EventDef = {
   kind: FeedEventKind;
   /** Human verb shown on the card. */
   label: string;
-  /** StatusDisk / Tag tone. */
-  tone: "green" | "gold";
 };
 
 export const EVENT_DEFS: EventDef[] = [
@@ -37,46 +34,41 @@ export const EVENT_DEFS: EventDef[] = [
     key: "deposit",
     typeStr: `${VAULT_PKG}::events::VaultDepositEvent`,
     kind: "deposit",
-    label: "deposited",
-    tone: "green",
+    label: "Deposited",
   },
   {
     key: "redeem",
     typeStr: `${VAULT_PKG}::events::RequestRedeemedEvent`,
     kind: "redeem",
-    label: "requested redeem",
-    tone: "gold",
+    label: "Redeemed",
   },
 ];
 
 /** Per-event-type cursor map keyed by EventDef.key. */
 export type CursorMap = Record<string, string | null>;
 
-/** A normalized, render-ready feed item. */
+/** A normalized feed item — raw values + identity. Display values (USD,
+ *  ticker, vault) are derived later via `deriveEventDisplay`, once the vault
+ *  list is available. */
 export type FeedEvent = {
   /** Stable dedupe key. */
   id: string;
   kind: FeedEventKind;
   label: string;
-  tone: "green" | "gold";
   /** Tx sender address. */
   sender: string;
   /** SuiNS name of the sender, if any. */
   senderName: string | null;
   /** json.owner — the depositor / redeemer. */
   owner: string;
-  /** Underlying coin type parsed from the event's generic param. */
+  /** Underlying coin type parsed from the event's generic param (canonical). */
   coinType: string;
-  symbol: string;
-  iconUrl?: string;
-  /** Deposit amount in human units (deposit events only). */
-  amountHuman?: number;
-  /** Shares in human units (redeem events only). */
-  sharesHuman?: number;
-  /** json.vault_id. */
+  /** json.vault_id (the on-chain vault object address). */
   vaultId: string;
   timestampMs: number;
   digest: string;
+  /** Raw event payload (string amounts), used by deriveEventDisplay. */
+  raw: Record<string, string>;
 };
 
 // ---- raw GraphQL shapes ----------------------------------------------------
@@ -179,14 +171,20 @@ export async function fetchFeedPage(opts: {
 
 // ---- normalization ---------------------------------------------------------
 
-/** coinType (canonical) → ClientCoin, for resolving symbol/decimals/icon. */
-export type CoinIndex = Map<string, ClientCoin>;
+/** coinType (canonical) → {ticker, decimals, icon}, for symbol/icon lookup. */
+export type CoinInfo = { ticker: string; decimals: number; icon?: string };
+export type CoinIndex = Map<string, CoinInfo>;
 
 export function buildCoinIndex(coinMap: CoinMap | null): CoinIndex {
   const idx: CoinIndex = new Map();
   if (!coinMap) return idx;
-  for (const coin of Object.values(coinMap)) {
-    idx.set(canonicalCoinType(coin.coin_type), coin);
+  // The map KEY is the ticker (e.g. "USDC", "SUI") — coin.name is a long label.
+  for (const [ticker, coin] of Object.entries(coinMap)) {
+    idx.set(canonicalCoinType(coin.coin_type), {
+      ticker,
+      decimals: coin.decimals,
+      icon: coin.icon_url,
+    });
   }
   return idx;
 }
@@ -209,49 +207,103 @@ function toHuman(raw: string | undefined, decimals: number): number | undefined 
   }
 }
 
-/** Maps a raw GraphQL node to a render-ready FeedEvent. */
+/** Maps a raw GraphQL node to a FeedEvent (raw values + identity). */
 export function normalizeEvent(
   node: RawEventNode,
-  def: EventDef,
-  coinIndex: CoinIndex
+  def: EventDef
 ): FeedEvent | null {
   const json = node.contents?.json ?? {};
   const digest = node.transaction?.digest ?? "";
   const seq = json.sequence_number ?? "";
-  // Skip anything we can't key stably — guards against malformed nodes.
   if (!digest && !seq) return null;
 
   const coinType = parseGeneric(node.contents?.type?.repr ?? "");
   const canon = coinType ? canonicalCoinType(coinType) : "";
-  const coin = canon ? coinIndex.get(canon) : undefined;
-  const decimals = coin?.decimals ?? 9;
-  const symbol =
-    coin?.name ?? (coinType ? coinType.split("::").pop() ?? "?" : "?");
-
   const timestampMs = new Date(node.timestamp).getTime();
 
   return {
     id: `${digest}:${def.kind}:${seq}`,
     kind: def.kind,
     label: def.label,
-    tone: def.tone,
     sender: node.sender?.address ?? json.owner ?? "",
     senderName: node.sender?.defaultNameRecord?.domain ?? null,
     owner: json.owner ?? node.sender?.address ?? "",
     coinType: canon,
-    symbol,
-    iconUrl: coin?.icon_url,
-    amountHuman:
-      def.kind === "deposit" ? toHuman(json.total_amount, decimals) : undefined,
-    sharesHuman:
-      def.kind === "redeem" ? toHuman(json.shares, decimals) : undefined,
     vaultId: json.vault_id ?? "",
     timestampMs: Number.isFinite(timestampMs) ? timestampMs : 0,
     digest,
+    raw: json,
   };
 }
 
 /** Newest-first comparator. The server returns ascending — always re-sort. */
 export function byNewest(a: FeedEvent, b: FeedEvent): number {
   return b.timestampMs - a.timestampMs;
+}
+
+// ---- display derivation ----------------------------------------------------
+
+/** Minimal vault shape the feed needs (subset of SuiVault). */
+export type VaultInfo = {
+  name: string;
+  logoUrl?: string;
+  depositSymbol: string;
+  depositDecimals: number;
+  /** USD per receipt (share) token — Bluefin's own oracle. */
+  receiptCoinPriceUsd?: number;
+  apyPct: number;
+};
+
+/** Render-ready fields computed from a FeedEvent + its vault. */
+export type EventDisplay = {
+  ticker: string;
+  tokenIcon?: string;
+  vaultName?: string;
+  vaultLogo?: string;
+  apyPct?: number;
+  /** USD value (shares × receipt price). Undefined when vault is unknown. */
+  usd?: number;
+  /** Native amount — deposit: underlying tokens; redeem: shares. */
+  nativeAmount?: number;
+  nativeUnit: "token" | "shares";
+};
+
+/**
+ * Computes USD + native amounts. USD = shares × the vault's per-share price
+ * (deposits value `shares_minted`, redeems value `shares`) — validated against
+ * live data, no oracle call required.
+ */
+export function deriveEventDisplay(
+  ev: FeedEvent,
+  vault: VaultInfo | undefined,
+  coinIndex: CoinIndex
+): EventDisplay {
+  const coin = ev.coinType ? coinIndex.get(ev.coinType) : undefined;
+  const decimals = vault?.depositDecimals ?? coin?.decimals ?? 9;
+  const ticker =
+    vault?.depositSymbol ??
+    coin?.ticker ??
+    (ev.coinType ? ev.coinType.split("::").pop() ?? "?" : "?");
+  const recPrice = vault?.receiptCoinPriceUsd;
+
+  const base = {
+    ticker,
+    tokenIcon: coin?.icon,
+    vaultName: vault?.name,
+    vaultLogo: vault?.logoUrl,
+    apyPct: vault?.apyPct,
+  };
+
+  if (ev.kind === "deposit") {
+    const amount = toHuman(ev.raw.total_amount, decimals);
+    const sharesMinted = toHuman(ev.raw.shares_minted, decimals);
+    const usd =
+      recPrice != null && sharesMinted != null
+        ? sharesMinted * recPrice
+        : undefined;
+    return { ...base, usd, nativeAmount: amount, nativeUnit: "token" };
+  }
+  const shares = toHuman(ev.raw.shares, decimals);
+  const usd = recPrice != null && shares != null ? shares * recPrice : undefined;
+  return { ...base, usd, nativeAmount: shares, nativeUnit: "shares" };
 }
