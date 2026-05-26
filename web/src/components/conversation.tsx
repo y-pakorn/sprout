@@ -1154,28 +1154,24 @@ function EmbeddedEmpty({
   ready: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 text-center">
-        <h2 className="font-alt text-body-lg font-medium tracking-tight text-midnight-ink">
-          Ask Sprout
-        </h2>
-        <p className="mt-1 max-w-xs text-body-sm text-muted-ash">
-          Swap, deposit, or ask about any vault you see in the feed.
-        </p>
-      </div>
-      <div className="shrink-0">
-        <div className="mx-auto w-full max-w-3xl px-4 py-4">
-          <ChatInput
-            value={draft}
-            onChange={onDraftChange}
-            onSubmit={() => onSubmit(draft)}
-            disabled={!ready}
-            placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
-          />
-          <div className="mt-3">
-            <ExamplePrompts onPick={onSubmit} />
-          </div>
+    <div className="flex h-full flex-col items-center justify-center px-5">
+      <div className="w-full max-w-md space-y-4">
+        <div className="text-center">
+          <h2 className="font-alt text-body-lg font-medium tracking-tight text-midnight-ink">
+            Ask Sprout
+          </h2>
+          <p className="mt-1 text-body-sm text-muted-ash">
+            Swap, deposit, or ask about any vault you see in the feed.
+          </p>
         </div>
+        <ChatInput
+          value={draft}
+          onChange={onDraftChange}
+          onSubmit={() => onSubmit(draft)}
+          disabled={!ready}
+          placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
+        />
+        <ExamplePrompts onPick={onSubmit} />
       </div>
     </div>
   );

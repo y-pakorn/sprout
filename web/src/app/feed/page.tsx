@@ -9,14 +9,14 @@ export default function FeedPage() {
   // bottom sheet on mobile).
   return (
     <CinematicShell mode="dim">
-      <div className="flex h-dvh flex-col pt-16">
-        <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1">
-          {/* Timeline column — fixed-width white panel, like a Twitter feed */}
-          <div className="min-h-0 flex-1 overflow-hidden border-x border-hairline bg-canvas-white">
+      <div className="flex h-dvh flex-col px-6 pb-6 pt-20">
+        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 gap-6">
+          {/* Timeline — contained white panel with divided rows */}
+          <div className="min-h-0 flex-1 overflow-hidden surface-card rounded-card">
             <FeedList />
           </div>
           {/* Chat right rail */}
-          <aside className="hidden min-h-0 w-96 shrink-0 md:flex">
+          <aside className="hidden min-h-0 w-[400px] shrink-0 md:flex lg:w-[460px]">
             <Conversation embedded />
           </aside>
         </div>
