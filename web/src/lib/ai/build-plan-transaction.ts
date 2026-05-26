@@ -5,8 +5,8 @@ import {
   type Transaction,
   type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
-import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import { resolveRecipient } from "@/lib/suins";
 import {
   resolveSymbol,
   canonicalCoinType,
@@ -37,40 +37,6 @@ import type {
 
 /** The dapp-kit core client shape (used here only for the gas dryRun). */
 export type SuiClientLike = ReturnType<typeof useCurrentClient>;
-
-/**
- * Resolve a send recipient to a normalized 0x address. Accepts a raw Sui
- * address or a SuiNS name (e.g. "yoisha.sui" / "@yoisha"), resolving the
- * latter on-chain via the client's name service. Throws a clear, agent-
- * readable error for invalid or unregistered inputs.
- */
-async function resolveRecipient(
-  input: string,
-  client: SuiClientLike,
-): Promise<{ address: string; name?: string }> {
-  const raw = input.trim();
-  if (!raw) throw new Error("send: missing recipient (0x address or SuiNS name).");
-  if (isValidSuiAddress(raw)) return { address: normalizeSuiAddress(raw) };
-  // Treat anything else as a SuiNS name. lookupName accepts "name.sui" and "@name".
-  let target: string | undefined;
-  try {
-    // dapp-kit types the client as ClientWithCoreApi (core only); the concrete
-    // instance is a SuiGrpcClient, which exposes the name service.
-    const grpc = client as unknown as SuiGrpcClient;
-    const res = await grpc.nameService.lookupName({ name: raw });
-    target = res.response.record?.targetAddress;
-  } catch {
-    throw new Error(
-      `send: '${input}' is not a valid Sui address or SuiNS name (e.g. yoisha.sui).`,
-    );
-  }
-  if (!target) {
-    throw new Error(
-      `send: SuiNS name '${raw}' isn't registered (or has no target address set).`,
-    );
-  }
-  return { address: normalizeSuiAddress(target), name: raw };
-}
 
 export type BuildPlanArgs = {
   steps: RawStep[];
@@ -184,7 +150,9 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
     const key = input.trim();
     const hit = recipientCache.get(key);
     if (hit) return hit;
-    const res = await resolveRecipient(key, client);
+    // dapp-kit types the client as ClientWithCoreApi; the runtime instance is a
+    // SuiGrpcClient, which exposes the name service used for SuiNS resolution.
+    const res = await resolveRecipient(key, client as unknown as SuiGrpcClient);
     recipientCache.set(key, res);
     return res;
   }

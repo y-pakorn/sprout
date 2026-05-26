@@ -308,6 +308,26 @@ export const swapTools = {
         ),
     }),
   }),
+  sendStablecoin: tool({
+    description:
+      "Transfer an allowlisted stablecoin to someone GASLESS — $0 fee, NO SUI required (Sui's protocol-level gasless stablecoin transfers). Eligible tokens: USDC, USDSUI, suiUSDe, USDY, FDUSD, AUSD, USDB. Use this for a SINGLE peer-to-peer stablecoin transfer drawn from the wallet — it is the preferred way to send these tokens because it costs nothing and needs no SUI. It is NOT chainable: for swap→send, splitting one amount across recipients, or sending any non-allowlisted token, use executePlan's `send` step instead (that pays SUI gas). The transfer is IRREVERSIBLE; pass the recipient exactly as the user gave it, never invent one.",
+    inputSchema: z.object({
+      symbol: z
+        .string()
+        .describe(
+          "Stablecoin to send — one of USDC, USDSUI, suiUSDe, USDY, FDUSD, AUSD, USDB.",
+        ),
+      amount: z
+        .number()
+        .positive()
+        .describe("Amount to send in human units (e.g. 5 = 5 USDC)."),
+      recipient: z
+        .string()
+        .describe(
+          "Recipient: a 0x address or SuiNS name (e.g. yoisha.sui / @yoisha). Pass exactly as the user gave it.",
+        ),
+    }),
+  }),
   explainConcept: tool({
     description:
       "Look up the canonical explainer for a DeFi concept the user asked about (e.g. impermanent loss, APY composition, withdrawal lockup, MPC custody). Always use this when the user wants to understand a risk, term, or how something works — DO NOT freestyle the explanation. The explainer is a markdown string; quote it back to the user verbatim, optionally adding 1–2 sentences tying it to the vault/quote on screen.",

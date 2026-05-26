@@ -26,6 +26,7 @@ import {
 } from "@/components/parts/message-footer";
 import {
   actionPlanCache,
+  gaslessSendCache,
   vaultsListCache,
   txHistoryCache,
   accountTxCache,
@@ -34,6 +35,7 @@ import {
   coinMetadataCache,
   coinHoldersCache,
 } from "@/lib/ai/action-plan-cache";
+import { GaslessSendCard } from "@/components/parts/gasless-send-card";
 import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
 
@@ -552,6 +554,69 @@ export function AgentMessage({
               receivedShares={
                 isActivePlan ? planAction.receivedShares : undefined
               }
+              walletConnected={planAction.walletConnected}
+            />
+          );
+        }
+
+        if (part.type === "tool-sendStablecoin") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Gasless send failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Preparing gasless transfer…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+            );
+          }
+          const cached = gaslessSendCache.get(p.toolCallId);
+          if (!cached) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Transfer expired — ask again to rebuild"
+                status="output-error"
+              />
+            );
+          }
+          const isActive = planAction.activePlanId === p.toolCallId;
+          return (
+            <GaslessSendCard
+              key={key}
+              cached={cached}
+              iconLookup={planAction.iconLookup}
+              onConfirm={() => planAction.onConfirm(p.toolCallId)}
+              onCancel={() => planAction.onCancel(p.toolCallId)}
+              signing={isActive && planAction.signing}
+              confirming={isActive && planAction.confirming}
+              executed={isActive && planAction.executed}
+              txDigest={isActive ? planAction.txDigest : undefined}
+              txStatus={isActive ? planAction.txStatus : undefined}
+              txError={isActive ? planAction.txError : undefined}
               walletConnected={planAction.walletConnected}
             />
           );

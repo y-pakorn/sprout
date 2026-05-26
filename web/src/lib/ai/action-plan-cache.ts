@@ -304,6 +304,28 @@ export const coinListCache = {
   },
 };
 
+// Gasless stablecoin transfer — holds the built Transaction + display metadata
+// for the card and the confirm/execute handler. Keyed by toolCallId.
+export type CachedGaslessSend = {
+  tx: Transaction;
+  symbol: string;
+  coinType: string;
+  decimals: number;
+  amountHuman: number;
+  recipient: string;
+  recipientName?: string;
+  fetchedAt: number;
+};
+const gaslessSendMap = new Map<string, CachedGaslessSend>();
+export const gaslessSendCache = {
+  set(id: string, entry: CachedGaslessSend) {
+    gaslessSendMap.set(id, entry);
+  },
+  get(id: string): CachedGaslessSend | undefined {
+    return gaslessSendMap.get(id);
+  },
+};
+
 const coinMetaMap = new Map<string, CoinMetadata>();
 export const coinMetadataCache = {
   set(id: string, entry: CoinMetadata) {

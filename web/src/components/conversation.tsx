@@ -14,6 +14,8 @@ import {
 
 type SuiClientLike = ReturnType<typeof useCurrentClient>;
 import type { Transaction } from "@mysten/sui/transactions";
+import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import { buildGaslessSend } from "@/lib/gasless";
 import { fetchAllBalances, fetchBalance } from "@/lib/grpc-balances";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
@@ -33,6 +35,7 @@ import { signedFetch } from "@/lib/api-client";
 import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
+  gaslessSendCache,
   vaultsListCache,
   txHistoryCache,
   accountTxCache,
@@ -230,6 +233,16 @@ export function Conversation({
             coinMap,
             vaultsRef.current,
             accountRef.current,
+            addToolResultRef
+          );
+          return;
+        }
+        if (toolCall.toolName === "sendStablecoin") {
+          void runSendStablecoin(
+            toolCall,
+            coinMap,
+            accountRef.current,
+            suiClientRef.current,
             addToolResultRef
           );
           return;
@@ -1259,6 +1272,70 @@ export function Conversation({
     }
   }
 
+  async function runSendStablecoin(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    if (!acct) {
+      await addResult({
+        tool: "sendStablecoin",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "Wallet not connected. The user needs to connect a wallet before I can send.",
+        },
+      });
+      return;
+    }
+    const { symbol, amount, recipient } = toolCall.input as {
+      symbol: string;
+      amount: number;
+      recipient: string;
+    };
+    try {
+      const built = await buildGaslessSend({
+        symbol,
+        amountHuman: amount,
+        recipient,
+        sender: acct.address,
+        coinMap: map,
+        client: client as unknown as SuiGrpcClient,
+      });
+      gaslessSendCache.set(toolCall.toolCallId, {
+        tx: built.tx,
+        symbol: built.symbol,
+        coinType: built.coinType,
+        decimals: built.decimals,
+        amountHuman: built.amountHuman,
+        recipient: built.recipient,
+        recipientName: built.recipientName,
+        fetchedAt: Date.now(),
+      });
+      await addResult({
+        tool: "sendStablecoin",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          gasless: true,
+          amount: Number(built.amountHuman.toFixed(6)),
+          symbol: built.symbol,
+          recipient: built.recipient,
+          recipientName: built.recipientName,
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "sendStablecoin",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Gasless send failed to build: ${(e as Error).message}` },
+      });
+    }
+  }
+
   async function runExecutePlan(
     toolCall: { toolCallId: string; input: unknown },
     map: typeof coinMap,
@@ -1452,6 +1529,11 @@ export function Conversation({
   }
 
   async function handleConfirmPlan(toolCallId: string) {
+    // Gasless stablecoin transfers live in a separate cache + execution path
+    // (they can't be composite PTBs). Route them before the plan lookup.
+    if (gaslessSendCache.get(toolCallId)) {
+      return handleConfirmGaslessSend(toolCallId);
+    }
     setSignError(null);
     setPlanTxError(undefined);
     setPlanTxStatus(undefined);
@@ -1545,6 +1627,89 @@ export function Conversation({
           `Couldn't confirm on chain: ${
             (waitErr as Error).message
           }. The tx may still be processing.`
+        );
+      } finally {
+        setPlanConfirming(false);
+        setPlanExecuted(true);
+      }
+    } catch (e) {
+      setSignError((e as Error).message || "Wallet rejected");
+      setPlanSigning(false);
+      setPlanConfirming(false);
+    }
+  }
+
+  async function handleConfirmGaslessSend(toolCallId: string) {
+    setSignError(null);
+    setPlanTxError(undefined);
+    setPlanTxStatus(undefined);
+    setPlanGasSui(undefined);
+    setPlanReceivedShares(undefined);
+    const cached = gaslessSendCache.get(toolCallId);
+    if (!cached) {
+      setSignError("Transfer expired. Ask again to rebuild.");
+      return;
+    }
+    const acct = accountRef.current;
+    if (!acct) {
+      setSignError("Connect a wallet first.");
+      return;
+    }
+    setActivePlanId(toolCallId);
+    setPlanSigning(true);
+    setPlanConfirming(false);
+    setPlanExecuted(false);
+    setPlanTxDigest(undefined);
+    try {
+      // dapp-kit serializes the tx via our gRPC client, which resolves a
+      // qualifying gasless stablecoin transfer to gasPrice=0 / gasBudget=0.
+      const signed = await signAndExecute({
+        transaction: cached.tx as unknown as Transaction,
+      });
+      const signedTx =
+        signed.$kind === "Transaction"
+          ? signed.Transaction
+          : signed.FailedTransaction;
+      setPlanSigning(false);
+      setPlanConfirming(true);
+      setPlanTxDigest(signedTx.digest);
+      try {
+        const finalized = await suiClientRef.current.core.waitForTransaction({
+          digest: signedTx.digest,
+          include: { effects: true },
+        });
+        const finTx =
+          finalized.$kind === "Transaction"
+            ? finalized.Transaction
+            : finalized.FailedTransaction;
+        if (finTx.status.success) {
+          setPlanTxStatus("success");
+          const gas = finTx.effects?.gasUsed;
+          if (gas) {
+            const mist =
+              BigInt(gas.computationCost) +
+              BigInt(gas.storageCost) -
+              BigInt(gas.storageRebate);
+            setPlanGasSui(Math.max(0, Number(mist) / 1e9));
+          }
+        } else {
+          setPlanTxStatus("failure");
+          const err = finTx.status.success ? null : finTx.status.error;
+          setPlanTxError(
+            (typeof err === "string"
+              ? err
+              : err
+              ? JSON.stringify(err)
+              : null) || "Transfer failed on chain."
+          );
+        }
+      } catch (waitErr) {
+        console.warn("[gaslessSend] waitForTransaction failed", waitErr);
+        setPlanTxStatus("failure");
+        setPlanTxError(
+          `Couldn't confirm on chain: ${
+            (waitErr as Error).message
+          }. The transfer may still be processing.`
         );
       } finally {
         setPlanConfirming(false);
