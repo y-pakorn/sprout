@@ -23,8 +23,11 @@ import { StatusDisk } from "@/components/ui/status-disk";
 import { Tag } from "@/components/ui/tag";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
+import { CoinFlow } from "@/components/parts/coin-flow";
 import { useVaultBalance } from "@/lib/client-vault-balance";
 import { useWalletHoldings, type TokenHolding } from "@/lib/client-wallet";
+import { useAccountActivity } from "@/lib/client-account-activity";
+import type { TxActivity, TxCoin } from "@/lib/tx-history";
 import { fetchDeployment } from "@/lib/client-vaults";
 import { truncateCoinType } from "@/lib/client-coins";
 import { appendCancelRedeemCall } from "@/lib/ember-actions";
@@ -56,6 +59,7 @@ export function PortfolioView() {
     null,
   );
   const [showAllActivity, setShowAllActivity] = useState(false);
+  const [showAllAccountActivity, setShowAllAccountActivity] = useState(false);
 
   // Tick every 30s for the pending countdowns.
   const [now, setNow] = useState(() => Date.now());
@@ -95,6 +99,11 @@ export function PortfolioView() {
   const activity =
     vaultData?.history.filter((h) => h.type !== "Unknown") ?? [];
   const visibleActivity = showAllActivity ? activity : activity.slice(0, 6);
+
+  const accountActivity = useAccountActivity();
+  const visibleAccountActivity = showAllAccountActivity
+    ? accountActivity
+    : accountActivity.slice(0, 6);
 
   function refresh() {
     refreshVaults();
@@ -222,16 +231,18 @@ export function PortfolioView() {
           </Section>
         )}
 
-        {/* ───── Activity ───── */}
+        {/* ───── Vault activity ───── */}
         {account && vaultData && activity.length > 0 && (
           <Section
-            title="Recent activity"
+            title="Recent vault activity"
             subtitle="Deposits, withdrawals, and processed redemptions"
             count={activity.length}
           >
-            {visibleActivity.map((h, i) => (
-              <ActivityRow key={i} item={h} i={i} />
-            ))}
+            <div className="surface-card overflow-hidden rounded-card">
+              {visibleActivity.map((h, i) => (
+                <ActivityRow key={i} item={h} i={i} />
+              ))}
+            </div>
             {activity.length > 6 && (
               <button
                 type="button"
@@ -246,13 +257,40 @@ export function PortfolioView() {
           </Section>
         )}
 
+        {/* ───── Account activity ───── */}
+        {account && accountActivity.length > 0 && (
+          <Section
+            title="Recent account activity"
+            subtitle="Swaps, transfers & stakes across Sui"
+            count={accountActivity.length}
+          >
+            <div className="surface-card overflow-hidden rounded-card">
+              {visibleAccountActivity.map((a, i) => (
+                <AccountActivityRow key={`${a.digest}:${i}`} item={a} i={i} />
+              ))}
+            </div>
+            {accountActivity.length > 6 && (
+              <button
+                type="button"
+                onClick={() => setShowAllAccountActivity((v) => !v)}
+                className="mt-1 w-full bg-whisper-gray px-3 py-2 text-caption font-medium text-muted-ash transition-colors hover:bg-light-taupe hover:text-midnight-ink rounded-card"
+              >
+                {showAllAccountActivity
+                  ? "Show less"
+                  : `Show ${accountActivity.length - 6} more`}
+              </button>
+            )}
+          </Section>
+        )}
+
         {/* ───── Empty fallback ───── */}
         {account &&
           vaultData &&
           vaultData.positions.length === 0 &&
           pending.length === 0 &&
           holdings.length === 0 &&
-          activity.length === 0 && (
+          activity.length === 0 &&
+          accountActivity.length === 0 && (
             <EmptyCard>
               <span className="text-muted-ash">
                 Nothing in your garden yet. Plant a seed →
@@ -574,6 +612,104 @@ function PendingRow({
   );
 }
 
+/**
+ * One row in an activity log (vault or account). Lives inside a single grouped
+ * surface-card; rows are hairline-divided. Coin movement renders via the shared
+ * CoinFlow when `coins` are given, else the plain `subtitle`.
+ */
+function ActivityLine({
+  i,
+  icon,
+  title,
+  muted,
+  coins,
+  subtitle,
+  valueUsd,
+  valuePrefix,
+  timestampMs,
+  failed = false,
+  href,
+}: {
+  i: number;
+  icon: React.ReactNode;
+  title: string;
+  muted?: string;
+  coins?: TxCoin[];
+  subtitle?: string;
+  valueUsd?: number;
+  valuePrefix?: string;
+  timestampMs: number;
+  failed?: boolean;
+  href?: string;
+}) {
+  const inner = (
+    <>
+      {icon}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-1.5">
+          <span className="truncate text-body-sm font-medium text-midnight-ink">
+            {title}
+          </span>
+          {muted && (
+            <span className="truncate text-caption text-muted-ash">
+              · {muted}
+            </span>
+          )}
+          {failed && (
+            <Tag tone="red" className="ml-0.5 shrink-0">
+              Failed
+            </Tag>
+          )}
+        </div>
+        <div className="mt-0.5 text-caption tabular-nums text-muted-ash">
+          {coins && coins.length > 0 ? (
+            <CoinFlow coins={coins} />
+          ) : subtitle ? (
+            <span className="block truncate">{subtitle}</span>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end leading-tight">
+        {typeof valueUsd === "number" && valueUsd > 0 && (
+          <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
+            {valuePrefix}
+            {fmtUsd(valueUsd)}
+          </span>
+        )}
+        <span className="text-caption tabular-nums text-muted-ash">
+          {fmtRelative(timestampMs)}
+        </span>
+      </div>
+    </>
+  );
+
+  const className = cn(
+    "flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0",
+    href && "group transition-colors hover:bg-whisper-gray/50",
+  );
+  const motionProps = {
+    initial: { opacity: 0, y: 8 },
+    animate: { opacity: 1, y: 0 },
+    transition: { delay: 0.03 * i, duration: 0.2 },
+  };
+
+  return href ? (
+    <motion.a
+      {...motionProps}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      {inner}
+    </motion.a>
+  ) : (
+    <motion.div {...motionProps} className={className}>
+      {inner}
+    </motion.div>
+  );
+}
+
 function ActivityRow({
   item,
   i,
@@ -581,103 +717,87 @@ function ActivityRow({
   item: VaultBalanceHistoryItem;
   i: number;
 }) {
-  if (item.type === "Unknown") return null;
-
-  const common = {
-    initial: { opacity: 0, y: 8 },
-    animate: { opacity: 1, y: 0 },
-    transition: { delay: 0.03 * i, duration: 0.2 },
-    className: "surface-card flex items-center gap-3 rounded-card px-4 py-3",
-  };
-
   if (item.type === "Deposit") {
-    const usd = item.depositAmount * item.depositCoin.priceUsd;
     return (
-      <motion.div {...common}>
-        <StatusDisk tone="green">
-          <ArrowDownLeft className="size-4" strokeWidth={2.4} />
-        </StatusDisk>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-medium text-midnight-ink">
-            Deposit · {item.vault.name}
-          </span>
-          <span className="truncate text-caption tabular-nums text-muted-ash">
-            {fmtAmount(item.depositAmount)} {item.depositCoin.symbol} →{" "}
-            {fmtAmount(item.receivedShares)} {item.receiptCoin.symbol}
-          </span>
-        </div>
-        <div className="flex flex-col items-end leading-tight">
-          {usd > 0 && (
-            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
-              {fmtUsd(usd)}
-            </span>
-          )}
-          <span className="text-caption text-muted-ash">
-            {fmtRelative(item.timestamp)}
-          </span>
-        </div>
-      </motion.div>
+      <ActivityLine
+        i={i}
+        icon={
+          <StatusDisk tone="green">
+            <ArrowDownLeft className="size-4" strokeWidth={2.4} />
+          </StatusDisk>
+        }
+        title="Deposited"
+        muted={item.vault.name}
+        coins={[
+          { symbol: item.depositCoin.symbol, amount: -item.depositAmount },
+          { symbol: item.receiptCoin.symbol, amount: item.receivedShares },
+        ]}
+        valueUsd={item.depositAmount * item.depositCoin.priceUsd}
+        timestampMs={item.timestamp}
+      />
     );
   }
 
   if (item.type === "RedeemRequest") {
-    const usd = item.shares * item.receiptCoin.priceUsd;
     return (
-      <motion.div {...common}>
-        <StatusDisk tone="gold">
-          <Clock className="size-4" strokeWidth={2.4} />
-        </StatusDisk>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-medium text-midnight-ink">
-            Withdraw request · {item.vault.name}
-          </span>
-          <span className="truncate text-caption tabular-nums text-muted-ash">
-            {fmtAmount(item.shares)} {item.receiptCoin.symbol}
-          </span>
-        </div>
-        <div className="flex flex-col items-end leading-tight">
-          {usd > 0 && (
-            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
-              ≈{fmtUsd(usd)}
-            </span>
-          )}
-          <span className="text-caption text-muted-ash">
-            {fmtRelative(item.timestamp)}
-          </span>
-        </div>
-      </motion.div>
+      <ActivityLine
+        i={i}
+        icon={
+          <StatusDisk tone="gold">
+            <Clock className="size-4" strokeWidth={2.4} />
+          </StatusDisk>
+        }
+        title="Withdrawal requested"
+        muted={item.vault.name}
+        coins={[{ symbol: item.receiptCoin.symbol, amount: -item.shares }]}
+        valueUsd={item.shares * item.receiptCoin.priceUsd}
+        valuePrefix="≈"
+        timestampMs={item.timestamp}
+      />
     );
   }
 
   if (item.type === "RedeemRequestProcessed") {
-    const usd = item.receivedAmount * item.receivedCoin.priceUsd;
     return (
-      <motion.div {...common}>
-        <StatusDisk tone="green">
-          <Check className="size-4" strokeWidth={2.6} />
-        </StatusDisk>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body-sm font-medium text-midnight-ink">
-            Withdrawal completed · {item.vault.name}
-          </span>
-          <span className="truncate text-caption tabular-nums text-muted-ash">
-            {fmtAmount(item.redeemedShares)} {item.receiptCoin.symbol} →{" "}
-            {fmtAmount(item.receivedAmount)} {item.receivedCoin.symbol}
-          </span>
-        </div>
-        <div className="flex flex-col items-end leading-tight">
-          {usd > 0 && (
-            <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
-              {fmtUsd(usd)}
-            </span>
-          )}
-          <span className="text-caption text-muted-ash">
-            {fmtRelative(item.timestamp)}
-          </span>
-        </div>
-      </motion.div>
+      <ActivityLine
+        i={i}
+        icon={
+          <StatusDisk tone="green">
+            <Check className="size-4" strokeWidth={2.6} />
+          </StatusDisk>
+        }
+        title="Withdrawal completed"
+        muted={item.vault.name}
+        coins={[
+          { symbol: item.receiptCoin.symbol, amount: -item.redeemedShares },
+          { symbol: item.receivedCoin.symbol, amount: item.receivedAmount },
+        ]}
+        valueUsd={item.receivedAmount * item.receivedCoin.priceUsd}
+        timestampMs={item.timestamp}
+      />
     );
   }
 
   return null;
+}
+
+function AccountActivityRow({ item, i }: { item: TxActivity; i: number }) {
+  return (
+    <ActivityLine
+      i={i}
+      icon={
+        <AssetIcon
+          src={item.protocol?.img}
+          label={item.protocol?.name ?? item.activity}
+          size={36}
+        />
+      }
+      title={item.activity}
+      muted={item.protocol?.name}
+      coins={item.coins}
+      failed={!!item.status && item.status !== "SUCCESS"}
+      timestampMs={item.timestampMs}
+      href={`https://suiscan.xyz/mainnet/tx/${item.digest}`}
+    />
+  );
 }
