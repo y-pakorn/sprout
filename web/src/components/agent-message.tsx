@@ -772,6 +772,56 @@ export function AgentMessage({
           return <TransactionDetailCard key={key} detail={detail} />;
         }
 
+        if (part.type === "tool-searchToken") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { query?: string };
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Token lookup failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            const q = p.input?.query;
+            return (
+              <ToolCallRow
+                key={key}
+                label={q ? `Looking up "${q}"…` : "Looking up token…"}
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+            );
+          }
+          const cached = coinListCache.get(p.toolCallId);
+          const items = cached?.items ?? [];
+          if (items.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`No token found for "${p.input?.query ?? ""}"`}
+                status="output-available"
+              />
+            );
+          }
+          return <CoinListCard key={key} items={items} sortBy="SEARCH" />;
+        }
+
         if (part.type === "tool-getCoins") {
           const p = part as unknown as {
             toolCallId: string;

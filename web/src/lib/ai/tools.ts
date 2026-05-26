@@ -99,6 +99,17 @@ export const swapTools = {
         .describe("Max number of coins to return."),
     }),
   }),
+  searchToken: tool({
+    description:
+      "Confirm a token in the live Sui registry by symbol OR name, and get its EXACT symbol + coin type before a swap. Use this whenever the destination/source token the user named is NOT an obvious major (SUI, USDC, USDT, WAL, DEEP) and you're not 100% sure it resolves — NEVER guess or autocorrect an unfamiliar symbol to a better-known lookalike (Sui has many similarly-named tokens: USDC, USDSUI, USDB, WUSDC, SUIUSDE, AUSD, …; 'usdsui' is USDSUI, not USDC). Returns ranked matches with the exact symbol, name, coin type, and verified flag. Copy the returned symbol VERBATIM into executePlan's fromSymbol/toSymbol.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe(
+          "Token symbol or name to look up — e.g. 'usdsui', 'sui dollar', 'wal'. Case-insensitive.",
+        ),
+    }),
+  }),
   getCoinMetadata: tool({
     description:
       "Get metadata + market stats for one coin/token by its coin type (e.g. 0x2::sui::SUI), via Blockberry: name, symbol, decimals, description, total + circulating supply, market cap, 24h volume, and social links (website/twitter/discord/github/telegram). Use when the user asks about a specific token's details, fundamentals, supply, or socials.",

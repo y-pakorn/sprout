@@ -258,6 +258,10 @@ export function Conversation({
           void runGetTransactionDetail(toolCall, coinMap, addToolResultRef);
           return;
         }
+        if (toolCall.toolName === "searchToken") {
+          void runSearchToken(toolCall, coinMap, addToolResultRef);
+          return;
+        }
         if (toolCall.toolName === "getCoins") {
           void runGetCoins(toolCall, addToolResultRef);
           return;
@@ -1017,6 +1021,81 @@ export function Conversation({
         output: { error: `Transaction detail failed: ${(e as Error).message}` },
       });
     }
+  }
+
+  async function runSearchToken(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { query } = (toolCall.input ?? {}) as { query?: string };
+    const q = (query ?? "").trim();
+    if (!q) {
+      await addResult({
+        tool: "searchToken",
+        toolCallId: toolCall.toolCallId,
+        output: { error: "Empty query — pass a token symbol or name to look up." },
+      });
+      return;
+    }
+    if (!map) {
+      await addResult({
+        tool: "searchToken",
+        toolCallId: toolCall.toolCallId,
+        output: { error: "Token registry not loaded yet — ask again in a moment." },
+      });
+      return;
+    }
+    const qUpper = q.toUpperCase();
+    const qLower = q.toLowerCase();
+    // Rank registry entries: exact symbol → symbol prefix → symbol substring
+    // → exact name → name substring. Lower score = closer match.
+    const ranked: Array<{ item: CoinListItem; score: number }> = [];
+    for (const [symbol, coin] of Object.entries(map)) {
+      const symUpper = symbol.toUpperCase();
+      const nameLower = coin.name.toLowerCase();
+      let score = -1;
+      if (symUpper === qUpper) score = 0;
+      else if (symUpper.startsWith(qUpper)) score = 1;
+      else if (symUpper.includes(qUpper)) score = 2;
+      else if (nameLower === qLower) score = 3;
+      else if (nameLower.includes(qLower)) score = 4;
+      if (score < 0) continue;
+      ranked.push({
+        item: {
+          coinType: coin.coin_type,
+          name: coin.name,
+          symbol,
+          decimals: coin.decimals,
+          imgUrl: coin.icon_url,
+          isVerified: coin.verified,
+          isBridged: false,
+        },
+        score,
+      });
+    }
+    ranked.sort(
+      (a, b) =>
+        a.score - b.score || a.item.symbol.localeCompare(b.item.symbol)
+    );
+    const items = ranked.slice(0, 6).map((r) => r.item);
+    coinListCache.set(toolCall.toolCallId, { items, sortBy: "SEARCH" });
+    await addResult({
+      tool: "searchToken",
+      toolCallId: toolCall.toolCallId,
+      output: pruneForModel({
+        query: q,
+        count: items.length,
+        matches: items.map((c) => ({
+          symbol: c.symbol,
+          name: c.name,
+          coinType: c.coinType,
+          verified: c.isVerified,
+        })),
+      }),
+    });
   }
 
   async function runGetCoins(

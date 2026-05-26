@@ -11,6 +11,7 @@ const SORT_LABEL: Record<string, string> = {
   HOLDERS: "Top coins by holders",
   AGE: "Newest coins",
   NAME: "Coins A–Z",
+  SEARCH: "Token matches",
 };
 
 export function CoinListCard({
