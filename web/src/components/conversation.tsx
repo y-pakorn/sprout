@@ -33,6 +33,7 @@ import {
   actionPlanCache,
   vaultsListCache,
   type CachedActionPlan,
+  type PlanRisk,
   type ResolvedSwapStep,
   type ResolvedSplitStep,
   type ResolvedDepositStep,
@@ -589,6 +590,22 @@ export function Conversation() {
             tvlUsd: Math.round(v.tvlUsd),
             withdrawalPeriodDays: v.withdrawalPeriodDays,
             isPrivate: v.isPrivate,
+            // Risk signals for the agent's Guardian assessment.
+            riskProfile: v.riskProfile?.slug,
+            flags: v.flagSlugs.length ? v.flagSlugs : undefined,
+            perfFeeBps: v.performanceFeeBps,
+            mgmtFeeBps: v.managementFeeBps,
+            rewardApyPct: Number(v.apyBreakdown.rewardApyPct.toFixed(2)),
+            capacityPct:
+              v.maxDepositsRaw && Number(v.maxDepositsRaw) > 0
+                ? Math.round(
+                    (Number(v.totalDepositsRaw) / Number(v.maxDepositsRaw)) *
+                      100,
+                  )
+                : undefined,
+            depositors: v.activeDepositors,
+            strategy: v.strategy,
+            description: v.description?.slice(0, 220),
           })),
         },
       });
@@ -643,7 +660,10 @@ export function Conversation() {
       return;
     }
 
-    const { steps } = toolCall.input as { steps: RawStep[] };
+    const { steps, risks } = toolCall.input as {
+      steps: RawStep[];
+      risks?: PlanRisk[];
+    };
 
     try {
       // On silent rebuilds, preserve the previously-computed real gas
@@ -667,6 +687,9 @@ export function Conversation() {
         tx,
         steps: resolved,
         originalInput: steps,
+        // Preserve agent risks across silent slippage rebuilds (the rebuild
+        // passes only `steps`, so `risks` would otherwise be lost).
+        risks: risks ?? prev?.risks,
         summary,
         fetchedAt: Date.now(),
       };

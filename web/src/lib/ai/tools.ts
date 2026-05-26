@@ -32,7 +32,7 @@ export const swapTools = {
   }),
   listVaults: tool({
     description:
-      "List Ember Finance vaults on Sui sorted by APY descending. Optionally filter to vaults that accept a specific deposit token. Use this when the user wants to deposit and hasn't named a vault, asks about yields, or wants to compare options.",
+      "List Ember Finance vaults on Sui sorted by APY descending. Optionally filter to vaults that accept a specific deposit token. Use this when the user wants to deposit and hasn't named a vault, asks about yields, or wants to compare options.\n\nEach vault includes RISK signals to ground your Guardian assessment (the executePlan `risks` array): `riskProfile` (\"principal_protected\"=Delta-Neutral/conservative, \"balanced\", \"volatile\"=Asymmetric/high-risk), `flags` (e.g. kyc_required, rwa, deprecated, beta, private, stablecoin), `perfFeeBps`/`mgmtFeeBps`, `rewardApyPct` (high share of `apyPct` = emissions-dependent), `capacityPct` (deposits vs cap), `depositors`, `strategy` (free-text, e.g. \"Private Credit\"), and `description`.",
     inputSchema: z.object({
       depositSymbol: z
         .string()
@@ -143,6 +143,31 @@ export const swapTools = {
         .max(20)
         .describe(
           "Ordered list of plan steps. Topo-sorted by handle dependencies before execution.",
+        ),
+      risks: z
+        .array(
+          z.object({
+            title: z
+              .string()
+              .max(60)
+              .describe("Short risk label, e.g. 'Illiquid private-credit RWA'."),
+            note: z
+              .string()
+              .max(280)
+              .describe(
+                "1–2 plain-English sentences explaining this specific risk.",
+              ),
+            level: z
+              .enum(["pass", "flag", "block"])
+              .describe(
+                "Severity: pass = informational, flag = noteworthy, block = serious.",
+              ),
+          }),
+        )
+        .max(6)
+        .optional()
+        .describe(
+          "Key risks of THIS plan, each rendered as its own Guardian row for the user. REQUIRED when the plan has a deposit. Ground each risk in the target vault's riskProfile / flags / fees / capacityPct / rewardApyPct / strategy / description from listVaults — be specific to the vault, not generic. Do not restate these in your chat reply.",
         ),
     }),
   }),

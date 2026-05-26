@@ -9,6 +9,7 @@ import { AssetIcon } from "@/components/asset-icon";
 import { Sparkline } from "@/components/parts/sparkline";
 import { useVaultHistory } from "@/lib/client-vaults";
 import type { SuiVault } from "@/lib/vaults";
+import { Tag } from "@/components/ui/tag";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
 import { fmtUsdShort, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -269,25 +270,47 @@ export function VaultInfoDialog({
               </Section>
 
               {/* Strategy + transparency */}
-              {strategyExplainer && (
+              {(vault.strategy ||
+                vault.description ||
+                vault.riskProfile ||
+                strategyExplainer) && (
                 <Section title="Strategy">
-                  <div className="prose-sprout text-body-sm text-muted-ash">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => (
-                          <p className="m-0 mb-1.5">{children}</p>
-                        ),
-                        strong: ({ children }) => (
-                          <strong className="font-medium text-midnight-ink">
-                            {children}
-                          </strong>
-                        ),
-                      }}
-                    >
-                      {strategyExplainer}
-                    </ReactMarkdown>
-                  </div>
+                  {(vault.strategy || vault.riskProfile) && (
+                    <p className="m-0 mb-1.5 text-body-sm font-medium text-midnight-ink">
+                      {vault.strategy}
+                      {vault.strategy && vault.riskProfile ? " · " : ""}
+                      {vault.riskProfile?.name}
+                    </p>
+                  )}
+                  {vault.riskProfile?.description && (
+                    <p className="m-0 mb-1.5 text-body-sm text-muted-ash">
+                      {vault.riskProfile.description}
+                    </p>
+                  )}
+                  {vault.description && (
+                    <p className="m-0 mb-1.5 text-body-sm text-muted-ash">
+                      {vault.description}
+                    </p>
+                  )}
+                  {strategyExplainer && (
+                    <div className="prose-sprout text-body-sm text-muted-ash">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          p: ({ children }) => (
+                            <p className="m-0 mb-1.5">{children}</p>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-medium text-midnight-ink">
+                              {children}
+                            </strong>
+                          ),
+                        }}
+                      >
+                        {strategyExplainer}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </Section>
               )}
 
@@ -329,6 +352,43 @@ export function VaultInfoDialog({
                     {getGlossary("mpc-custody")}
                   </ReactMarkdown>
                 </div>
+                {vault.strategyAccounts && vault.strategyAccounts.length > 0 && (
+                  <div className="mt-2.5 space-y-1.5">
+                    <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
+                      Strategy accounts — where funds deploy
+                    </div>
+                    {vault.strategyAccounts.map((a) => (
+                      <div
+                        key={`${a.chain ?? ""}-${a.address}`}
+                        className="flex items-center justify-between gap-2 surface-panel px-2.5 py-1.5 rounded-card"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-body-sm font-medium text-midnight-ink">
+                              {a.name}
+                            </span>
+                            {a.chain && <Tag tone="neutral">{a.chain}</Tag>}
+                            {!a.isActive && <Tag tone="gold">Inactive</Tag>}
+                          </div>
+                          <div className="truncate font-mono text-caption text-muted-ash">
+                            {a.address.slice(0, 8)}…{a.address.slice(-6)}
+                          </div>
+                        </div>
+                        {a.explorerUrl && (
+                          <a
+                            href={a.explorerUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 bg-whisper-gray px-2.5 py-1 text-caption font-medium text-midnight-ink rounded-card"
+                          >
+                            View
+                            <ExternalLink className="size-3" strokeWidth={2.2} />
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Section>
 
               {/* Footer */}

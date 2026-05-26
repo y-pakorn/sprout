@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { AssetIcon } from "@/components/asset-icon";
+import { Tag } from "@/components/ui/tag";
 import {
   VaultRiskDetail,
   type RiskVerdict,
@@ -950,6 +951,7 @@ function DepositSummary({
           {s.vault.category}
           {lockup ? ` · ${lockup}` : ""}
         </div>
+        <RiskTags vault={s.vault} />
       </div>
       <div className="text-right leading-tight">
         <div className="text-[10px] font-medium uppercase tracking-wider text-muted-ash">
@@ -959,6 +961,47 @@ function DepositSummary({
           {fmtPct(s.vault.apyPct)}
         </div>
       </div>
+    </div>
+  );
+}
+
+const RISK_PROFILE_TONE: Record<string, "green" | "gold" | "red"> = {
+  principal_protected: "green",
+  balanced: "gold",
+  volatile: "red",
+};
+const RISK_FLAG_TAGS: Record<
+  string,
+  { label: string; tone: "neutral" | "gold" | "red" }
+> = {
+  kyc_required: { label: "KYC", tone: "gold" },
+  deprecated: { label: "Deprecated", tone: "red" },
+  private: { label: "Private", tone: "neutral" },
+  rwa: { label: "RWA", tone: "neutral" },
+  beta: { label: "Beta", tone: "gold" },
+};
+
+/** Risk-profile + high-signal flag chips for a vault, surfaced on the deposit
+ *  row so the classification is visible at a glance (independent of the
+ *  agent's Guardian narrative). */
+function RiskTags({ vault }: { vault: ResolvedDepositStep["vault"] }) {
+  const profile = vault.riskProfile;
+  const flags = (vault.flagSlugs ?? [])
+    .filter((s) => s in RISK_FLAG_TAGS)
+    .slice(0, 2);
+  if (!profile && flags.length === 0) return null;
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-1">
+      {profile && (
+        <Tag tone={RISK_PROFILE_TONE[profile.slug] ?? "neutral"}>
+          {profile.name}
+        </Tag>
+      )}
+      {flags.map((s) => (
+        <Tag key={s} tone={RISK_FLAG_TAGS[s].tone}>
+          {RISK_FLAG_TAGS[s].label}
+        </Tag>
+      ))}
     </div>
   );
 }
@@ -1038,6 +1081,21 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
   out.push(...depositRisks(deposits));
   out.push(...splitRisks(splits));
   out.push(...redeemRisks(redeems, deposits.length > 0));
+
+  // Agent-authored, vault-specific risk rows (the dynamic Guardian). Additive:
+  // when the agent supplies none, the static rows above stand in as a fallback.
+  for (const [i, r] of (cached.risks ?? []).entries()) {
+    const verdict: RiskVerdict =
+      r.level === "block" || r.level === "flag" ? r.level : "pass";
+    out.push({
+      id: `agent-risk-${i}`,
+      title: r.title,
+      summary: r.title,
+      verdict,
+      detail: r.note,
+      askPrompt: "Walk me through this risk.",
+    });
+  }
 
   const gas = cached.summary.estimatedGasSui;
   let gasV: RiskVerdict = "pass";

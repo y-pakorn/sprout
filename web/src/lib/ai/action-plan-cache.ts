@@ -147,12 +147,22 @@ export type RawStep = {
   sequenceNumber?: string;
 };
 
+/** Agent-authored plan risk, rendered as a Guardian row. */
+export type PlanRisk = {
+  title: string;
+  note: string;
+  level: "pass" | "flag" | "block";
+};
+
 export type CachedActionPlan = {
   tx: Transaction;
   steps: ResolvedStep[];
   /** Source-of-truth step list the agent emitted. Used to rebuild the
    *  plan when the user adjusts slippage. */
   originalInput: RawStep[];
+  /** Agent's per-plan risk assessment (executePlan `risks`). Rendered by the
+   *  Guardian; preserved across silent slippage rebuilds. */
+  risks?: PlanRisk[];
   /** Human summary used by the renderer header. */
   summary: {
     swapCount: number;

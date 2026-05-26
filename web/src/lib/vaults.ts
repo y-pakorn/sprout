@@ -51,6 +51,23 @@ export type SuiVault = {
   isBridgeable?: boolean;
   status?: string;
   strategy?: string;
+  /** The vault's risk-profile tag (the one upstream tag with isProfile=true):
+   *  principal_protected (Delta-Neutral), balanced, or volatile (Asymmetric). */
+  riskProfile?: { slug: string; name: string; description?: string };
+  /** Slugs of all non-profile tags (e.g. kyc_required, rwa, deprecated, beta,
+   *  private, stablecoin). Risk/availability flags surfaced to agent + UI. */
+  flagSlugs: string[];
+  /** Active depositor count on Sui — adoption signal. */
+  activeDepositors?: number;
+  /** On-chain accounts the vault deploys capital into (Fordefi MPC custody),
+   *  per chain, with explorer links. `name` is the custodian label. */
+  strategyAccounts?: Array<{
+    name: string;
+    address: string;
+    chain?: string;
+    explorerUrl?: string;
+    isActive: boolean;
+  }>;
   apyBreakdown: {
     depositApyPct: number;
     rewardApyPct: number;
@@ -119,6 +136,20 @@ type RawVault = {
       targetApyE9?: string;
     }
   >;
+  tags?: Array<{
+    name: string;
+    slug: string;
+    description?: string;
+    isProfile?: boolean;
+    logoUrl?: string;
+  }>;
+  strategyAccounts?: Array<{
+    name?: string;
+    address?: string;
+    explorerUrl?: string;
+    isActive?: boolean;
+    chain?: { name?: string; type?: string };
+  }>;
   rewards?: unknown[];
   managers?: unknown[];
   detailsByChain?: Record<
@@ -190,6 +221,31 @@ export async function getSuiVaults(): Promise<SuiVault[]> {
         status === "paused" ||
         status === "deprecated" ||
         status === "disabled";
+      const tags = v.tags ?? [];
+      const profileTag = tags.find((t) => t.isProfile);
+      const riskProfile = profileTag
+        ? {
+            slug: profileTag.slug,
+            name: profileTag.name,
+            description: profileTag.description,
+          }
+        : undefined;
+      const flagSlugs = Array.from(
+        new Set(tags.filter((t) => !t.isProfile).map((t) => t.slug)),
+      );
+      const depositorsNum = Number(sui.activeDepositorsCount);
+      const activeDepositors = Number.isFinite(depositorsNum)
+        ? depositorsNum
+        : undefined;
+      const strategyAccounts = (v.strategyAccounts ?? [])
+        .filter((a) => !!a.address)
+        .map((a) => ({
+          name: a.name ?? "Strategy account",
+          address: a.address!,
+          chain: a.chain?.name,
+          explorerUrl: a.explorerUrl,
+          isActive: a.isActive ?? false,
+        }));
       return {
         id: v.id,
         objectId: sui.address,
@@ -221,6 +277,10 @@ export async function getSuiVaults(): Promise<SuiVault[]> {
         isBridgeable: v.isBridgeable,
         status: v.status,
         strategy: v.strategy,
+        riskProfile,
+        flagSlugs,
+        activeDepositors,
+        strategyAccounts,
         apyBreakdown: {
           depositApyPct,
           rewardApyPct,
