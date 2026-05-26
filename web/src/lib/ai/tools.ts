@@ -82,6 +82,48 @@ export const swapTools = {
         .describe("The transaction digest (base58 hash), e.g. from a feed/history row."),
     }),
   }),
+  getCoins: tool({
+    description:
+      "List Sui coins/tokens via Blockberry, ranked by market cap (default), holder count, age (newest first), or name. Returns each coin's name, symbol, coin type, price, market cap, 24h volume, holder count, and whether it's verified. Use for 'top coins', 'biggest tokens by market cap', 'newest tokens', 'most-held coins', or to discover a coin's coin type before calling another coin tool.",
+    inputSchema: z.object({
+      sortBy: z
+        .enum(["MARKET_CAP", "HOLDERS", "AGE", "NAME"])
+        .optional()
+        .describe("Ranking. Default MARKET_CAP. AGE = newest first."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe("Max number of coins to return."),
+    }),
+  }),
+  getCoinMetadata: tool({
+    description:
+      "Get metadata + market stats for one coin/token by its coin type (e.g. 0x2::sui::SUI), via Blockberry: name, symbol, decimals, description, total + circulating supply, market cap, 24h volume, and social links (website/twitter/discord/github/telegram). Use when the user asks about a specific token's details, fundamentals, supply, or socials.",
+    inputSchema: z.object({
+      coinType: z
+        .string()
+        .describe("The coin type, formatted 0x…::module::TYPE (e.g. 0x2::sui::SUI)."),
+    }),
+  }),
+  getHoldersByCoinType: tool({
+    description:
+      "List the largest holders of a coin/token by its coin type, via Blockberry — ranked by balance, each with the holder address (or label), token amount, USD value, and percentage of supply. Use for 'who holds X', 'top holders / whales of X', or to gauge holder concentration.",
+    inputSchema: z.object({
+      coinType: z
+        .string()
+        .describe("The coin type, formatted 0x…::module::TYPE (e.g. 0x2::sui::SUI)."),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe("Max number of holders to return."),
+    }),
+  }),
   getAccountTransactions: tool({
     description:
       "Fetch the raw transaction list for a Sui address via Blockberry, newest-first — the tx-level view (vs getAccountActivity's decoded swaps/sends). Each tx has its type, the Move functions called, the protocol/packages touched, fee, command count, and net balance changes. Use when the user wants their transactions / tx list / tx history by hash, asks which protocols/contracts they (or an address) interacted with, or wants SENDER vs RECEIVER txs. Prefer getAccountActivity when they ask about swaps/transfers/amounts in plain terms. OMIT `address` to use the connected wallet. Errors if no address is given and no wallet is connected.",

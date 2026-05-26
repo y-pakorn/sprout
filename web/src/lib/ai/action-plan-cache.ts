@@ -5,6 +5,11 @@ import type { SuiVault } from "@/lib/vaults";
 import type { TxActivity } from "@/lib/tx-history";
 import type { AccountTxView } from "@/lib/account-transactions";
 import type { TransactionDetailView } from "@/lib/transaction-detail";
+import type {
+  CoinListItem,
+  CoinMetadata,
+  CoinHolder,
+} from "@/lib/blockberry-coins";
 
 // ───────────────────────────────────────────────────────────────────────
 // Generic action plan cache. Built by `runExecutePlan`, consumed by the
@@ -265,5 +270,42 @@ export const txDetailCache = {
   },
   get(toolCallId: string): TransactionDetailView | undefined {
     return txDetailMap.get(toolCallId);
+  },
+};
+
+// Blockberry coin tools — rich data (icons) kept client-side for the cards.
+export type CachedCoinList = { items: CoinListItem[]; sortBy: string };
+const coinListMap = new Map<string, CachedCoinList>();
+export const coinListCache = {
+  set(id: string, entry: CachedCoinList) {
+    coinListMap.set(id, entry);
+  },
+  get(id: string): CachedCoinList | undefined {
+    return coinListMap.get(id);
+  },
+};
+
+const coinMetaMap = new Map<string, CoinMetadata>();
+export const coinMetadataCache = {
+  set(id: string, entry: CoinMetadata) {
+    coinMetaMap.set(id, entry);
+  },
+  get(id: string): CoinMetadata | undefined {
+    return coinMetaMap.get(id);
+  },
+};
+
+export type CachedCoinHolders = {
+  items: CoinHolder[];
+  symbol: string;
+  coinType: string;
+};
+const coinHoldersMap = new Map<string, CachedCoinHolders>();
+export const coinHoldersCache = {
+  set(id: string, entry: CachedCoinHolders) {
+    coinHoldersMap.set(id, entry);
+  },
+  get(id: string): CachedCoinHolders | undefined {
+    return coinHoldersMap.get(id);
   },
 };

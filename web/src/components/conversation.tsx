@@ -36,6 +36,9 @@ import {
   txHistoryCache,
   accountTxCache,
   txDetailCache,
+  coinListCache,
+  coinMetadataCache,
+  coinHoldersCache,
   type CachedActionPlan,
   type PlanRisk,
   type ResolvedSwapStep,
@@ -52,6 +55,12 @@ import type {
   TransactionDetail,
   TransactionDetailView,
 } from "@/lib/transaction-detail";
+import {
+  isCoinType,
+  type CoinListItem,
+  type CoinMetadata,
+  type CoinHolder,
+} from "@/lib/blockberry-coins";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
@@ -246,6 +255,18 @@ export function Conversation({
         }
         if (toolCall.toolName === "getTransactionDetail") {
           void runGetTransactionDetail(toolCall, coinMap, addToolResultRef);
+          return;
+        }
+        if (toolCall.toolName === "getCoins") {
+          void runGetCoins(toolCall, addToolResultRef);
+          return;
+        }
+        if (toolCall.toolName === "getCoinMetadata") {
+          void runGetCoinMetadata(toolCall, addToolResultRef);
+          return;
+        }
+        if (toolCall.toolName === "getHoldersByCoinType") {
+          void runGetCoinHolders(toolCall, addToolResultRef);
           return;
         }
       },
@@ -993,6 +1014,157 @@ export function Conversation({
         tool: "getTransactionDetail",
         toolCallId: toolCall.toolCallId,
         output: { error: `Transaction detail failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetCoins(
+    toolCall: { toolCallId: string; input: unknown },
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { sortBy, limit } = (toolCall.input ?? {}) as {
+      sortBy?: string;
+      limit?: number;
+    };
+    try {
+      const params = new URLSearchParams({
+        sortBy: sortBy ?? "MARKET_CAP",
+        size: String(limit ?? 10),
+      });
+      const res = await fetch(`/api/coin-list?${params.toString()}`);
+      const body = (await res.json()) as {
+        error?: string;
+        items?: CoinListItem[];
+        hasNextPage?: boolean;
+      };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `coin list failed: ${res.status}`);
+      }
+      const items = body.items ?? [];
+      coinListCache.set(toolCall.toolCallId, {
+        items,
+        sortBy: sortBy ?? "MARKET_CAP",
+      });
+      // pruneForModel strips imgUrl + nulls; the card reads icons from cache.
+      await addResult({
+        tool: "getCoins",
+        toolCallId: toolCall.toolCallId,
+        output: pruneForModel({
+          sortBy: sortBy ?? "MARKET_CAP",
+          count: items.length,
+          hasNextPage: !!body.hasNextPage,
+          coins: items,
+        }),
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getCoins",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Coin list failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetCoinMetadata(
+    toolCall: { toolCallId: string; input: unknown },
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { coinType } = (toolCall.input ?? {}) as { coinType?: string };
+    const ct = (coinType ?? "").trim();
+    if (!isCoinType(ct)) {
+      await addResult({
+        tool: "getCoinMetadata",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
+        },
+      });
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/coin-metadata?coinType=${encodeURIComponent(ct)}`
+      );
+      const body = (await res.json()) as CoinMetadata & { error?: string };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `coin metadata failed: ${res.status}`);
+      }
+      coinMetadataCache.set(toolCall.toolCallId, body);
+      await addResult({
+        tool: "getCoinMetadata",
+        toolCallId: toolCall.toolCallId,
+        output: pruneForModel(body),
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getCoinMetadata",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Coin metadata failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runGetCoinHolders(
+    toolCall: { toolCallId: string; input: unknown },
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { coinType, limit } = (toolCall.input ?? {}) as {
+      coinType?: string;
+      limit?: number;
+    };
+    const ct = (coinType ?? "").trim();
+    if (!isCoinType(ct)) {
+      await addResult({
+        tool: "getHoldersByCoinType",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
+        },
+      });
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        coinType: ct,
+        size: String(limit ?? 10),
+      });
+      const res = await fetch(`/api/coin-holders?${params.toString()}`);
+      const body = (await res.json()) as {
+        error?: string;
+        items?: CoinHolder[];
+        hasNextPage?: boolean;
+      };
+      if (!res.ok || body.error) {
+        throw new Error(body.error ?? `coin holders failed: ${res.status}`);
+      }
+      const items = body.items ?? [];
+      coinHoldersCache.set(toolCall.toolCallId, {
+        items,
+        symbol: items[0]?.symbol ?? "?",
+        coinType: ct,
+      });
+      await addResult({
+        tool: "getHoldersByCoinType",
+        toolCallId: toolCall.toolCallId,
+        output: pruneForModel({
+          coinType: ct,
+          symbol: items[0]?.symbol ?? "?",
+          count: items.length,
+          hasNextPage: !!body.hasNextPage,
+          holders: items,
+        }),
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getHoldersByCoinType",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Coin holders failed: ${(e as Error).message}` },
       });
     }
   }

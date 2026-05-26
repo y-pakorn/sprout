@@ -15,6 +15,9 @@ import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
 import { TxHistoryCard } from "@/components/parts/tx-history-card";
 import { AccountTransactionsCard } from "@/components/parts/account-transactions-card";
 import { TransactionDetailCard } from "@/components/parts/transaction-detail-card";
+import { CoinListCard } from "@/components/parts/coin-list-card";
+import { CoinMetadataCard } from "@/components/parts/coin-metadata-card";
+import { CoinHoldersCard } from "@/components/parts/coin-holders-card";
 import type { VaultBalance } from "@/lib/vault-balance";
 import { AssetIcon } from "@/components/asset-icon";
 import {
@@ -27,6 +30,9 @@ import {
   txHistoryCache,
   accountTxCache,
   txDetailCache,
+  coinListCache,
+  coinMetadataCache,
+  coinHoldersCache,
 } from "@/lib/ai/action-plan-cache";
 import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
@@ -764,6 +770,149 @@ export function AgentMessage({
             );
           }
           return <TransactionDetailCard key={key} detail={detail} />;
+        }
+
+        if (part.type === "tool-getCoins") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Coin list failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow key={key} label="Listing coins…" status={p.state} />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+            );
+          }
+          const cached = coinListCache.get(p.toolCallId);
+          const items = cached?.items ?? [];
+          if (items.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="No coins found"
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <CoinListCard
+              key={key}
+              items={items}
+              sortBy={cached?.sortBy ?? "MARKET_CAP"}
+            />
+          );
+        }
+
+        if (part.type === "tool-getCoinMetadata") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Coin lookup failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow key={key} label="Reading coin…" status={p.state} />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+            );
+          }
+          const meta = coinMetadataCache.get(p.toolCallId);
+          if (!meta) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Coin metadata unavailable"
+                status="output-available"
+              />
+            );
+          }
+          return <CoinMetadataCard key={key} meta={meta} />;
+        }
+
+        if (part.type === "tool-getHoldersByCoinType") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Holders lookup failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow key={key} label="Reading holders…" status={p.state} />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+            );
+          }
+          const cached = coinHoldersCache.get(p.toolCallId);
+          const items = cached?.items ?? [];
+          if (items.length === 0) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="No holders found"
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <CoinHoldersCard
+              key={key}
+              items={items}
+              symbol={cached?.symbol ?? "?"}
+            />
+          );
         }
 
         return null;

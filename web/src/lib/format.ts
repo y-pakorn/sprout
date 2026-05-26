@@ -52,6 +52,15 @@ export function fmtUsdShort(n: number): string {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+/** Compact non-USD number ("1.5B", "12.3K") — for token supply / counts. */
+export function fmtCompact(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString(undefined, {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
+}
+
 /**
  * Token amount formatter. Loose precision: 4 decimals for ≥1, 6 for ≥1e-4,
  * exponential for smaller. Pass `maxFrac` to override the ≥1 ceiling.
