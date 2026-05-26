@@ -51,6 +51,7 @@ export function WalletButton({
     return (
       <>
         <PillButton
+          variant={glass ? "secondary" : "primary"}
           onClick={() => setConnectOpen(true)}
           className={glass ? "gap-1.5" : "gap-2 px-5 py-2.5"}
         >

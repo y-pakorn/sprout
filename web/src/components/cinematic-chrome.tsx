@@ -28,7 +28,7 @@ export function CinematicChrome({ children }: { children: React.ReactNode }) {
   return (
     <CinematicModeContext.Provider value={{ mode, setMode }}>
       <GradientField mode={mode} />
-      <SiteHeader variant="glass" />
+      <SiteHeader />
       <div className="relative z-20 flex min-h-screen w-full flex-col">
         {children}
       </div>

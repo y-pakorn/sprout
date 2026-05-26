@@ -7,8 +7,6 @@ import { WalletButton } from "@/components/wallet-button";
 import { SPRING_BOUNCY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-type Variant = "solid" | "glass";
-
 /** Bare filled-seedling brand mark — Midnight Ink via currentColor, no container. */
 function SproutLogo({ size = 22 }: { size?: number }) {
   return (
@@ -18,7 +16,7 @@ function SproutLogo({ size = 22 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden
-      className="shrink-0 text-midnight-ink"
+      className="shrink-0"
     >
       <path
         d="M12 22C11.3 18 11.4 14 12.4 10.5"
@@ -45,11 +43,11 @@ function SproutLogo({ size = 22 }: { size?: number }) {
   );
 }
 
-function Brand({ logoSize = 22 }: { logoSize?: number }) {
+function Brand({ logoSize = 18 }: { logoSize?: number }) {
   return (
-    <Link href="/" className="flex items-center gap-0.5 text-midnight-ink">
+    <Link href="/" className="flex items-center gap-0.5 text-canvas-white">
       <SproutLogo size={logoSize} />
-      <span className="font-alt text-2xl font-bold lowercase tracking-tight">
+      <span className="font-alt text-2xl font-semibold lowercase tracking-tight mb-0.5">
         sprout
       </span>
     </Link>
@@ -85,8 +83,8 @@ function NavTabs() {
               className={cn(
                 "relative z-10",
                 active
-                  ? "text-midnight-ink"
-                  : "text-muted-ash hover:text-midnight-ink"
+                  ? "text-midnight-ink font-semibold"
+                  : "text-canvas-white/55 hover:text-canvas-white"
               )}
             >
               {t.label}
@@ -98,29 +96,23 @@ function NavTabs() {
   );
 }
 
-export function SiteHeader({ variant = "glass" }: { variant?: Variant } = {}) {
-  // Both variants are light now. "glass" is the floating header used across
-  // the app: translucent canvas-white with a hairline + subtle elevation.
-  if (variant === "glass") {
-    return (
-      <header className="fixed inset-x-0 top-0 z-30 w-full">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-8">
-          <Brand logoSize={22} />
-          <NavTabs />
-          <WalletButton tone="glass" />
-        </div>
-      </header>
-    );
-  }
-
+export function SiteHeader() {
+  // A single centered floating bar (Skiff-style): the brand, nav tabs, and
+  // wallet CTA grouped inside one charcoal capsule rather than spread edge-to-edge.
   return (
-    <header className="w-full border-b border-hairline bg-canvas-white">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <div className="flex items-center gap-4">
-          <Brand logoSize={24} />
-          <NavTabs />
-        </div>
-        <WalletButton />
+    <header className="fixed inset-x-0 top-3 z-30 flex w-full justify-center px-4">
+      <div className="flex items-center gap-1.5 rounded-md bg-surface-charcoal py-1.5 pl-4 pr-1.5 ring-1 ring-canvas-white/15 shadow-header">
+        <Brand />
+        <span
+          className="mx-2 h-5 w-px shrink-0 bg-canvas-white/15"
+          aria-hidden
+        />
+        <NavTabs />
+        <span
+          className="mx-2 h-5 w-px shrink-0 bg-canvas-white/15"
+          aria-hidden
+        />
+        <WalletButton tone="glass" />
       </div>
     </header>
   );
