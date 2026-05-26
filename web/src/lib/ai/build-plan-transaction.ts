@@ -5,6 +5,8 @@ import {
   type Transaction,
   type TransactionObjectArgument,
 } from "@mysten/sui/transactions";
+import { isValidSuiAddress, normalizeSuiAddress } from "@mysten/sui/utils";
+import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import {
   resolveSymbol,
   canonicalCoinType,
@@ -29,11 +31,46 @@ import type {
   ResolvedDepositStep,
   ResolvedRedeemStep,
   ResolvedCancelRedeemStep,
+  ResolvedSendStep,
   CachedActionPlan,
 } from "@/lib/ai/action-plan-cache";
 
 /** The dapp-kit core client shape (used here only for the gas dryRun). */
 export type SuiClientLike = ReturnType<typeof useCurrentClient>;
+
+/**
+ * Resolve a send recipient to a normalized 0x address. Accepts a raw Sui
+ * address or a SuiNS name (e.g. "yoisha.sui" / "@yoisha"), resolving the
+ * latter on-chain via the client's name service. Throws a clear, agent-
+ * readable error for invalid or unregistered inputs.
+ */
+async function resolveRecipient(
+  input: string,
+  client: SuiClientLike,
+): Promise<{ address: string; name?: string }> {
+  const raw = input.trim();
+  if (!raw) throw new Error("send: missing recipient (0x address or SuiNS name).");
+  if (isValidSuiAddress(raw)) return { address: normalizeSuiAddress(raw) };
+  // Treat anything else as a SuiNS name. lookupName accepts "name.sui" and "@name".
+  let target: string | undefined;
+  try {
+    // dapp-kit types the client as ClientWithCoreApi (core only); the concrete
+    // instance is a SuiGrpcClient, which exposes the name service.
+    const grpc = client as unknown as SuiGrpcClient;
+    const res = await grpc.nameService.lookupName({ name: raw });
+    target = res.response.record?.targetAddress;
+  } catch {
+    throw new Error(
+      `send: '${input}' is not a valid Sui address or SuiNS name (e.g. yoisha.sui).`,
+    );
+  }
+  if (!target) {
+    throw new Error(
+      `send: SuiNS name '${raw}' isn't registered (or has no target address set).`,
+    );
+  }
+  return { address: normalizeSuiAddress(target), name: raw };
+}
 
 export type BuildPlanArgs = {
   steps: RawStep[];
@@ -84,7 +121,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
   // swaps whose input is a vault share (so resolveOrigin can resolve them
   // and we can flag the redeem-vs-swap tradeoff).
   const needsReceiptIndex =
-    needsVaults || steps.some((s) => s.kind === "swap");
+    needsVaults ||
+    steps.some((s) => s.kind === "swap" || s.kind === "send");
   const vaultByReceipt = needsReceiptIndex
     ? await loadVaultReceiptIndex()
     : new Map<string, never>();
@@ -139,6 +177,17 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
   // Sui will reject the PTB with `UnusedValueWithoutDrop`.
   const consumedHandles = new Set<string>();
   const resolved: ResolvedStep[] = [];
+  // Memoize SuiNS / address resolution so repeated recipients in one plan
+  // don't each hit the name service.
+  const recipientCache = new Map<string, { address: string; name?: string }>();
+  async function resolveRecipientCached(input: string) {
+    const key = input.trim();
+    const hit = recipientCache.get(key);
+    if (hit) return hit;
+    const res = await resolveRecipient(key, client);
+    recipientCache.set(key, res);
+    return res;
+  }
 
   function resolveOrigin(
     step: RawStep,
@@ -596,10 +645,17 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           runningSum += p;
         }
       }
-      const splitArgs = portionsRaw.map((p) => tx.pure.u64(p));
+      // splitCoins takes the source coin by `&mut` — it is NOT consumed by
+      // the split. So we split off only the FIRST N-1 portions as new coins
+      // and let the SOURCE coin itself be the last portion (it retains the
+      // remainder). This way every portion is a live handle that a downstream
+      // step (or the orphan transfer) consumes by value; otherwise the drained
+      // source Result dangles and Sui rejects the PTB with UnusedValueWithoutDrop.
+      const lastIdx = portionsRaw.length - 1;
+      const splitArgs = portionsRaw.slice(0, lastIdx).map((p) => tx.pure.u64(p));
       // @mysten/sui v2 splitCoins returns a Result (indexable), not an array.
       const splitResult = tx.splitCoins(origin.arg, splitArgs);
-      for (let i = 0; i < portionsRaw.length; i++) {
+      for (let i = 0; i < lastIdx; i++) {
         handles.set(`${step.id}.${i}`, {
           arg: splitResult[i] as unknown as TransactionObjectArgument,
           symbol: origin.symbol,
@@ -608,6 +664,14 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           expectedHuman: Number(portionsRaw[i]) / 10 ** origin.decimals,
         });
       }
+      // Last portion = the source coin's remainder (the same object handle).
+      handles.set(`${step.id}.${lastIdx}`, {
+        arg: origin.arg,
+        symbol: origin.symbol,
+        coinType: origin.coinType,
+        decimals: origin.decimals,
+        expectedHuman: Number(portionsRaw[lastIdx]) / 10 ** origin.decimals,
+      });
       resolved.push({
         kind: "split",
         id: step.id,
@@ -731,6 +795,27 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         receiptDecimals: origin.decimals,
         sharesHuman: origin.expectedHuman,
       });
+    } else if (step.kind === "send") {
+      if (!step.recipient) {
+        throw new Error(
+          `Send ${step.id}: missing recipient (a 0x address or SuiNS name like yoisha.sui).`,
+        );
+      }
+      const { address, name } = await resolveRecipientCached(step.recipient);
+      // origin.arg is the coin to transfer (an upstream handle, already marked
+      // consumed by resolveOrigin, or a fresh coinWithBalance draw). Send
+      // produces no handle — the coin leaves the wallet.
+      tx.transferObjects([origin.arg], tx.pure.address(address));
+      resolved.push({
+        kind: "send",
+        id: step.id,
+        symbol: origin.symbol,
+        coinType: origin.coinType,
+        decimals: origin.decimals,
+        amountHuman: origin.expectedHuman,
+        recipient: address,
+        recipientName: name,
+      });
     }
   }
 
@@ -762,6 +847,9 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
   const cancelSteps = resolved.filter(
     (s): s is ResolvedCancelRedeemStep => s.kind === "cancelRedeemFromVault"
   );
+  const sendSteps = resolved.filter(
+    (s): s is ResolvedSendStep => s.kind === "send"
+  );
 
   const blendedApyPct =
     depositSteps.length > 0
@@ -779,7 +867,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
     0.004 * depositSteps.length +
     0.006 * swapSteps.length +
     0.004 * redeemSteps.length +
-    0.003 * cancelSteps.length;
+    0.003 * cancelSteps.length +
+    0.002 * sendSteps.length;
   let estimatedGasSui = heuristicGasSui;
   if (args.estimateGas) {
     try {
@@ -820,6 +909,7 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
       depositCount: depositSteps.length,
       redeemCount: redeemSteps.length,
       cancelCount: cancelSteps.length,
+      sendCount: sendSteps.length,
       vaults: depositSteps.map((d) => d.vault),
       blendedApyPct,
       estimatedGasSui,

@@ -102,6 +102,13 @@ export function fmtPriceUsd(n: number): string {
   return `$${n.toExponential(2)}`;
 }
 
+/** Truncate a Sui address for display: "0x1234…cdef". Leaves short/odd
+ *  strings untouched so a SuiNS name passed by mistake still reads sensibly. */
+export function fmtAddress(addr: string, head = 6, tail = 4): string {
+  if (!addr.startsWith("0x") || addr.length <= head + tail + 1) return addr;
+  return `${addr.slice(0, head)}…${addr.slice(-tail)}`;
+}
+
 /** "5m ago" / "3d ago" / falls back to a locale date past ~30d. */
 export function fmtRelative(ms: number): string {
   const diff = Date.now() - ms;

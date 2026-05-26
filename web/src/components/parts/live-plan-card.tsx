@@ -14,6 +14,7 @@ import {
   Merge,
   RefreshCw,
   X,
+  Send,
 } from "lucide-react";
 import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { AssetIcon } from "@/components/asset-icon";
@@ -32,13 +33,14 @@ import type {
   ResolvedMergeStep,
   ResolvedRedeemStep,
   ResolvedCancelRedeemStep,
+  ResolvedSendStep,
   ResolvedStep,
 } from "@/lib/ai/action-plan-cache";
 import { providerLabel } from "@/lib/seven-k";
 import { dexLabel } from "@/lib/bluefin7k";
 import { untrustedDexes } from "@/lib/route-trust";
 import { fadeUp, scaleIn, stagger } from "@/lib/motion";
-import { fmtAmount, fmtPct } from "@/lib/format";
+import { fmtAmount, fmtPct, fmtAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useWalletHoldings } from "@/lib/client-wallet";
 import {
@@ -473,7 +475,10 @@ function ExpandableStep({
         onClick={() => setOpen((v) => !v)}
         className="group flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-whisper-gray"
       >
-        <StepIndex n={idx + 1} lit={step.kind === "deposit"} />
+        <StepIndex
+          n={idx + 1}
+          lit={step.kind === "deposit" || step.kind === "send"}
+        />
         <div className="min-w-0 flex-1">
           <StepSummary step={step} iconLookup={iconLookup} />
         </div>
@@ -701,6 +706,7 @@ function StepSummary({
   if (step.kind === "merge") return <MergeSummary s={step} iconLookup={iconLookup} />;
   if (step.kind === "deposit") return <DepositSummary s={step} iconLookup={iconLookup} />;
   if (step.kind === "redeemFromVault") return <RedeemSummary s={step} iconLookup={iconLookup} />;
+  if (step.kind === "send") return <SendSummary s={step} iconLookup={iconLookup} />;
   return <CancelSummary s={step} />;
 }
 
@@ -721,6 +727,7 @@ function StepDetail({
   if (step.kind === "deposit")
     return <DepositDetail s={step} onOpenVault={onOpenVault} />;
   if (step.kind === "redeemFromVault") return <RedeemDetail s={step} />;
+  if (step.kind === "send") return <SendDetail s={step} iconLookup={iconLookup} />;
   return <CancelDetail s={step} />;
 }
 
@@ -758,6 +765,35 @@ function RedeemSummary({
         {s.vault.withdrawalPeriodDays
           ? `≤${s.vault.withdrawalPeriodDays}d`
           : "Withdraw"}
+      </span>
+    </div>
+  );
+}
+
+function SendSummary({
+  s,
+  iconLookup,
+}: {
+  s: ResolvedSendStep;
+  iconLookup: IconLookup;
+}) {
+  return (
+    <div className="flex w-full flex-wrap items-center gap-1.5">
+      <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={20} />
+      <span className="text-body-sm font-medium tabular-nums text-midnight-ink">
+        {fmtAmount(s.amountHuman)}
+      </span>
+      <span className="text-caption text-muted-ash">{s.symbol}</span>
+      <ArrowRight
+        className="size-3 shrink-0 text-muted-ash"
+        strokeWidth={2.4}
+      />
+      <span className="truncate text-body-sm font-medium text-midnight-ink">
+        {s.recipientName ?? fmtAddress(s.recipient)}
+      </span>
+      <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium uppercase tracking-wider text-muted-ash">
+        <Send className="size-3" strokeWidth={2.4} />
+        Send
       </span>
     </div>
   );
@@ -1076,11 +1112,15 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
   const redeems = cached.steps.filter(
     (s): s is ResolvedRedeemStep => s.kind === "redeemFromVault",
   );
+  const sends = cached.steps.filter(
+    (s): s is ResolvedSendStep => s.kind === "send",
+  );
 
   out.push(...swapRisks(swaps));
   out.push(...depositRisks(deposits));
   out.push(...splitRisks(splits));
   out.push(...redeemRisks(redeems, deposits.length > 0));
+  out.push(...sendRisks(sends));
 
   // Agent-authored, vault-specific risk rows (the dynamic Guardian). Additive:
   // when the agent supplies none, the static rows above stand in as a fallback.
@@ -1344,6 +1384,34 @@ function splitRisks(splits: ResolvedSplitStep[]): GuardianRow[] {
   return out;
 }
 
+function sendRisks(sends: ResolvedSendStep[]): GuardianRow[] {
+  if (sends.length === 0) return [];
+  const recipients = Array.from(
+    new Set(sends.map((s) => s.recipientName ?? s.recipient)),
+  );
+  const named = sends.filter((s) => s.recipientName);
+  const who =
+    recipients.length === 1 ? recipients[0] : `${recipients.length} recipients`;
+  const nameNote =
+    named.length > 0
+      ? ` ${named
+          .map((s) => `${s.recipientName} resolves to ${fmtAddress(s.recipient, 8, 6)}`)
+          .join("; ")}.`
+      : "";
+  return [
+    {
+      id: "send-irreversible",
+      title: "Irreversible transfer",
+      summary: `Funds leave your wallet to ${who} — transfers can't be undone`,
+      verdict: "flag",
+      detail:
+        "A send moves coins out of your wallet permanently. There is no recall, refund, or chargeback on Sui — if the recipient is wrong, the funds are gone. Verify the address (or SuiNS name) is exactly who you intend to pay before signing." +
+        nameNote,
+      askPrompt: "How do I make sure I'm sending to the right address?",
+    },
+  ];
+}
+
 function redeemRisks(
   redeems: ResolvedRedeemStep[],
   hasDeposits: boolean,
@@ -1559,7 +1627,7 @@ function stepFlowsInto(current: ResolvedStep, next: ResolvedStep): boolean {
   // shape without extra plumbing, but adjacency + non-terminal upstream
   // covers the common composes (swap→deposit, split→deposit, merge→swap).
   const producers = ["swap", "split", "merge"];
-  const consumers = ["swap", "split", "merge", "deposit", "redeemFromVault"];
+  const consumers = ["swap", "split", "merge", "deposit", "redeemFromVault", "send"];
   return producers.includes(current.kind) && consumers.includes(next.kind);
 }
 
@@ -2082,6 +2150,55 @@ function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
   );
 }
 
+function SendDetail({
+  s,
+  iconLookup,
+}: {
+  s: ResolvedSendStep;
+  iconLookup: IconLookup;
+}) {
+  return (
+    <div className="space-y-3">
+      <DetailHero
+        label="Send"
+        value={
+          <>
+            {fmtAmount(s.amountHuman)} {s.symbol}
+          </>
+        }
+        trailing={
+          <AssetIcon src={iconLookup(s.coinType)} label={s.symbol} size={32} />
+        }
+      />
+      <div className="space-y-1">
+        <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-ash">
+          Recipient
+        </div>
+        {s.recipientName ? (
+          <div className="text-body-sm leading-snug text-midnight-ink">
+            <span className="font-medium">{s.recipientName}</span>
+            <span className="text-muted-ash">
+              {" → "}
+              {fmtAddress(s.recipient, 10, 6)}
+            </span>
+          </div>
+        ) : (
+          <div className="break-all text-body-sm font-medium tabular-nums text-midnight-ink">
+            {s.recipient}
+          </div>
+        )}
+      </div>
+      <div className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-muted-ash rounded-[10px]">
+        Transfers are irreversible
+        {s.recipientName
+          ? " — confirm the SuiNS name resolved to the address above"
+          : " — double-check the recipient address"}
+        .
+      </div>
+    </div>
+  );
+}
+
 function CancelDetail({ s }: { s: ResolvedCancelRedeemStep }) {
   return (
     <div className="space-y-3">
@@ -2130,7 +2247,8 @@ function PlanStats({ cached }: { cached: CachedActionPlan }) {
 }
 
 function computeStatTiles(cached: CachedActionPlan): StatTile[] {
-  const { swapCount, depositCount, redeemCount, cancelCount } = cached.summary;
+  const { swapCount, depositCount, redeemCount, cancelCount, sendCount } =
+    cached.summary;
   const swaps = cached.steps.filter(
     (s): s is ResolvedSwapStep => s.kind === "swap",
   );
@@ -2139,6 +2257,9 @@ function computeStatTiles(cached: CachedActionPlan): StatTile[] {
   );
   const redeems = cached.steps.filter(
     (s): s is ResolvedRedeemStep => s.kind === "redeemFromVault",
+  );
+  const sends = cached.steps.filter(
+    (s): s is ResolvedSendStep => s.kind === "send",
   );
   const gas = cached.summary.estimatedGasSui;
   const gasTile: StatTile = {
@@ -2196,6 +2317,27 @@ function computeStatTiles(cached: CachedActionPlan): StatTile[] {
     ];
   }
 
+  // Send-driven plans (bare send, or swap/split → send). Headline the transfer.
+  if (sendCount > 0 && depositCount === 0 && redeemCount === 0) {
+    const recipients = new Set(sends.map((s) => s.recipientName ?? s.recipient));
+    return [
+      {
+        id: "send",
+        label: sendCount === 1 ? "Sending" : "Total sent",
+        value: summarizeSends(sends),
+      },
+      {
+        id: "recipient",
+        label: recipients.size === 1 ? "Recipient" : "Recipients",
+        value:
+          recipients.size === 1
+            ? (sends[0].recipientName ?? fmtAddress(sends[0].recipient))
+            : `${recipients.size} addresses`,
+      },
+      gasTile,
+    ];
+  }
+
   // Solo or chained swaps without follow-on deposit
   if (swapCount > 0) {
     const s = swaps[0];
@@ -2233,6 +2375,17 @@ function summarizeRedeems(redeems: ResolvedRedeemStep[]): string {
       r.receiptSymbol,
       (byToken.get(r.receiptSymbol) ?? 0) + r.sharesHuman,
     );
+  }
+  return Array.from(byToken.entries())
+    .map(([sym, total]) => `${fmtAmount(total)} ${sym}`)
+    .join(" + ");
+}
+
+function summarizeSends(sends: ResolvedSendStep[]): string {
+  if (sends.length === 0) return "—";
+  const byToken = new Map<string, number>();
+  for (const s of sends) {
+    byToken.set(s.symbol, (byToken.get(s.symbol) ?? 0) + s.amountHuman);
   }
   return Array.from(byToken.entries())
     .map(([sym, total]) => `${fmtAmount(total)} ${sym}`)

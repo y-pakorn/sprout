@@ -121,13 +121,28 @@ export type ResolvedCancelRedeemStep = {
   sequenceNumber: string;
 };
 
+export type ResolvedSendStep = {
+  kind: "send";
+  id: string;
+  /** Coin being transferred out. */
+  symbol: string;
+  coinType: string;
+  decimals: number;
+  amountHuman: number;
+  /** Resolved 0x recipient address (normalized). */
+  recipient: string;
+  /** Original SuiNS name, when the user gave one (for display + confirmation). */
+  recipientName?: string;
+};
+
 export type ResolvedStep =
   | ResolvedSwapStep
   | ResolvedSplitStep
   | ResolvedMergeStep
   | ResolvedDepositStep
   | ResolvedRedeemStep
-  | ResolvedCancelRedeemStep;
+  | ResolvedCancelRedeemStep
+  | ResolvedSendStep;
 
 /** Raw step shape the agent emits via executePlan. Stashed on the cache
  *  so the slippage-rebuild flow can re-run the whole plan. */
@@ -138,7 +153,8 @@ export type RawStep = {
     | "merge"
     | "deposit"
     | "redeemFromVault"
-    | "cancelRedeemFromVault";
+    | "cancelRedeemFromVault"
+    | "send";
   id: string;
   fromHandle?: string;
   fromHandles?: string[];
@@ -153,6 +169,8 @@ export type RawStep = {
   portionsBps?: number[];
   vaultId?: string;
   sequenceNumber?: string;
+  /** (send only) 0x address or SuiNS name (e.g. yoisha.sui) to transfer to. */
+  recipient?: string;
 };
 
 /** Agent-authored plan risk, rendered as a Guardian row. */
@@ -178,6 +196,7 @@ export type CachedActionPlan = {
     depositCount: number;
     redeemCount: number;
     cancelCount: number;
+    sendCount: number;
     /** Vaults targeted by all deposit steps in order. */
     vaults: SuiVault[];
     /** Blended APY weighted by per-vault deposit human amount * deposit-token USD ≈ tvlUsd proxy. We just average across deposit steps for v1. */

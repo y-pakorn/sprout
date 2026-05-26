@@ -47,6 +47,7 @@ import {
   type ResolvedDepositStep,
   type ResolvedRedeemStep,
   type ResolvedCancelRedeemStep,
+  type ResolvedSendStep,
   type RawStep,
 } from "@/lib/ai/action-plan-cache";
 import { pruneForModel } from "@/lib/ai/prune-output";
@@ -238,11 +239,7 @@ export function Conversation({
           return;
         }
         if (toolCall.toolName === "getAccountActivity") {
-          void runGetTxHistory(
-            toolCall,
-            accountRef.current,
-            addToolResultRef
-          );
+          void runGetTxHistory(toolCall, accountRef.current, addToolResultRef);
           return;
         }
         if (toolCall.toolName === "getAccountTransactions") {
@@ -691,7 +688,7 @@ export function Conversation({
               v.maxDepositsRaw && Number(v.maxDepositsRaw) > 0
                 ? Math.round(
                     (Number(v.totalDepositsRaw) / Number(v.maxDepositsRaw)) *
-                      100,
+                      100
                   )
                 : undefined,
             depositors: v.activeDepositors,
@@ -780,7 +777,10 @@ export function Conversation({
           digest: it.digest,
         };
         if (it.coins.length) {
-          o.coins = it.coins.map((c) => ({ symbol: c.symbol, amount: c.amount }));
+          o.coins = it.coins.map((c) => ({
+            symbol: c.symbol,
+            amount: c.amount,
+          }));
         }
         if (it.protocol?.name) o.protocol = it.protocol.name;
         if (it.status && it.status !== "SUCCESS") o.status = it.status;
@@ -868,7 +868,9 @@ export function Conversation({
         participation: participation ?? "SENDER",
         size: String(limit ?? 10),
       });
-      const res = await signedFetch(`/api/account-transactions?${params.toString()}`);
+      const res = await signedFetch(
+        `/api/account-transactions?${params.toString()}`
+      );
       const body = (await res.json()) as {
         error?: string;
         count?: number;
@@ -899,7 +901,10 @@ export function Conversation({
         if (it.feeSui > 0) o.feeSui = it.feeSui;
         if (it.txsCount) o.commands = it.txsCount;
         if (it.coins.length) {
-          o.coins = it.coins.map((c) => ({ symbol: c.symbol, amount: c.amount }));
+          o.coins = it.coins.map((c) => ({
+            symbol: c.symbol,
+            amount: c.amount,
+          }));
         }
         return o;
       });
@@ -1036,7 +1041,9 @@ export function Conversation({
       await addResult({
         tool: "searchToken",
         toolCallId: toolCall.toolCallId,
-        output: { error: "Empty query — pass a token symbol or name to look up." },
+        output: {
+          error: "Empty query — pass a token symbol or name to look up.",
+        },
       });
       return;
     }
@@ -1044,7 +1051,9 @@ export function Conversation({
       await addResult({
         tool: "searchToken",
         toolCallId: toolCall.toolCallId,
-        output: { error: "Token registry not loaded yet — ask again in a moment." },
+        output: {
+          error: "Token registry not loaded yet — ask again in a moment.",
+        },
       });
       return;
     }
@@ -1077,8 +1086,7 @@ export function Conversation({
       });
     }
     ranked.sort(
-      (a, b) =>
-        a.score - b.score || a.item.symbol.localeCompare(b.item.symbol)
+      (a, b) => a.score - b.score || a.item.symbol.localeCompare(b.item.symbol)
     );
     const items = ranked.slice(0, 6).map((r) => r.item);
     coinListCache.set(toolCall.toolCallId, { items, sortBy: "SEARCH" });
@@ -1160,7 +1168,8 @@ export function Conversation({
         tool: "getCoinMetadata",
         toolCallId: toolCall.toolCallId,
         output: {
-          error: "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
+          error:
+            "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
         },
       });
       return;
@@ -1204,7 +1213,8 @@ export function Conversation({
         tool: "getHoldersByCoinType",
         toolCallId: toolCall.toolCallId,
         output: {
-          error: "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
+          error:
+            "Invalid coinType. Expected 0x…::module::TYPE (e.g. 0x2::sui::SUI).",
         },
       });
       return;
@@ -1329,6 +1339,9 @@ export function Conversation({
       const cancelSteps = resolved.filter(
         (s): s is ResolvedCancelRedeemStep => s.kind === "cancelRedeemFromVault"
       );
+      const sendSteps = resolved.filter(
+        (s): s is ResolvedSendStep => s.kind === "send"
+      );
 
       // Minimal summary back to the model — keeps prompt tokens tight.
       const output = {
@@ -1339,6 +1352,13 @@ export function Conversation({
         depositCount: depositSteps.length,
         redeemCount: redeemSteps.length,
         cancelCount: cancelSteps.length,
+        sendCount: sendSteps.length,
+        sends: sendSteps.map((s) => ({
+          amount: Number(s.amountHuman.toFixed(6)),
+          symbol: s.symbol,
+          recipient: s.recipient,
+          recipientName: s.recipientName,
+        })),
         deposits: depositSteps.map((d) => ({
           vaultName: d.vault.name,
           apyPct: Number(d.vault.apyPct.toFixed(3)),
@@ -1600,7 +1620,6 @@ export function Conversation({
     return -1;
   })();
 
-
   const latestPlanToolCallId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
@@ -1615,126 +1634,117 @@ export function Conversation({
   })();
 
   const body = (
-      <div className={cn("flex flex-col", embedded ? "h-full" : "h-dvh")}>
-        <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className={cn("flex flex-col", embedded ? "h-full" : "h-dvh")}>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div
+          ref={stick.scrollRef}
+          className={cn("min-h-0 flex-1 overflow-y-auto", !embedded && "pt-16")}
+        >
           <div
-            ref={stick.scrollRef}
-            className={cn(
-              "min-h-0 flex-1 overflow-y-auto",
-              !embedded && "pt-16"
-            )}
+            ref={stick.contentRef}
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
           >
-            <div
-              ref={stick.contentRef}
-              className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
-            >
-              {messages.map((m, i) => {
-                const isLastAssistant = i === lastAssistantIdx;
-                return (
-                  <AgentMessage
-                    key={m.id}
-                    message={m}
-                    isStreaming={isStreaming && isLastAssistant}
-                    canRegenerate={isLastAssistant && !isStreaming}
-                    onRegenerate={() => regenerate()}
-                    planAction={{
-                      activePlanId,
-                      latestPlanId: latestPlanToolCallId,
-                      slippagePct,
-                      signing: planSigning,
-                      confirming: planConfirming,
-                      executed: planExecuted,
-                      txDigest: planTxDigest,
-                      txStatus: planTxStatus,
-                      txError: planTxError,
-                      gasUsedSui: planGasSui,
-                      receivedShares: planReceivedShares,
-                      walletConnected: !!account,
-                      iconLookup,
-                      onConfirm: handleConfirmPlan,
-                      onCancel: handleCancelPlan,
-                      onSlippageChange: handleSlippageChange,
-                      onRefresh: handlePlanRefresh,
-                    }}
-                  />
-                );
-              })}
-
-              {/* Thinking pill — gooey liquid blob */}
-              {status === "submitted" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="surface-card inline-flex items-center gap-2.5 self-start px-3.5 py-2 text-body-sm font-medium rounded-card"
-                  role="status"
-                  aria-label="Sprout is thinking"
-                >
-                  <LiquidBlob size={20} />
-                  <span className="shimmer-text">Thinking…</span>
-                </motion.div>
-              )}
-
-              {signError && (
-                <ErrorBanner
-                  message={signError}
-                  coinMap={coinMap}
-                  onAskAgent={(prompt) => {
-                    setSignError(null);
-                    sendMessage({ text: prompt });
+            {messages.map((m, i) => {
+              const isLastAssistant = i === lastAssistantIdx;
+              return (
+                <AgentMessage
+                  key={m.id}
+                  message={m}
+                  isStreaming={isStreaming && isLastAssistant}
+                  canRegenerate={isLastAssistant && !isStreaming}
+                  onRegenerate={() => regenerate()}
+                  planAction={{
+                    activePlanId,
+                    latestPlanId: latestPlanToolCallId,
+                    slippagePct,
+                    signing: planSigning,
+                    confirming: planConfirming,
+                    executed: planExecuted,
+                    txDigest: planTxDigest,
+                    txStatus: planTxStatus,
+                    txError: planTxError,
+                    gasUsedSui: planGasSui,
+                    receivedShares: planReceivedShares,
+                    walletConnected: !!account,
+                    iconLookup,
+                    onConfirm: handleConfirmPlan,
+                    onCancel: handleCancelPlan,
+                    onSlippageChange: handleSlippageChange,
+                    onRefresh: handlePlanRefresh,
                   }}
-                  onDismiss={() => setSignError(null)}
                 />
-              )}
+              );
+            })}
 
-              {error && (
-                <div className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive rounded-[18px]">
-                  {error.message}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <AnimatePresence>
-            {stick.escapedFromLock && !stick.isAtBottom && (
-              <motion.button
-                type="button"
-                initial={{ opacity: 0, y: 8, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 8, scale: 0.9 }}
-                transition={SPRING_BOUNCY}
-                onClick={() => stick.scrollToBottom()}
-                aria-label="Scroll to bottom"
-                className="absolute bottom-3 left-1/2 z-10 inline-flex size-9 -translate-x-1/2 items-center justify-center surface-card text-muted-ash shadow-header transition-colors hover:text-midnight-ink rounded-full"
+            {/* Thinking pill — gooey liquid blob */}
+            {status === "submitted" && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="surface-card inline-flex items-center gap-2.5 self-start px-3.5 py-2 text-body-sm font-medium rounded-card"
+                role="status"
+                aria-label="Sprout is thinking"
               >
-                <ChevronDown className="size-4" strokeWidth={2.4} />
-              </motion.button>
+                <LiquidBlob size={20} />
+                <span className="shimmer-text">Thinking…</span>
+              </motion.div>
             )}
-          </AnimatePresence>
+
+            {signError && (
+              <ErrorBanner
+                message={signError}
+                coinMap={coinMap}
+                onAskAgent={(prompt) => {
+                  setSignError(null);
+                  sendMessage({ text: prompt });
+                }}
+                onDismiss={() => setSignError(null)}
+              />
+            )}
+
+            {error && (
+              <div className="bg-destructive/15 px-4 py-3 text-body-sm text-destructive rounded-[18px]">
+                {error.message}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="shrink-0">
-          <div className="mx-auto w-full max-w-3xl px-6 py-4">
-            <ChatInput
-              value={draft}
-              onChange={setDraft}
-              onSubmit={() => submit(draft)}
-              disabled={isStreaming}
-              placeholder={
-                isStreaming
-                  ? "Sprout is thinking…"
-                  : "Tell me a swap or a goal…"
-              }
-            />
-          </div>
+        <AnimatePresence>
+          {stick.escapedFromLock && !stick.isAtBottom && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 8, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.9 }}
+              transition={SPRING_BOUNCY}
+              onClick={() => stick.scrollToBottom()}
+              aria-label="Scroll to bottom"
+              className="absolute bottom-3 left-1/2 z-10 inline-flex size-9 -translate-x-1/2 items-center justify-center surface-card text-muted-ash shadow-header transition-colors hover:text-midnight-ink rounded-full"
+            >
+              <ChevronDown className="size-4" strokeWidth={2.4} />
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="shrink-0">
+        <div className="mx-auto w-full max-w-3xl px-6 py-4">
+          <ChatInput
+            value={draft}
+            onChange={setDraft}
+            onSubmit={() => submit(draft)}
+            disabled={isStreaming}
+            placeholder={
+              isStreaming ? "Sprout is thinking…" : "Tell me a swap or a goal…"
+            }
+          />
         </div>
       </div>
+    </div>
   );
 
-  return embedded ? (
-    body
-  ) : (
-    <CinematicShell mode="dim">{body}</CinematicShell>
-  );
+  return embedded ? body : <CinematicShell mode="dim">{body}</CinematicShell>;
 }
 
 function EmbeddedEmpty({

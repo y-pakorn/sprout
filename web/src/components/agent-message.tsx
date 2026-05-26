@@ -1087,6 +1087,7 @@ function formatPlanSummary(summary: {
   depositCount: number;
   redeemCount: number;
   cancelCount: number;
+  sendCount: number;
 }): string {
   const parts: string[] = [];
   if (summary.swapCount > 0) {
@@ -1106,6 +1107,9 @@ function formatPlanSummary(summary: {
     parts.push(
       `${summary.cancelCount} cancel${summary.cancelCount === 1 ? "" : "s"}`,
     );
+  }
+  if (summary.sendCount > 0) {
+    parts.push(`${summary.sendCount} send${summary.sendCount === 1 ? "" : "s"}`);
   }
   return parts.length > 0 ? parts.join(" + ") : "empty plan";
 }
