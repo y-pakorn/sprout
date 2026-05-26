@@ -18,10 +18,11 @@ import {
   Wallet as WalletIcon,
   X,
 } from "lucide-react";
-import { SPRING_BOUNCY } from "@/lib/motion";
+import { Dialog } from "@base-ui/react";
 import { cn } from "@/lib/utils";
 import { PillButton } from "@/components/ui/pill-button";
-import { shortAddr, avatarLetter, avatarTone } from "@/lib/avatar";
+import { shortAddr } from "@/lib/avatar";
+import { Identicon } from "@/components/ui/identicon";
 
 export function WalletButton({
   tone = "default",
@@ -83,14 +84,9 @@ export function WalletButton({
         whileHover={{ scale: 1.03 }}
         whileTap={{ scale: 0.97 }}
         transition={{ type: "spring", visualDuration: 0.2, bounce: 0.3 }}
-        className="inline-flex items-center gap-2 bg-canvas-white pl-1.5 pr-3 py-1 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline shadow-button rounded-button"
+        className="inline-flex items-center gap-2 h-9 bg-canvas-white pl-1.5 pr-3 py-1 text-body-sm font-medium text-midnight-ink ring-1 ring-hairline shadow-button rounded-button"
       >
-        <span
-          className="inline-flex size-7 items-center justify-center text-canvas-white text-caption font-medium rounded-full tracking-[0]"
-          style={{ background: avatarTone(account.address) }}
-        >
-          {avatarLetter(suins, account.address)}
-        </span>
+        <Identicon address={account.address} size={24} />
         <span className={isNamed ? "" : "font-mono tabular-nums"}>
           {displayName}
         </span>
@@ -142,15 +138,8 @@ function WalletMenu({
       transition={{ type: "spring", visualDuration: 0.25, bounce: 0.2 }}
       className="absolute right-0 top-[calc(100%+8px)] z-50 w-60 origin-top-right rounded-card bg-canvas-white p-1.5 ring-1 ring-hairline shadow-header"
     >
-      <div
-        className="flex items-center gap-2.5 bg-whisper-gray px-2.5 py-2.5 rounded-card"
-      >
-        <span
-          className="inline-flex size-8 shrink-0 items-center justify-center text-canvas-white text-body-sm font-medium rounded-full tracking-[0]"
-          style={{ background: avatarTone(address) }}
-        >
-          {avatarLetter(suins, address)}
-        </span>
+      <div className="flex items-center gap-2.5 bg-whisper-gray px-2.5 py-2.5 rounded-card">
+        <Identicon address={address} size={32} className="shrink-0" />
         <div className="min-w-0 flex-1 space-y-0.5">
           {suins ? (
             <>
@@ -213,10 +202,10 @@ function MenuItem({
   danger?: boolean;
 }) {
   const cls = cn(
-    "flex w-full items-center gap-2 rounded-button px-2.5 py-1.5 text-left text-sm font-medium transition-colors",
+    "flex w-full items-center gap-2 rounded-button px-2.5 py-1.5 text-left text-body-sm font-medium transition-colors",
     danger
       ? "text-destructive hover:bg-destructive/10"
-      : "text-midnight-ink hover:bg-whisper-gray",
+      : "text-midnight-ink hover:bg-whisper-gray"
   );
   const inner = (
     <>
@@ -226,22 +215,13 @@ function MenuItem({
   );
   if (href) {
     return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className={cls}
-      >
+      <a href={href} target="_blank" rel="noreferrer" className={cls}>
         {inner}
       </a>
     );
   }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cls}
-    >
+    <button type="button" onClick={onClick} className={cls}>
       {inner}
     </button>
   );
@@ -258,124 +238,97 @@ function ConnectDialog({
   const dAppKit = useDAppKit();
 
   function handleConnect(wallet: DetectedWallet) {
-    dAppKit.connectWallet({ wallet }).then(onClose).catch(() => {});
+    dAppKit
+      .connectWallet({ wallet })
+      .then(onClose)
+      .catch(() => {});
   }
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={onClose}
-            className="fixed inset-0 z-50 bg-midnight-ink/30 backdrop-blur-sm"
-          />
-          <motion.div
-            role="dialog"
-            aria-modal="true"
-            initial={{ opacity: 0, scale: 0.94, y: 12 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 6 }}
-            transition={SPRING_BOUNCY}
-            className="fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-card bg-canvas-white p-6 ring-1 ring-hairline shadow-header"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
-                  Sui
-                </div>
-                <div className="text-body-lg font-medium leading-tight">
-                  Connect a wallet
-                </div>
+    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 z-40 bg-midnight-ink/30 backdrop-blur-sm transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
+        <Dialog.Popup className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-canvas-white shadow-[0_24px_80px_-20px_rgba(0,0,0,0.5)] transition-[opacity,transform] duration-200 rounded-card data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 pb-3 pt-5">
+            <div className="min-w-0 flex-1">
+              <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
+                Sui
+              </div>
+              <Dialog.Title className="mt-1 font-alt text-title font-medium leading-tight tracking-tight text-midnight-ink">
+                Connect a wallet
+              </Dialog.Title>
+              <p className="mt-1.5 text-body-sm text-muted-ash">
+                Pick how you want to sign in.
+              </p>
+            </div>
+            <Dialog.Close
+              aria-label="Close"
+              className="-mr-1 -mt-1 inline-flex size-7 items-center justify-center text-muted-ash transition-colors hover:bg-whisper-gray hover:text-midnight-ink rounded-full"
+            >
+              <X className="size-4" strokeWidth={2.4} />
+            </Dialog.Close>
+          </div>
+
+          {/* Wallet list */}
+          <div className="space-y-1.5 px-5 pb-5">
+            {wallets.length === 0 ? (
+              <div className="space-y-2 bg-whisper-gray p-6 text-center rounded-card">
+                <div className="text-body font-medium">No wallet detected</div>
                 <div className="text-body-sm text-muted-ash">
-                  Pick how you want to sign in.
+                  Install{" "}
+                  <a
+                    href="https://slush.app"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-midnight-ink underline"
+                  >
+                    Slush
+                  </a>{" "}
+                  or any Sui-compatible wallet to continue.
                 </div>
               </div>
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                onClick={onClose}
-                aria-label="Close"
-                className="inline-flex size-8 items-center justify-center bg-whisper-gray text-midnight-ink rounded-full"
-              >
-                <X className="size-4" strokeWidth={2.4} />
-              </motion.button>
-            </div>
-
-            <div className="mt-5 space-y-2">
-              {wallets.length === 0 ? (
-                <div
-                  className="space-y-2 bg-whisper-gray p-6 text-center rounded-card"
+            ) : (
+              wallets.map((wallet) => (
+                <motion.button
+                  key={wallet.name}
+                  type="button"
+                  whileTap={{ scale: 0.99 }}
+                  transition={{
+                    type: "spring",
+                    visualDuration: 0.2,
+                    bounce: 0.3,
+                  }}
+                  onClick={() => handleConnect(wallet)}
+                  className="flex w-full items-center gap-3 bg-whisper-gray p-3.5 transition-colors hover:bg-light-taupe rounded-card"
                 >
-                  <div className="text-body font-medium">
-                    No wallet detected
-                  </div>
-                  <div className="text-body-sm text-muted-ash">
-                    Install{" "}
-                    <a
-                      href="https://slush.app"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-midnight-ink underline"
-                    >
-                      Slush
-                    </a>{" "}
-                    or any Sui-compatible wallet to continue.
-                  </div>
-                </div>
-              ) : (
-                wallets.map((wallet) => (
-                  <motion.button
-                    key={wallet.name}
-                    type="button"
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    transition={{
-                      type: "spring",
-                      visualDuration: 0.2,
-                      bounce: 0.3,
-                    }}
-                    onClick={() => handleConnect(wallet)}
-                    className="flex w-full items-center gap-3 bg-whisper-gray p-4 ring-1 ring-hairline transition-colors hover:bg-canvas-white hover:ring-midnight-ink/20 rounded-card"
-                  >
-                    {wallet.icon ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={wallet.icon}
-                        alt=""
-                        width={36}
-                        height={36}
-                        className="rounded-card"
-                      />
-                    ) : (
-                      <span
-                        className="inline-flex size-9 items-center justify-center bg-canvas-white text-midnight-ink rounded-card"
-                      >
-                        <WalletIcon className="size-4" strokeWidth={2.4} />
-                      </span>
-                    )}
-                    <div className="flex-1 text-left">
-                      <div className="text-body font-medium leading-tight">
-                        {wallet.name}
-                      </div>
-                      <div className="text-body-sm text-muted-ash">
-                        Tap to connect
-                      </div>
-                    </div>
-                    <ChevronDown
-                      className="size-4 -rotate-90 text-muted-ash"
-                      strokeWidth={2.2}
+                  {wallet.icon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={wallet.icon}
+                      alt=""
+                      width={36}
+                      height={36}
+                      className="rounded-card"
                     />
-                  </motion.button>
-                ))
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+                  ) : (
+                    <span className="inline-flex size-9 items-center justify-center bg-canvas-white text-midnight-ink rounded-card">
+                      <WalletIcon className="size-4" strokeWidth={2.4} />
+                    </span>
+                  )}
+                  <span className="flex-1 text-left text-body font-medium text-midnight-ink">
+                    {wallet.name}
+                  </span>
+                  <ChevronDown
+                    className="size-4 -rotate-90 text-muted-ash"
+                    strokeWidth={2.2}
+                  />
+                </motion.button>
+              ))
+            )}
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
