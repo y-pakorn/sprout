@@ -379,6 +379,18 @@ export const swapTools = {
         .describe("Concept key from the vault glossary."),
     }),
   }),
+  resolveSuiName: tool({
+    description:
+      "Convert between a SuiNS name and a Sui address, in EITHER direction (auto-detected). Pass a SuiNS name (e.g. 'yoisha.sui' or '@yoisha') to get its target 0x address; pass a 0x address to get its primary SuiNS name (reverse lookup). Use whenever the user asks 'what's the address for X.sui', 'what name does 0x… have', 'who is this address', or to confirm a recipient before sending. Read-only — no wallet required. A reverse lookup may legitimately find no name (not every address sets one).",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .min(1)
+        .describe(
+          "A SuiNS name ('yoisha.sui' / '@yoisha') OR a 0x Sui address. The direction is detected automatically.",
+        ),
+    }),
+  }),
 };
 
 export type ToolName = keyof typeof swapTools;

@@ -16,6 +16,7 @@ type SuiClientLike = ReturnType<typeof useCurrentClient>;
 import type { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { buildGaslessSend } from "@/lib/gasless";
+import { lookupSuins } from "@/lib/suins";
 import { fetchAllBalances, fetchBalance } from "@/lib/grpc-balances";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
@@ -167,140 +168,155 @@ export function Conversation({
     | null
   >(null);
 
-  const { messages, sendMessage, addToolResult, regenerate, status, error, stop } =
-    useChat({
-      transport,
-      sendAutomaticallyWhen: ({ messages: msgs }) => {
-        // Re-submit when the LAST part of the assistant turn is a resolved
-        // tool call (no text after it). This lets the agent chain
-        // (getBalance → listVaults → executePlan, getBalances → listVaults
-        // → executePlan, etc.) even when it intersperses commentary text
-        // BEFORE the tool call. We stop re-firing only when the agent
-        // emits text AFTER its last tool result — that's its "I'm done"
-        // signal.
-        const last = msgs[msgs.length - 1];
-        if (!last || last.role !== "assistant") return false;
-        let lastToolIdx = -1;
-        for (let i = last.parts.length - 1; i >= 0; i--) {
-          if (last.parts[i].type.startsWith("tool-")) {
-            lastToolIdx = i;
-            break;
-          }
+  const {
+    messages,
+    sendMessage,
+    addToolResult,
+    regenerate,
+    status,
+    error,
+    stop,
+  } = useChat({
+    transport,
+    sendAutomaticallyWhen: ({ messages: msgs }) => {
+      // Re-submit when the LAST part of the assistant turn is a resolved
+      // tool call (no text after it). This lets the agent chain
+      // (getBalance → listVaults → executePlan, getBalances → listVaults
+      // → executePlan, etc.) even when it intersperses commentary text
+      // BEFORE the tool call. We stop re-firing only when the agent
+      // emits text AFTER its last tool result — that's its "I'm done"
+      // signal.
+      const last = msgs[msgs.length - 1];
+      if (!last || last.role !== "assistant") return false;
+      let lastToolIdx = -1;
+      for (let i = last.parts.length - 1; i >= 0; i--) {
+        if (last.parts[i].type.startsWith("tool-")) {
+          lastToolIdx = i;
+          break;
         }
-        if (lastToolIdx === -1) return false;
-        const lastTool = last.parts[lastToolIdx] as { state?: string };
-        const resolved =
-          lastTool.state === "output-available" ||
-          lastTool.state === "output-error";
-        if (!resolved) return false;
-        // If text was emitted AFTER the last tool, the agent is signaling
-        // it's done — don't re-fire.
-        for (let i = lastToolIdx + 1; i < last.parts.length; i++) {
-          const p = last.parts[i] as { type: string; text?: string };
-          if (p.type === "text" && p.text?.trim()) return false;
-        }
-        return true;
-      },
-      /**
-       * onToolCall MUST return quickly. The SDK awaits us, and addToolResult
-       * queues a job on the SDK's executor that's blocked on the streaming
-       * loop — awaiting addToolResult here would deadlock. So we fire-and-
-       * forget the async work; the queued result update lands after the
-       * stream's tool-call step finishes.
-       */
-      onToolCall({ toolCall }) {
-        if (toolCall.toolName === "getBalance") {
-          void runGetBalance(
-            toolCall,
-            coinMap,
-            accountRef.current,
-            suiClientRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "getBalances") {
-          void runGetBalances(
-            toolCall,
-            coinMap,
-            accountRef.current,
-            suiClientRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "getVaultBalance") {
-          void runGetVaultBalance(
-            toolCall,
-            accountRef.current,
-            suiClientRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "listVaults") {
-          void runListVaults(toolCall, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "executePlan") {
-          void runExecutePlan(
-            toolCall,
-            coinMap,
-            vaultsRef.current,
-            accountRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "sendStablecoin") {
-          void runSendStablecoin(
-            toolCall,
-            coinMap,
-            accountRef.current,
-            suiClientRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "explainConcept") {
-          void runExplainConcept(toolCall, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "getAccountActivity") {
-          void runGetTxHistory(toolCall, accountRef.current, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "getAccountTransactions") {
-          void runGetAccountTransactions(
-            toolCall,
-            coinMap,
-            accountRef.current,
-            addToolResultRef
-          );
-          return;
-        }
-        if (toolCall.toolName === "getTransactionDetail") {
-          void runGetTransactionDetail(toolCall, coinMap, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "searchToken") {
-          void runSearchToken(toolCall, coinMap, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "getCoins") {
-          void runGetCoins(toolCall, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "getCoinMetadata") {
-          void runGetCoinMetadata(toolCall, addToolResultRef);
-          return;
-        }
-        if (toolCall.toolName === "getHoldersByCoinType") {
-          void runGetCoinHolders(toolCall, addToolResultRef);
-          return;
-        }
-      },
-    });
+      }
+      if (lastToolIdx === -1) return false;
+      const lastTool = last.parts[lastToolIdx] as { state?: string };
+      const resolved =
+        lastTool.state === "output-available" ||
+        lastTool.state === "output-error";
+      if (!resolved) return false;
+      // If text was emitted AFTER the last tool, the agent is signaling
+      // it's done — don't re-fire.
+      for (let i = lastToolIdx + 1; i < last.parts.length; i++) {
+        const p = last.parts[i] as { type: string; text?: string };
+        if (p.type === "text" && p.text?.trim()) return false;
+      }
+      return true;
+    },
+    /**
+     * onToolCall MUST return quickly. The SDK awaits us, and addToolResult
+     * queues a job on the SDK's executor that's blocked on the streaming
+     * loop — awaiting addToolResult here would deadlock. So we fire-and-
+     * forget the async work; the queued result update lands after the
+     * stream's tool-call step finishes.
+     */
+    onToolCall({ toolCall }) {
+      if (toolCall.toolName === "getBalance") {
+        void runGetBalance(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "getBalances") {
+        void runGetBalances(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "getVaultBalance") {
+        void runGetVaultBalance(
+          toolCall,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "listVaults") {
+        void runListVaults(toolCall, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "executePlan") {
+        void runExecutePlan(
+          toolCall,
+          coinMap,
+          vaultsRef.current,
+          accountRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "sendStablecoin") {
+        void runSendStablecoin(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "explainConcept") {
+        void runExplainConcept(toolCall, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "resolveSuiName") {
+        void runResolveSuiName(
+          toolCall,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "getAccountActivity") {
+        void runGetTxHistory(toolCall, accountRef.current, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "getAccountTransactions") {
+        void runGetAccountTransactions(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "getTransactionDetail") {
+        void runGetTransactionDetail(toolCall, coinMap, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "searchToken") {
+        void runSearchToken(toolCall, coinMap, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "getCoins") {
+        void runGetCoins(toolCall, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "getCoinMetadata") {
+        void runGetCoinMetadata(toolCall, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "getHoldersByCoinType") {
+        void runGetCoinHolders(toolCall, addToolResultRef);
+        return;
+      }
+    },
+  });
 
   // Keep the ref pointed at the latest addToolResult
   addToolResultRef.current =
@@ -756,6 +772,39 @@ export function Conversation({
       toolCallId: toolCall.toolCallId,
       output: text ? { key, text } : { error: `Unknown glossary key: ${key}` },
     });
+  }
+
+  async function runResolveSuiName(
+    toolCall: { toolCallId: string; input: unknown },
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { query } = (toolCall.input ?? {}) as { query?: string };
+    const q = (query ?? "").trim();
+    if (!q) {
+      await addResult({
+        tool: "resolveSuiName",
+        toolCallId: toolCall.toolCallId,
+        output: { error: "Pass a SuiNS name (yoisha.sui) or a 0x address." },
+      });
+      return;
+    }
+    try {
+      const res = await lookupSuins(q, client as unknown as SuiGrpcClient);
+      await addResult({
+        tool: "resolveSuiName",
+        toolCallId: toolCall.toolCallId,
+        output: res,
+      });
+    } catch (e) {
+      await addResult({
+        tool: "resolveSuiName",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Name lookup failed: ${(e as Error).message}` },
+      });
+    }
   }
 
   async function runGetTxHistory(
@@ -1354,7 +1403,9 @@ export function Conversation({
       await addResult({
         tool: "sendStablecoin",
         toolCallId: toolCall.toolCallId,
-        output: { error: `Gasless send failed to build: ${(e as Error).message}` },
+        output: {
+          error: `Gasless send failed to build: ${(e as Error).message}`,
+        },
       });
     }
   }
@@ -2005,7 +2056,12 @@ function IdleHero({
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.15, delay: 0.15 }}
+          transition={{
+            type: "spring",
+            visualDuration: 0.7,
+            bounce: 0.15,
+            delay: 0.15,
+          }}
           className="font-alt display-tight max-w-[1100px] text-center font-medium leading-[1.05] tracking-tight text-midnight-ink text-[clamp(40px,5.4vw,72px)]"
         >
           <span className="block">Plant a goal.</span>
@@ -2019,7 +2075,12 @@ function IdleHero({
         <motion.p
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.1, delay: 0.3 }}
+          transition={{
+            type: "spring",
+            visualDuration: 0.7,
+            bounce: 0.1,
+            delay: 0.3,
+          }}
           className="mt-5 max-w-3xl text-center text-body text-pretty text-muted-ash"
         >
           Describe a goal in plain English — Sprout routes the swaps, pools, and

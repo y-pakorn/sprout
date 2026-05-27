@@ -11,6 +11,7 @@ import {
   ExplainerTrail,
   type ExplainerItem,
 } from "@/components/parts/explainer-trail";
+import { SuinsCard } from "@/components/parts/suins-card";
 import { LivePlanCard } from "@/components/parts/live-plan-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
@@ -667,6 +668,54 @@ export function AgentMessage({
             });
           }
           return <ExplainerTrail key={key} items={run} />;
+        }
+
+        if (part.type === "tool-resolveSuiName") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            input?: { query?: string };
+            output?: { address?: string; name?: string; error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Name lookup failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Resolving ${p.input?.query ?? "name"}…`}
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error || !p.output?.address) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output?.error ?? "No result"}
+                status="output-error"
+              />
+            );
+          }
+          return (
+            <SuinsCard
+              key={key}
+              name={p.output.name}
+              address={p.output.address}
+            />
+          );
         }
 
         if (part.type === "tool-getAccountActivity") {
