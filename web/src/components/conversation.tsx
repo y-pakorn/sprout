@@ -75,7 +75,10 @@ import { defaultModelId } from "@/lib/ai/pricing";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
 import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
-import { executeSponsored } from "@/lib/enoki-sponsor";
+import {
+  executeSponsored,
+  SponsorshipUnavailableError,
+} from "@/lib/enoki-sponsor";
 import type { SuiNetwork } from "@/lib/sui";
 import { floorToDecimals } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -144,6 +147,11 @@ export function Conversation({
   /** True when the executed plan's gas was actually paid by the Enoki sponsor
    *  (vs. the wallet — e.g. when sponsorship fell back). Drives the receipt. */
   const [planSponsored, setPlanSponsored] = useState(false);
+  /** Set when "Sprout pays gas" was on but Enoki refused — we fell back to
+   *  wallet-paid gas. Surfaced as a non-blocking notice (not a silent failure). */
+  const [sponsorFallbackReason, setSponsorFallbackReason] = useState<
+    string | undefined
+  >();
   /** Per-vault shares received (in human units), indexed by allocation order. */
   const [planReceivedShares, setPlanReceivedShares] = useState<
     number[] | undefined
@@ -1431,6 +1439,8 @@ export function Conversation({
         tool: "sendStablecoin",
         toolCallId: toolCall.toolCallId,
         output: {
+          status: "built_unsigned" as const,
+          note: "Transfer constructed and shown in the card. NOT sent — the user must review and click Confirm & sign to send. Do not say it's done/sent; invite them to review and sign.",
           gasless: true,
           amount: Number(built.amountHuman.toFixed(6)),
           symbol: built.symbol,
@@ -1535,7 +1545,12 @@ export function Conversation({
       );
 
       // Minimal summary back to the model — keeps prompt tokens tight.
+      // `status` is first + explicit: the PTB is only CONSTRUCTED here, not
+      // executed. The user must review and sign in the card. Without this the
+      // model reads a successful "executePlan" result as "done/executed".
       const output = {
+        status: "built_unsigned" as const,
+        note: "PTB constructed and shown in the card. NOT executed — the user must review and click Confirm & sign to execute. Do not say it's done/sent/executed; invite them to review and sign.",
         planId: toolCall.toolCallId,
         stepCount: resolved.length,
         swapCount: swapSteps.length,
@@ -1664,6 +1679,7 @@ export function Conversation({
     setPlanGasSui(undefined);
     setPlanReceivedShares(undefined);
     setPlanSponsored(false);
+    setSponsorFallbackReason(undefined);
     const cached = actionPlanCache.get(toolCallId);
     if (!cached) {
       setSignError("Plan expired. Ask again to re-build.");
@@ -1687,6 +1703,16 @@ export function Conversation({
       let digest: string;
       let sponsored = false;
       const planTx = cached.tx as unknown as Transaction;
+      // Enoki won't sponsor a transfer to an address it can't vouch for, so
+      // allow exactly this plan's send recipients (resolved 0x addresses).
+      const sendRecipients = Array.from(
+        new Set(
+          cached.steps
+            .filter((s): s is ResolvedSendStep => s.kind === "send")
+            .map((s) => s.recipient)
+            .filter(Boolean)
+        )
+      );
       const walletPay = async () => {
         const signed = await signAndExecute({ transaction: planTx });
         const signedTx =
@@ -1703,13 +1729,23 @@ export function Conversation({
             network: currentNetwork,
             suiClient: suiClientRef.current as unknown as SuiGrpcClient,
             signTransaction,
+            allowedAddresses: sendRecipients,
           });
           sponsored = true;
         } catch (sponsorErr) {
-          console.warn(
-            "[handleConfirmPlan] sponsorship failed; falling back to wallet-paid gas",
-            sponsorErr
+          // Only fall back when Enoki couldn't sponsor BEFORE the wallet was
+          // asked to sign. If the user rejected the sponsored signature (or
+          // execution failed after signing), do NOT re-prompt — rethrow so it's
+          // handled as a normal cancel/error.
+          if (!(sponsorErr instanceof SponsorshipUnavailableError)) {
+            throw sponsorErr;
+          }
+          // Not silent: log the real Enoki reason, then fall back to wallet gas.
+          console.error(
+            "[handleConfirmPlan] Enoki sponsorship unavailable — falling back to wallet-paid gas:",
+            (sponsorErr as Error).message
           );
+          setSponsorFallbackReason((sponsorErr as Error).message);
           digest = await walletPay();
         }
       } else {
@@ -2034,6 +2070,23 @@ export function Conversation({
                 }}
                 onDismiss={() => setSignError(null)}
               />
+            )}
+
+            {sponsorFallbackReason && (
+              <div className="flex items-start justify-between gap-3 surface-card px-4 py-3 text-body-sm text-midnight-ink rounded-card ring-1 ring-engagement-gold/40">
+                <span>
+                  <span className="font-medium">Sprout couldn&apos;t cover gas</span>{" "}
+                  — you paid the network fee from your wallet instead.{" "}
+                  <span className="text-muted-ash">{sponsorFallbackReason}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSponsorFallbackReason(undefined)}
+                  className="shrink-0 text-caption font-medium text-muted-ash transition-colors hover:text-midnight-ink"
+                >
+                  Dismiss
+                </button>
+              </div>
             )}
 
             {error && (

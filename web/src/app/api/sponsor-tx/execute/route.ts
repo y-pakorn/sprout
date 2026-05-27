@@ -1,5 +1,5 @@
 import "server-only";
-import { getEnokiClient } from "@/lib/enoki-server";
+import { getEnokiClient, formatEnokiError } from "@/lib/enoki-server";
 
 export const maxDuration = 30;
 
@@ -31,8 +31,12 @@ export async function POST(req: Request) {
     });
     return json({ digest: result.digest });
   } catch (e) {
-    console.error("[api/sponsor-tx/execute] executeSponsoredTransaction failed", e);
-    return json({ error: (e as Error).message || "Execution failed." }, 502);
+    const { message, status } = formatEnokiError(e);
+    console.error("[api/sponsor-tx/execute] executeSponsoredTransaction failed", {
+      status,
+      message,
+    });
+    return json({ error: message, enokiStatus: status }, 502);
   }
 }
 

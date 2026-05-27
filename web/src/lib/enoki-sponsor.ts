@@ -1,4 +1,4 @@
-import type { Transaction } from "@mysten/sui/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { toBase64 } from "@mysten/sui/utils";
 import { apiFetch } from "@/lib/api-client";
@@ -12,7 +12,19 @@ import type { SuiNetwork } from "@/lib/sui";
 //   3. wallet signs the sponsored bytes (sign-only, NOT execute)
 //   4. POST /api/sponsor-tx/execute → Enoki adds sponsor sig + broadcasts → digest
 //
-// Throws on any failure so the caller can fall back to wallet-paid execution.
+// Only step 2 (before any wallet prompt) is "sponsorship unavailable" and safe
+// to fall back from. A failure at step 3 (user rejected the signature) or 4
+// must NOT silently retry — otherwise cancelling re-prompts the wallet.
+
+/** Thrown only when Enoki couldn't build the sponsored tx (step 2) — i.e.
+ *  before the wallet was asked to sign. The caller may fall back to wallet-paid
+ *  gas. Any other failure (sign rejection, execution) is a hard stop. */
+export class SponsorshipUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SponsorshipUnavailableError";
+  }
+}
 
 type SignFn = (args: {
   transaction: string;
@@ -24,14 +36,34 @@ export async function executeSponsored(args: {
   network: SuiNetwork;
   suiClient: SuiGrpcClient;
   signTransaction: SignFn;
+  /** Addresses this tx is allowed to transfer to (the plan's send recipients).
+   *  Enoki rejects sponsored transfers to non-allow-listed addresses. */
+  allowedAddresses?: string[];
 }): Promise<string> {
-  const { tx, sender, network, suiClient, signTransaction } = args;
+  const { tx, sender, network, suiClient, signTransaction, allowedAddresses } =
+    args;
 
   tx.setSender(sender);
   const kindBytes = await tx.build({
     client: suiClient,
     onlyTransactionKind: true,
   });
+
+  // Enoki also gates which move calls a sponsored tx may make. Aggregator
+  // routes (Cetus/Bluefin/7K) hit dynamic packages we can't pre-enumerate, so
+  // allow EXACTLY the targets this built transaction actually calls — read off
+  // the resolved kind (post-coinWithBalance), deduped.
+  const allowedMoveCallTargets = Array.from(
+    new Set(
+      Transaction.fromKind(kindBytes)
+        .getData()
+        .commands.flatMap((c) =>
+          c.$kind === "MoveCall"
+            ? [`${c.MoveCall.package}::${c.MoveCall.module}::${c.MoveCall.function}`]
+            : []
+        )
+    )
+  );
 
   const sponsorRes = await apiFetch("/api/sponsor-tx", {
     method: "POST",
@@ -40,11 +72,14 @@ export async function executeSponsored(args: {
       network,
       transactionKindBytes: toBase64(kindBytes),
       sender,
+      allowedAddresses,
+      allowedMoveCallTargets,
     }),
   });
   if (!sponsorRes.ok) {
+    // Step 2 failed — no wallet prompt happened yet, so falling back is safe.
     const err = await safeError(sponsorRes);
-    throw new Error(`Sponsorship failed: ${err}`);
+    throw new SponsorshipUnavailableError(`Sponsorship failed: ${err}`);
   }
   const { bytes, digest } = (await sponsorRes.json()) as {
     bytes: string;
