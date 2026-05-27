@@ -4,47 +4,30 @@
 // provider SDK + API key).
 
 export const MODEL_PRICING = {
-  "tencent/hy3-preview": {
-    inputPer1M: 0.112,
-    cachedInputPer1M: 0.022,
-    outputPer1M: 0.224,
-    name: "Hy3",
-  },
-  "nvidia/nemotron-3-nano-30b-a3b": {
-    inputPer1M: 0.05,
-    cachedInputPer1M: 0.05,
-    outputPer1M: 0.2,
-    name: "Nemotron 3 Nano",
-  },
-  "deepseek/deepseek-v4-flash": {
-    inputPer1M: 0.1,
-    cachedInputPer1M: 0.02,
-    outputPer1M: 0.2,
-    name: "DeepSeek v4 Flash",
-  },
-  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
-    inputPer1M: 0.05,
-    cachedInputPer1M: 0.05,
-    outputPer1M: 0.2,
-    name: "Nemotron 3 Nano Omni",
-  },
-  "arcee-ai/trinity-large-thinking": {
-    inputPer1M: 0.22,
-    cachedInputPer1M: 0.85,
-    outputPer1M: 0.06,
-    name: "Trinity Large",
-  },
   "poolside/laguna-xs.2": {
     inputPer1M: 0.05,
     cachedInputPer1M: 0.05,
     outputPer1M: 0.2,
     name: "Sprout XS",
+    description:
+      "Fast, lightweight guidance for quick questions, portfolio checks, and simple swaps.",
+  },
+  "poolside/laguna-m.1": {
+    inputPer1M: 0.1,
+    cachedInputPer1M: 0.02,
+    outputPer1M: 0.3,
+    name: "Sprout Medium",
+    description:
+      "Balanced reasoning for multi-step DeFi planning, tradeoffs, and risk explanations.",
   },
   "inclusionai/ling-2.6-flash": {
     inputPer1M: 0.1,
     cachedInputPer1M: 0.02,
     outputPer1M: 0.3,
     name: "Sprout Flash",
+    description:
+      "Responsive default assistant for everyday planning with clear, wallet-ready summaries.",
+    isDefault: true,
   },
 } as Record<
   string,
@@ -53,8 +36,38 @@ export const MODEL_PRICING = {
     cachedInputPer1M: number;
     outputPer1M: number;
     name: string;
+    description: string;
+    isDefault?: boolean;
   }
 >;
+
+export type SelectableModel = {
+  id: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+};
+
+/** The user-selectable chat models (every entry in the pricing table). */
+export function selectableModels(): SelectableModel[] {
+  return Object.entries(MODEL_PRICING).map(([id, m]) => ({
+    id,
+    name: m.name,
+    description: m.description,
+    isDefault: !!m.isDefault,
+  }));
+}
+
+/** The id flagged `isDefault` (falls back to the first listed model). */
+export function defaultModelId(): string {
+  const ids = Object.keys(MODEL_PRICING);
+  return ids.find((id) => MODEL_PRICING[id]?.isDefault) ?? ids[0];
+}
+
+/** Whether an id is a known/allowed model (guards the chat route). */
+export function isKnownModel(id: string): boolean {
+  return Object.prototype.hasOwnProperty.call(MODEL_PRICING, id);
+}
 
 /** Computes USD cost from a `LanguageModelUsage`-shaped object. */
 export function computeMessageCostAndModelName(usage: {

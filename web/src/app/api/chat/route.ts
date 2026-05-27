@@ -1,5 +1,6 @@
 import { streamText, convertToModelMessages, type UIMessage } from "ai";
-import { aiModel, aiModels } from "@/lib/ai/openrouter";
+import { chatModel, aiModels } from "@/lib/ai/openrouter";
+import { isKnownModel, defaultModelId } from "@/lib/ai/pricing";
 import { systemPrompt } from "@/lib/ai/system-prompt";
 import { swapTools } from "@/lib/ai/tools";
 import { MAX_USER_MESSAGE_CHARS } from "@/lib/chat-limits";
@@ -21,8 +22,17 @@ export async function POST(req: Request) {
     );
   }
 
-  const { messages: incoming = [] }: { messages?: UIMessage[] } =
-    await req.json();
+  const {
+    messages: incoming = [],
+    model: requestedModel,
+  }: { messages?: UIMessage[]; model?: string } = await req.json();
+
+  // The client picks a model in the input; validate it against the pricing
+  // table (never trust an arbitrary id) and fall back to the default.
+  const modelId =
+    requestedModel && isKnownModel(requestedModel)
+      ? requestedModel
+      : defaultModelId();
 
   // Keep only the most recent messages, starting at a user turn so the model
   // context begins cleanly (never on a dangling assistant/tool message).
@@ -47,7 +57,7 @@ export async function POST(req: Request) {
   const startedAt = Date.now();
 
   const result = streamText({
-    model: aiModel,
+    model: chatModel(modelId),
     system: systemPrompt,
     messages: await convertToModelMessages(messages),
     tools: swapTools,
@@ -92,7 +102,7 @@ export async function POST(req: Request) {
             outputTokens: part.totalUsage?.outputTokens,
             cachedInputTokens: part.totalUsage?.cachedInputTokens,
             totalTokens: part.totalUsage?.totalTokens,
-            model: aiModel.modelId.replace(":free", ""),
+            model: modelId.replace(":free", ""),
           },
           durationMs: Date.now() - startedAt,
         };

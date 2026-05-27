@@ -1,6 +1,6 @@
 import "server-only";
 import { generateText } from "ai";
-import { aiModel, aiModels } from "@/lib/ai/openrouter";
+import { ptbAiModel, ptbAiModels } from "@/lib/ai/openrouter";
 import type { PtbExplainRequest } from "@/lib/ptb-explain";
 import type { PtbView } from "@/lib/ptb-view";
 import type { ResolvedStep } from "@/lib/ai/action-plan-cache";
@@ -102,13 +102,13 @@ export async function POST(req: Request) {
 
   try {
     const { text } = await generateText({
-      model: aiModel,
+      model: ptbAiModel,
       system: SYSTEM,
       prompt,
       maxOutputTokens: 1024,
       abortSignal: req.signal,
       providerOptions: {
-        openrouter: { reasoning: { enabled: false, exclude: true }, models: aiModels },
+        openrouter: { reasoning: { enabled: false, exclude: true }, models: ptbAiModels },
       },
     });
 

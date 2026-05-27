@@ -68,6 +68,7 @@ import {
   type CoinHolder,
 } from "@/lib/blockberry-coins";
 import { getGlossary, type GlossaryKey } from "@/lib/ai/vault-glossary";
+import { defaultModelId } from "@/lib/ai/pricing";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
 import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
@@ -136,8 +137,21 @@ export function Conversation({
   const vaultsRef = useRef(vaults);
   vaultsRef.current = vaults;
 
+  // User-selected chat model (picked in the input). A ref mirrors it so the
+  // stable transport closure injects the LATEST choice into each request.
+  const [selectedModel, setSelectedModel] = useState(defaultModelId());
+  const modelRef = useRef(selectedModel);
+  modelRef.current = selectedModel;
+
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/chat", fetch: signedFetch }),
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        fetch: signedFetch,
+        prepareSendMessagesRequest: ({ messages, body }) => ({
+          body: { ...body, messages, model: modelRef.current },
+        }),
+      }),
     []
   );
 
@@ -1773,6 +1787,8 @@ export function Conversation({
           onDraftChange={setDraft}
           onSubmit={submit}
           ready={!!coinMap}
+          model={selectedModel}
+          onModelChange={setSelectedModel}
         />
       );
     }
@@ -1782,6 +1798,8 @@ export function Conversation({
         onDraftChange={setDraft}
         onSubmit={submit}
         ready={!!coinMap}
+        model={selectedModel}
+        onModelChange={setSelectedModel}
       />
     );
   }
@@ -1912,6 +1930,8 @@ export function Conversation({
             placeholder={
               isStreaming ? "Sprout is thinking…" : "Tell me a swap or a goal…"
             }
+            model={selectedModel}
+            onModelChange={setSelectedModel}
           />
         </div>
       </div>
@@ -1926,11 +1946,15 @@ function EmbeddedEmpty({
   onDraftChange,
   onSubmit,
   ready,
+  model,
+  onModelChange,
 }: {
   draft: string;
   onDraftChange: (v: string) => void;
   onSubmit: (text: string) => void;
   ready: boolean;
+  model?: string;
+  onModelChange?: (id: string) => void;
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-5">
@@ -1949,6 +1973,8 @@ function EmbeddedEmpty({
           onSubmit={() => onSubmit(draft)}
           disabled={!ready}
           placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
+          model={model}
+          onModelChange={onModelChange}
         />
         <ExamplePrompts onPick={onSubmit} />
       </div>
@@ -1961,11 +1987,15 @@ function IdleHero({
   onDraftChange,
   onSubmit,
   ready,
+  model,
+  onModelChange,
 }: {
   draft: string;
   onDraftChange: (v: string) => void;
   onSubmit: (text: string) => void;
   ready: boolean;
+  model?: string;
+  onModelChange?: (id: string) => void;
 }) {
   return (
     <CinematicShell mode="bright">
@@ -2022,6 +2052,8 @@ function IdleHero({
             autoFocus
             disabled={!ready}
             placeholder={ready ? "Tell me a goal…" : "Loading tokens…"}
+            model={model}
+            onModelChange={onModelChange}
           />
           <ExamplePrompts onPick={onSubmit} />
         </motion.div>

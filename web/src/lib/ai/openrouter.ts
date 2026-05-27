@@ -21,8 +21,22 @@ export const aiModel = openrouter("inclusionai/ling-2.6-flash");
 // export const aiModels = ["tencent/hy3-preview"];
 // export const aiModels = ["deepseek/deepseek-v4-flash"];
 export const aiModels = [
-  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  // "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   // "nvidia/nemotron-3-nano-30b-a3b:free",
+  "tencent/hy3-preview",
+  "deepseek/deepseek-v4-flash",
+];
+
+/** Build a chat model by id (used when the user picks one in the input).
+ *  Callers MUST validate the id against the pricing table (isKnownModel)
+ *  first — this does no validation of its own. */
+export function chatModel(id: string) {
+  return openrouter(id);
+}
+
+export const ptbAiModel = openrouter("poolside/laguna-xs.2:free");
+export const ptbAiModels = [
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   "tencent/hy3-preview",
   "deepseek/deepseek-v4-flash",
 ];
