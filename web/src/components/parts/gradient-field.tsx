@@ -63,6 +63,22 @@ const FRAG = `
       vec2 mst = fst;
       vec2 m = u_mouse.xy/u_resolution.xy;
 
+      // Portrait: this metaball field is authored for landscape, so sampling it
+      // across a tall screen smears the blobs into vertical streaks. Instead,
+      // render the SAME desktop composition scaled down into a band at the
+      // bottom (fieldAspect ~ desktop), then the corner mask below keeps the
+      // glow bottom-right exactly like desktop. Above the band, coords run past
+      // [0,1] so the blobs fade to clean base. Landscape is left untouched.
+      float portrait = 0.0;
+      if (aspect < 1.0) {
+        portrait = 1.0;
+        float fieldAspect = 0.85;            // <1 → taller glow band (square=1.0; lower = taller)
+        float bandH = aspect / fieldAspect;  // bottom fraction of height it fills
+        fst = vec2(fst.x, fst.y / bandH);
+        mst = fst;
+        aspect = fieldAspect;
+      }
+
       vec3 col1 = u_col1 / 255.;
       vec3 col2 = u_col2 / 255.;
       vec3 col3 = u_col3 / 255.;
@@ -129,18 +145,19 @@ const FRAG = `
       float noise = rand(fst*10.) * .2;
       color.rgb *= 1. - vec3(noise);
 
-      // Confine the wash to a contained glow in the bottom-right corner so
-      // most of the page reads as clean base. (Their site clips the canvas to
-      // a shaped path; we fade alpha by distance from a corner anchor.)
-      // Aspect-aware: on a tall portrait phone (aspect<1) the fixed bottom
-      // anchor + small radius leave the glow hugging the bottom edge and
-      // looking washed out. Raise the anchor and extend the falloff as the
-      // canvas narrows so it fills a comparable fraction. Landscape (aspect>=1)
-      // is unchanged: portrait=0 collapses every mix() back to the originals.
-      float portrait = clamp(1.0 - aspect, 0.0, 1.0);
-      vec2 mc = vec2(0.85, mix(0.15, 0.42, portrait));
-      float md = distance(vec2(fst.x*aspect, fst.y), vec2(mc.x*aspect, mc.y));
-      color *= 1.0 - smoothstep(mix(0.24, 0.34, portrait), mix(0.64, 1.0, portrait), md);
+      // Confine the wash to a contained glow in the bottom-right corner so most
+      // of the page reads as clean base. (Their site clips the canvas to a
+      // shaped path; we fade alpha by distance from a corner anchor.) On
+      // portrait this runs in the scaled-down field space from the top, so the
+      // glow lands bottom-right just like desktop.
+      vec2 mc = vec2(0.85, 0.15);
+      vec2 dd = vec2(fst.x*aspect, fst.y) - vec2(mc.x*aspect, mc.y);
+      // Portrait: weight the horizontal distance so the glow falls off faster
+      // going LEFT (less left spread) while a larger radius lets it reach
+      // UPWARD — a tall, bottom-right-anchored ellipse. Desktop stays circular.
+      dd.x *= mix(1.0, 1.65, portrait);
+      float md = length(dd);
+      color *= 1.0 - smoothstep(0.24, mix(0.64, 1.5, portrait), md);
 
       gl_FragColor = color;
     }
