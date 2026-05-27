@@ -71,7 +71,9 @@ export function PortfolioView() {
   }, []);
 
   const vaultData = vaultState.data;
-  const holdings = holdingsState.data ?? [];
+  // Vault receipt tokens are surfaced as positions below, not as plain
+  // holdings — drop them here so wallet totals/list don't double-count.
+  const holdings = (holdingsState.data ?? []).filter((h) => !h.isVaultReceipt);
 
   const totals = useMemo(() => {
     const positions = vaultData?.positions ?? [];

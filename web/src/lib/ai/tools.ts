@@ -235,7 +235,7 @@ export const swapTools = {
               .array(z.string())
               .optional()
               .describe(
-                "(merge only) Two or more upstream handle ids to merge into one coin. All MUST be the same token type. Can be combined with fromSymbol+fromAmount to also include sender balance.",
+                "(merge only) Two or more upstream handle ids to merge into one coin. All MUST be the same token type. Can be combined with fromSymbol + fromAmount OR fromSymbol + fromPercent to also fold in the sender's wallet balance of that token (use fromPercent: 100 to add ALL of it — the robust way to consolidate swap outputs WITH existing wallet balance).",
               ),
             fromSymbol: z
               .string()

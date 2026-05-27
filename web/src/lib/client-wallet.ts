@@ -18,6 +18,11 @@ export type TokenHolding = {
   balance: number;
   /** True when the token is in the verified coin map (has a known symbol). */
   known: boolean;
+  /** True when this is a vault receipt/share token (ercUSD, eACRED, …). It is
+   *  a real, swappable balance — included here so the plan balance-check can
+   *  see it — but display surfaces (portfolio) hide it and show the position
+   *  instead, so filter on this flag when listing/summing plain holdings. */
+  isVaultReceipt?: boolean;
   priceUsd?: number;
   valueUsd?: number;
   iconUrl?: string;
@@ -41,10 +46,6 @@ export async function fetchWalletHoldings(
       () => new Map() as Awaited<ReturnType<typeof loadVaultReceiptIndex>>,
     ),
   ]);
-  // Receipt-token coin types live in vault positions, NOT in plain
-  // holdings. The shared index already canonicalises its keys.
-  const receiptTypes = new Set(receiptIndex.keys());
-
   // Index the known coin map by canonical coin type.
   const byType = new Map<
     string,
@@ -60,25 +61,37 @@ export async function fetchWalletHoldings(
     }
   }
 
-  // Build initial holdings array (without prices yet).
+  // Build initial holdings array (without prices yet). Receipt/share tokens
+  // are REAL swappable balances, so include them too (tagged) — the balance
+  // check needs to see them. They use the vault's share decimals + the
+  // receipt-share USD price (the 7K oracle drops receipt coins).
   const holdings: TokenHolding[] = (allBalances as RawBal[])
     .filter((b) => BigInt(b.totalBalance) > BigInt(0))
-    .map((b): TokenHolding | null => {
+    .map((b): TokenHolding => {
       const canon = canonicalCoinType(b.coinType);
-      if (receiptTypes.has(canon)) return null; // skip vault receipts
+      const receipt = receiptIndex.get(canon);
       const known = byType.get(canon);
-      const decimals = known?.decimals ?? 9;
+      const decimals = receipt?.shareDecimals ?? known?.decimals ?? 9;
       const balance = Number(b.totalBalance) / 10 ** decimals;
-      return {
-        symbol: known?.symbol ?? b.coinType.split("::").pop() ?? "?",
+      const holding: TokenHolding = {
+        symbol: receipt
+          ? canon.split("::").pop() ?? "?"
+          : known?.symbol ?? b.coinType.split("::").pop() ?? "?",
         coinType: canon,
         decimals,
         balance: Number(balance.toFixed(6)),
-        known: !!known,
-        iconUrl: known?.iconUrl,
+        known: !!known || !!receipt,
+        isVaultReceipt: !!receipt,
+        iconUrl: known?.iconUrl ?? receipt?.position.logoUrl,
       };
-    })
-    .filter((h): h is TokenHolding => h !== null);
+      if (receipt?.position.receiptPriceUsd) {
+        holding.priceUsd = receipt.position.receiptPriceUsd;
+        holding.valueUsd = Number(
+          (balance * receipt.position.receiptPriceUsd).toFixed(6),
+        );
+      }
+      return holding;
+    });
 
   // Batch oracle prices.
   const priceQueryTypes = Array.from(new Set(holdings.map((h) => h.coinType)));

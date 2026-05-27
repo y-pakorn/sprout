@@ -38,6 +38,13 @@ import type {
 /** The dapp-kit core client shape (used here only for the gas dryRun). */
 export type SuiClientLike = ReturnType<typeof useCurrentClient>;
 
+const SUI_TYPE = canonicalCoinType("0x2::sui::SUI");
+/** Keep this much SUI (in MIST, 9 decimals) back for gas whenever a plan
+ *  spends SUI drawn from the wallet balance. A multi-step PTB can cost
+ *  ~0.05–0.08 SUI, so 0.1 is a safe deterministic floor. The "leave gas"
+ *  rule is enforced HERE, not trusted to the (sometimes weak) model. */
+const SUI_GAS_RESERVE = BigInt(100_000_000); // 0.1 SUI
+
 export type BuildPlanArgs = {
   steps: RawStep[];
   /** Sender address — coin selection + simulation are done as this account. */
@@ -96,7 +103,11 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
   // Live raw balances — only fetched when a step draws by percentage, so we
   // can resolve `fromPercent` to an EXACT u64 from on-chain state (no float
   // round-trip, hence no dust / no overshoot past the wallet balance).
-  const needsBalances = steps.some((s) => s.fromPercent != null);
+  // Fetch live balances for any balance-funded origin (percent OR amount) so
+  // we can resolve fromPercent exactly AND cap SUI draws to leave gas.
+  const needsBalances = steps.some(
+    (s) => s.fromPercent != null || s.fromAmount != null
+  );
   const balanceByType = new Map<string, bigint>();
   if (needsBalances) {
     const all = await fetchAllBalances(client as unknown as CoreClientLike, sender);
@@ -122,19 +133,33 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
   /** Exact raw u64 a balance-funded step should draw — percent (from the live
    *  balance) takes precedence over a fixed human `fromAmount`. */
   function drawRaw(step: RawStep, coinType: string, decimals: number): bigint {
+    const isSui = canonicalCoinType(coinType) === SUI_TYPE;
     if (step.fromPercent != null) {
       const balRaw = balanceByType.get(canonicalCoinType(coinType)) ?? BigInt(0);
+      // For SUI, take the percentage of what's spendable AFTER reserving gas,
+      // so "swap 100% of my SUI" can never leave the wallet unable to pay gas.
+      const usable =
+        isSui && balRaw > SUI_GAS_RESERVE ? balRaw - SUI_GAS_RESERVE : balRaw;
       // percent → bps (×100) so fractional percents (e.g. 33.33) survive.
       const bps = BigInt(Math.round(step.fromPercent * 100));
-      const raw = (balRaw * bps) / BigInt(10000);
+      const raw = (usable * bps) / BigInt(10000);
       if (raw <= BigInt(0)) {
         throw new Error(
-          `Step ${step.id}: wallet holds no ${step.fromSymbol ?? coinType} to draw ${step.fromPercent}% from.`
+          `Step ${step.id}: wallet holds no spendable ${step.fromSymbol ?? coinType} to draw ${step.fromPercent}% from${isSui ? " after reserving 0.1 SUI for gas" : ""}.`
         );
       }
       return raw;
     }
-    return BigInt(Math.floor((step.fromAmount ?? 0) * 10 ** decimals));
+    let raw = BigInt(Math.floor((step.fromAmount ?? 0) * 10 ** decimals));
+    // Cap a fixed SUI draw so it can't consume the gas reserve either.
+    if (isSui) {
+      const balRaw = balanceByType.get(SUI_TYPE);
+      if (balRaw != null) {
+        const usable = balRaw > SUI_GAS_RESERVE ? balRaw - SUI_GAS_RESERVE : BigInt(0);
+        if (raw > usable) raw = usable;
+      }
+    }
+    return raw;
   }
   const handles = new Map<string, HandleEntry>();
   // Handle ids consumed by a downstream step. Any handle NOT in this set
@@ -390,16 +415,17 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           sources.push({ entry: h, label: hId });
         }
       }
-      if (step.fromSymbol && step.fromAmount != null) {
+      if (step.fromSymbol && (step.fromAmount != null || step.fromPercent != null)) {
         const coin = resolveSymbol(map, step.fromSymbol);
         if (!coin) {
           throw new Error(
             `Merge ${step.id}: unknown token '${step.fromSymbol}'.`
           );
         }
-        const raw = BigInt(
-          Math.floor(step.fromAmount * 10 ** coin.decimals)
-        );
+        // drawRaw handles both fromAmount and fromPercent (and the SUI gas
+        // reserve), so "merge the swap outputs + 100% of my wallet USDC" is
+        // expressible without a stale fixed amount.
+        const raw = drawRaw(step, coin.coin_type, coin.decimals);
         const arg = tx.add(
           coinWithBalance({
             balance: raw,
@@ -413,7 +439,8 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
             symbol: step.fromSymbol.toUpperCase(),
             coinType: coin.coin_type,
             decimals: coin.decimals,
-            expectedHuman: step.fromAmount,
+            expectedHuman: Number(raw) / 10 ** coin.decimals,
+            rawAmount: raw,
           },
           label: `balance:${step.fromSymbol.toUpperCase()}`,
         });
