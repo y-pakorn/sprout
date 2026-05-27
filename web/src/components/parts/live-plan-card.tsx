@@ -19,6 +19,7 @@ import {
 import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { AssetIcon } from "@/components/asset-icon";
 import { Tag } from "@/components/ui/tag";
+import { Switch } from "@/components/ui/switch";
 import {
   VaultRiskDetail,
   type RiskVerdict,
@@ -84,6 +85,11 @@ type Props = {
   /** Optional — only used for plans with ≥1 swap step. */
   slippagePct?: number;
   onSlippageChange?: (pct: number) => void;
+  /** "Sprout pays gas" (Enoki sponsorship). Default on upstream. */
+  sponsorGas: boolean;
+  onSponsorGasChange: (next: boolean) => void;
+  /** True once executed AND gas was actually paid by the sponsor. */
+  sponsored?: boolean;
   onRefresh?: () => Promise<void>;
 };
 
@@ -105,6 +111,9 @@ export function LivePlanCard({
   walletConnected,
   slippagePct,
   onSlippageChange,
+  sponsorGas,
+  onSponsorGasChange,
+  sponsored,
   onRefresh,
 }: Props) {
   const [openVaultId, setOpenVaultId] = useState<string | null>(null);
@@ -163,7 +172,9 @@ export function LivePlanCard({
     walletHoldings.state.status === "ready"
       ? computeBalanceCheck(
           cached.steps,
-          cached.summary.estimatedGasSui,
+          // When Sprout sponsors gas, the wallet needs no SUI for the fee — so
+          // a zero-SUI wallet holding only the input coins can still confirm.
+          sponsorGas ? 0 : cached.summary.estimatedGasSui,
           walletHoldings.state.data,
         )
       : null;
@@ -191,7 +202,7 @@ export function LivePlanCard({
         }
       : null;
 
-  const rawRisks = buildRisks(cached);
+  const rawRisks = buildRisks(cached, sponsorGas);
   const severityOrder: Record<RiskVerdict, number> = {
     block: 0,
     flag: 1,
@@ -302,7 +313,7 @@ export function LivePlanCard({
       </motion.ol>
 
       {/* Kind-dispatched aggregate stats */}
-      <PlanStats cached={cached} />
+      <PlanStats cached={cached} sponsorGas={sponsorGas} />
 
       {/* Real PTB — compact teaser; opens the full interactive viewer. */}
       <PtbSummaryStrip tx={cached.tx} onOpen={() => setPtbOpen(true)} />
@@ -347,6 +358,28 @@ export function LivePlanCard({
           ))}
         </div>
       </div>
+
+      {/* Sprout-pays-gas toggle — applies to every plan kind. */}
+      {!executed && !confirming && (
+        <div className="flex items-center justify-between gap-3 border-t border-hairline/60 pt-3">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-body-sm font-medium text-midnight-ink">
+              Sprout pays gas
+            </span>
+            <span className="text-caption text-muted-ash">
+              {sponsorGas
+                ? "You sign — Sprout covers the SUI network fee"
+                : "You pay the SUI network fee from your wallet"}
+            </span>
+          </div>
+          <Switch
+            checked={sponsorGas}
+            onCheckedChange={(next) => onSponsorGasChange(next)}
+            disabled={signing}
+            aria-label="Sprout pays gas"
+          />
+        </div>
+      )}
 
       {/* Action row */}
       {!executed && !confirming && (
@@ -438,6 +471,7 @@ export function LivePlanCard({
           txError={txError}
           txDigest={txDigest}
           gasUsedSui={gasUsedSui}
+          sponsored={sponsored}
           receivedShares={receivedShares}
           deposits={depositSteps}
         />
@@ -1077,15 +1111,19 @@ function summarizeDeposits(deposits: ResolvedDepositStep[]): string {
 function Stat({
   label,
   value,
+  struck,
   tone = "default",
 }: {
   label: string;
   value: string;
+  /** When set, render this struck through (in muted ink) before `value` —
+   *  used for the sponsored gas tile (estimate crossed out, "0 SUI" in green). */
+  struck?: string;
   tone?: "default" | "lime";
 }) {
   return (
     <div
-      className={cn("rounded-card", 
+      className={cn("rounded-card",
         "surface-panel px-3 py-2",
         tone === "lime" && "bg-deliver-green/15",
       )}
@@ -1093,8 +1131,13 @@ function Stat({
       <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
         {label}
       </div>
-      <div className="text-body font-medium tabular-nums text-midnight-ink">
-        {value}
+      <div className="flex items-baseline gap-1.5 text-body font-medium tabular-nums">
+        {struck && (
+          <span className="text-muted-ash line-through">{struck}</span>
+        )}
+        <span className={cn(struck ? "text-deliver-green" : "text-midnight-ink")}>
+          {value}
+        </span>
       </div>
     </div>
   );
@@ -1112,7 +1155,10 @@ type GuardianRow = {
   extra?: React.ReactNode;
 };
 
-function buildRisks(cached: CachedActionPlan): GuardianRow[] {
+function buildRisks(
+  cached: CachedActionPlan,
+  sponsorGas: boolean,
+): GuardianRow[] {
   const out: GuardianRow[] = [];
   const deposits = cached.steps.filter(
     (s): s is ResolvedDepositStep => s.kind === "deposit",
@@ -1152,17 +1198,29 @@ function buildRisks(cached: CachedActionPlan): GuardianRow[] {
   }
 
   const gas = cached.summary.estimatedGasSui;
-  let gasV: RiskVerdict = "pass";
-  if (gas >= 0.05) gasV = "flag";
-  out.push({
-    id: "gas",
-    title: "Gas cost",
-    summary: `~${gas.toFixed(4)} SUI for this transaction`,
-    verdict: gasV,
-    detail:
-      "Gas is the SUI you pay validators to include and execute this transaction. Larger PTBs (more swaps, more deposits) cost more. The number shown is a heuristic estimate; the actual gas is in the receipt after signing.",
-    askPrompt: "Why does this plan cost so much gas?",
-  });
+  if (sponsorGas) {
+    out.push({
+      id: "gas",
+      title: "Gas sponsored by Sprout",
+      summary: `Sprout covers the ~${gas.toFixed(4)} SUI network fee — you pay 0`,
+      verdict: "pass",
+      detail:
+        "You sign this transaction, but Sprout pays the SUI gas via Enoki sponsorship — so you don't need any SUI in your wallet to execute it. If sponsorship is unavailable at sign time, it falls back to wallet-paid gas (you'd then need a little SUI).",
+      askPrompt: "How does Sprout pay the gas for me?",
+    });
+  } else {
+    let gasV: RiskVerdict = "pass";
+    if (gas >= 0.05) gasV = "flag";
+    out.push({
+      id: "gas",
+      title: "Gas cost",
+      summary: `~${gas.toFixed(4)} SUI for this transaction`,
+      verdict: gasV,
+      detail:
+        "Gas is the SUI you pay validators to include and execute this transaction. Larger PTBs (more swaps, more deposits) cost more. The number shown is a heuristic estimate; the actual gas is in the receipt after signing.",
+      askPrompt: "Why does this plan cost so much gas?",
+    });
+  }
 
   return out;
 }
@@ -1469,6 +1527,7 @@ function PlanReceipt({
   txError,
   txDigest,
   gasUsedSui,
+  sponsored,
   receivedShares,
   deposits,
 }: {
@@ -1477,6 +1536,7 @@ function PlanReceipt({
   txError?: string;
   txDigest?: string;
   gasUsedSui?: number;
+  sponsored?: boolean;
   receivedShares?: number[];
   deposits: ResolvedDepositStep[];
 }) {
@@ -1551,9 +1611,18 @@ function PlanReceipt({
           {gasUsedSui !== undefined && (
             <li className="flex items-center justify-between gap-2 pt-1">
               <span>Gas</span>
-              <span className="tabular-nums font-medium text-midnight-ink">
-                {gasUsedSui.toFixed(4)} SUI
-              </span>
+              {sponsored ? (
+                <span className="flex items-baseline gap-1.5 tabular-nums font-medium">
+                  <span className="text-muted-ash line-through">
+                    {gasUsedSui.toFixed(4)} SUI
+                  </span>
+                  <span className="text-deliver-green">Paid by Sprout</span>
+                </span>
+              ) : (
+                <span className="tabular-nums font-medium text-midnight-ink">
+                  {gasUsedSui.toFixed(4)} SUI
+                </span>
+              )}
             </li>
           )}
         </ul>
@@ -2237,11 +2306,19 @@ type StatTile = {
   id: string;
   label: string;
   value: string;
+  /** Struck-through prefix (sponsored gas: crossed-out estimate before "0 SUI"). */
+  struck?: string;
   tone?: "default" | "lime";
 };
 
-function PlanStats({ cached }: { cached: CachedActionPlan }) {
-  const tiles = computeStatTiles(cached);
+function PlanStats({
+  cached,
+  sponsorGas,
+}: {
+  cached: CachedActionPlan;
+  sponsorGas: boolean;
+}) {
+  const tiles = computeStatTiles(cached, sponsorGas);
   const cols =
     tiles.length >= 4 ? "sm:grid-cols-4"
     : tiles.length === 3 ? "sm:grid-cols-3"
@@ -2259,8 +2336,17 @@ function PlanStats({ cached }: { cached: CachedActionPlan }) {
             <span className="shrink-0 text-caption font-medium uppercase tracking-wider text-muted-ash">
               {tile.label}
             </span>
-            <span className="min-w-0 text-right text-body-sm font-medium tabular-nums text-midnight-ink">
-              {tile.value}
+            <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-right text-body-sm font-medium tabular-nums">
+              {tile.struck && (
+                <span className="text-muted-ash line-through">{tile.struck}</span>
+              )}
+              <span
+                className={cn(
+                  tile.struck ? "text-deliver-green" : "text-midnight-ink",
+                )}
+              >
+                {tile.value}
+              </span>
             </span>
           </div>
         ))}
@@ -2272,6 +2358,7 @@ function PlanStats({ cached }: { cached: CachedActionPlan }) {
             key={tile.id}
             label={tile.label}
             value={tile.value}
+            struck={tile.struck}
             tone={tile.tone}
           />
         ))}
@@ -2280,7 +2367,10 @@ function PlanStats({ cached }: { cached: CachedActionPlan }) {
   );
 }
 
-function computeStatTiles(cached: CachedActionPlan): StatTile[] {
+function computeStatTiles(
+  cached: CachedActionPlan,
+  sponsorGas: boolean,
+): StatTile[] {
   const { swapCount, depositCount, redeemCount, cancelCount, sendCount } =
     cached.summary;
   const swaps = cached.steps.filter(
@@ -2296,11 +2386,20 @@ function computeStatTiles(cached: CachedActionPlan): StatTile[] {
     (s): s is ResolvedSendStep => s.kind === "send",
   );
   const gas = cached.summary.estimatedGasSui;
-  const gasTile: StatTile = {
-    id: "gas",
-    label: "Network fee",
-    value: `~${gas.toFixed(4)} SUI`,
-  };
+  // Sponsored: cross out the estimate and show "0 SUI" in Deliver Green.
+  const gasTile: StatTile = sponsorGas
+    ? {
+        id: "gas",
+        label: "Network fee",
+        value: "0 SUI",
+        struck: `~${gas.toFixed(4)} SUI`,
+        tone: "lime",
+      }
+    : {
+        id: "gas",
+        label: "Network fee",
+        value: `~${gas.toFixed(4)} SUI`,
+      };
 
   // Deposit-driven plans (with or without an upstream swap)
   if (depositCount > 0) {

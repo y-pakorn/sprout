@@ -35,6 +35,9 @@ importers:
       '@mysten/dapp-kit-react':
         specifier: ^2.0.3
         version: 2.0.3(@mysten/sui@2.17.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.4)(typescript@5.9.3)
+      '@mysten/enoki':
+        specifier: ^1.0.8
+        version: 1.0.8(@mysten/sui@2.17.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.4)
       '@mysten/sui':
         specifier: ^2.17.0
         version: 2.17.0(typescript@5.9.3)
@@ -737,6 +740,18 @@ packages:
       '@types/react': '>=17.0.0'
       react: '>=17.0.0'
 
+  '@mysten/enoki@1.0.8':
+    resolution: {integrity: sha512-ZFWAnLavMEroBzZyiBNawAttkSLlpKgTTK3/irQW5jSNEP/G9U8+ZGeLpTnt78761b+9r13IEWmWbVlHx3hCuA==}
+    peerDependencies:
+      '@mysten/sui': ^2.16.3
+      '@types/react': '>=17.0.0'
+      react: '>=17.0.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
+
   '@mysten/slush-wallet@1.0.5':
     resolution: {integrity: sha512-soP0eZW4uP2S2z5YH7eg0dZQZ7hZyY6F7D2H0Wv93wjFz9DSHlOf1b9mY+2kzH1oO7nSnpdRdL15v8+X3X7f6w==}
     peerDependencies:
@@ -769,6 +784,12 @@ packages:
     resolution: {integrity: sha512-Kp1EpWaQAwANuMoTCJKVdZnEOaE9aJ5PPvIC7qg+J3u6Uf20VsVsQngZllyaS2OQHm+iLlJzcLXHff7ttvQJYw==}
     peerDependencies:
       '@mysten/sui': '*'
+
+  '@mysten/webcrypto-signer@0.1.2':
+    resolution: {integrity: sha512-MFI64BrUoyI05zZ1GXskZc8ohqCS9fM6StS/RO71YtX9pi7ZLTLdhUM7FEfgCYoSNsJHahG23JxvG0cfgiX/DQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@mysten/sui': ^2.16.2
 
   '@mysten/window-wallet-core@0.1.6':
     resolution: {integrity: sha512-vKx4RVn+6sfMHnoFIK3hJ3pxYcy88FdW+BjaFp8GpcGCXC0ImK0HTLNPC0JxeQWmjgDe1eXIMPpY9/eAMU9Azw==}
@@ -2522,6 +2543,9 @@ packages:
   iconv-lite@0.7.2:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
     engines: {node: '>=0.10.0'}
+
+  idb-keyval@6.2.4:
+    resolution: {integrity: sha512-D/NzHWUmYJGXi++z67aMSrnisb9A3621CyRK5G89JyTlN13C8xf0g04DLxUKMufPem3e3L2JAXR6Z00OWy183Q==}
 
   ieee754@1.2.1:
     resolution: {integrity: sha512-dcyqhDvX1C46lXZcVqCpK+FtMRQVdIMN6/Df5js2zouUsqG7I6sFxitIC+7KYK29KdXOLHdu9zL4sFnoVQnqaA==}
@@ -4805,6 +4829,20 @@ snapshots:
       - '@mysten/sui'
       - typescript
 
+  '@mysten/enoki@1.0.8(@mysten/sui@2.17.0(typescript@5.9.3))(@types/react@19.2.14)(react@19.2.4)':
+    dependencies:
+      '@mysten/sui': 2.17.0(typescript@5.9.3)
+      '@mysten/utils': 0.3.3
+      '@mysten/wallet-standard': 0.20.3(@mysten/sui@2.17.0(typescript@5.9.3))
+      '@mysten/webcrypto-signer': 0.1.2(@mysten/sui@2.17.0(typescript@5.9.3))
+      '@nanostores/react': 1.1.0(nanostores@1.3.0)(react@19.2.4)
+      '@wallet-standard/ui': 1.0.2
+      idb-keyval: 6.2.4
+      nanostores: 1.3.0
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.4
+
   '@mysten/slush-wallet@1.0.5(@mysten/sui@2.17.0(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
       '@mysten/sui': 2.17.0(typescript@5.9.3)
@@ -4912,6 +4950,11 @@ snapshots:
     dependencies:
       '@mysten/sui': 2.17.0(typescript@5.9.3)
       '@wallet-standard/core': 1.1.1
+
+  '@mysten/webcrypto-signer@0.1.2(@mysten/sui@2.17.0(typescript@5.9.3))':
+    dependencies:
+      '@mysten/sui': 2.17.0(typescript@5.9.3)
+      '@noble/curves': 2.2.0
 
   '@mysten/window-wallet-core@0.1.6(typescript@5.9.3)':
     dependencies:
@@ -6839,6 +6882,8 @@ snapshots:
   iconv-lite@0.7.2:
     dependencies:
       safer-buffer: 2.1.2
+
+  idb-keyval@6.2.4: {}
 
   ieee754@1.2.1: {}
 

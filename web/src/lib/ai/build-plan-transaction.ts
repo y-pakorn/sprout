@@ -60,6 +60,9 @@ export type BuildPlanArgs = {
   estimateGas: boolean;
   /** Previously-computed real gas (SUI) to preserve on silent rebuilds. */
   prevGasSui?: number;
+  /** When true (Enoki sponsorship on), the wallet pays no gas, so the 0.1 SUI
+   *  gas reserve is released — "swap all my SUI" can consume the full balance. */
+  sponsorGas?: boolean;
 };
 
 export type BuiltPlan = {
@@ -78,6 +81,11 @@ export type BuiltPlan = {
  */
 export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPlan> {
   const { steps, sender, coinMap: map, vaultList, slippagePct, client } = args;
+
+  // When Sprout sponsors gas, the wallet needs no SUI for the fee, so we hold
+  // back nothing — a max-SUI swap drains the entire balance. Otherwise keep the
+  // deterministic 0.1 SUI floor so the wallet can always pay its own gas.
+  const suiReserve = args.sponsorGas ? BigInt(0) : SUI_GAS_RESERVE;
 
   // Vault list + deployment are needed for any step that touches the
   // gateway (deposit, redeem, cancel).
@@ -139,13 +147,13 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
       // For SUI, take the percentage of what's spendable AFTER reserving gas,
       // so "swap 100% of my SUI" can never leave the wallet unable to pay gas.
       const usable =
-        isSui && balRaw > SUI_GAS_RESERVE ? balRaw - SUI_GAS_RESERVE : balRaw;
+        isSui && balRaw > suiReserve ? balRaw - suiReserve : balRaw;
       // percent → bps (×100) so fractional percents (e.g. 33.33) survive.
       const bps = BigInt(Math.round(step.fromPercent * 100));
       const raw = (usable * bps) / BigInt(10000);
       if (raw <= BigInt(0)) {
         throw new Error(
-          `Step ${step.id}: wallet holds no spendable ${step.fromSymbol ?? coinType} to draw ${step.fromPercent}% from${isSui ? " after reserving 0.1 SUI for gas" : ""}.`
+          `Step ${step.id}: wallet holds no spendable ${step.fromSymbol ?? coinType} to draw ${step.fromPercent}% from${isSui && suiReserve > BigInt(0) ? " after reserving 0.1 SUI for gas" : ""}.`
         );
       }
       return raw;
@@ -155,7 +163,7 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
     if (isSui) {
       const balRaw = balanceByType.get(SUI_TYPE);
       if (balRaw != null) {
-        const usable = balRaw > SUI_GAS_RESERVE ? balRaw - SUI_GAS_RESERVE : BigInt(0);
+        const usable = balRaw > suiReserve ? balRaw - suiReserve : BigInt(0);
         if (raw > usable) raw = usable;
       }
     }

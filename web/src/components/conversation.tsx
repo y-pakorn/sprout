@@ -9,6 +9,7 @@ import { useStickToBottom } from "use-stick-to-bottom";
 import {
   useCurrentAccount,
   useCurrentClient,
+  useCurrentNetwork,
   useDAppKit,
 } from "@mysten/dapp-kit-react";
 
@@ -74,6 +75,8 @@ import { defaultModelId } from "@/lib/ai/pricing";
 import { getTokenPrices } from "@/lib/bluefin7k";
 import { providerLabel } from "@/lib/seven-k";
 import { buildPlanTransaction } from "@/lib/ai/build-plan-transaction";
+import { executeSponsored } from "@/lib/enoki-sponsor";
+import type { SuiNetwork } from "@/lib/sui";
 import { floorToDecimals } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { VaultPosition } from "@/components/parts/wallet-card";
@@ -93,9 +96,12 @@ export function Conversation({
   const account = useCurrentAccount();
   const coinMap = useCoinMap();
   const suiClient = useCurrentClient();
+  const currentNetwork = useCurrentNetwork() as SuiNetwork;
   const dAppKit = useDAppKit();
   const signAndExecute = (args: { transaction: Transaction }) =>
     dAppKit.signAndExecuteTransaction(args);
+  const signTransaction = (args: { transaction: string }) =>
+    dAppKit.signTransaction(args);
 
   // Stick-to-bottom for the active conversation. Used via the hook (not the
   // component) so the scroller is an inner div and the scroll-to-bottom button
@@ -116,6 +122,12 @@ export function Conversation({
   const [slippagePct, setSlippagePct] = useState(1);
   const slippageRef = useRef(slippagePct);
   slippageRef.current = slippagePct;
+  // "Sprout pays gas" (Enoki sponsorship). Default ON — the builder releases
+  // the SUI gas reserve and the wallet signs only. The ref mirror lets silent
+  // rebuilds (toggle / refresh) read the live value from a stale closure.
+  const [sponsorGas, setSponsorGas] = useState(true);
+  const sponsorGasRef = useRef(sponsorGas);
+  sponsorGasRef.current = sponsorGas;
   const [signError, setSignError] = useState<string | null>(null);
 
   // Active plan-deposit state (one plan card may be live at a time).
@@ -129,6 +141,9 @@ export function Conversation({
   >();
   const [planTxError, setPlanTxError] = useState<string | undefined>();
   const [planGasSui, setPlanGasSui] = useState<number | undefined>();
+  /** True when the executed plan's gas was actually paid by the Enoki sponsor
+   *  (vs. the wallet — e.g. when sponsorship fell back). Drives the receipt. */
+  const [planSponsored, setPlanSponsored] = useState(false);
   /** Per-vault shares received (in human units), indexed by allocation order. */
   const [planReceivedShares, setPlanReceivedShares] = useState<
     number[] | undefined
@@ -1481,6 +1496,7 @@ export function Conversation({
         client: suiClientRef.current,
         estimateGas: !silent,
         prevGasSui: prev?.summary.estimatedGasSui,
+        sponsorGas: sponsorGasRef.current,
       });
 
       const cached: CachedActionPlan = {
@@ -1626,6 +1642,16 @@ export function Conversation({
     void handlePlanRefresh(latestPlanToolCallId);
   }
 
+  function handleSponsorGasChange(next: boolean) {
+    setSponsorGas(next);
+    sponsorGasRef.current = next;
+    // Rebuild so the SUI gas reserve is released/restored. Unlike slippage,
+    // this matters whenever the plan draws SUI from balance, so always refresh.
+    if (!latestPlanToolCallId) return;
+    if (!actionPlanCache.get(latestPlanToolCallId)) return;
+    void handlePlanRefresh(latestPlanToolCallId);
+  }
+
   async function handleConfirmPlan(toolCallId: string) {
     // Gasless stablecoin transfers live in a separate cache + execution path
     // (they can't be composite PTBs). Route them before the plan lookup.
@@ -1637,6 +1663,7 @@ export function Conversation({
     setPlanTxStatus(undefined);
     setPlanGasSui(undefined);
     setPlanReceivedShares(undefined);
+    setPlanSponsored(false);
     const cached = actionPlanCache.get(toolCallId);
     if (!cached) {
       setSignError("Plan expired. Ask again to re-build.");
@@ -1653,20 +1680,49 @@ export function Conversation({
     setPlanExecuted(false);
     setPlanTxDigest(undefined);
     try {
-      const signed = await signAndExecute({
-        transaction: cached.tx as unknown as Transaction,
-      });
-      const signedTx =
-        signed.$kind === "Transaction"
-          ? signed.Transaction
-          : signed.FailedTransaction;
+      // Sign + execute the plan. When "Sprout pays gas" is on, route through
+      // Enoki (build kind bytes → sponsor → wallet signs → execute). If
+      // sponsorship fails for any reason, fall back to wallet-paid gas so the
+      // plan still goes through. Both paths produce an on-chain digest.
+      let digest: string;
+      let sponsored = false;
+      const planTx = cached.tx as unknown as Transaction;
+      const walletPay = async () => {
+        const signed = await signAndExecute({ transaction: planTx });
+        const signedTx =
+          signed.$kind === "Transaction"
+            ? signed.Transaction
+            : signed.FailedTransaction;
+        return signedTx.digest;
+      };
+      if (sponsorGasRef.current) {
+        try {
+          digest = await executeSponsored({
+            tx: planTx,
+            sender: acct.address,
+            network: currentNetwork,
+            suiClient: suiClientRef.current as unknown as SuiGrpcClient,
+            signTransaction,
+          });
+          sponsored = true;
+        } catch (sponsorErr) {
+          console.warn(
+            "[handleConfirmPlan] sponsorship failed; falling back to wallet-paid gas",
+            sponsorErr
+          );
+          digest = await walletPay();
+        }
+      } else {
+        digest = await walletPay();
+      }
+      setPlanSponsored(sponsored);
       setPlanSigning(false);
       setPlanConfirming(true);
-      setPlanTxDigest(signedTx.digest);
+      setPlanTxDigest(digest);
 
       try {
         const finalized = await suiClientRef.current.core.waitForTransaction({
-          digest: signedTx.digest,
+          digest,
           include: { effects: true, balanceChanges: true },
         });
         const finTx =
@@ -1932,6 +1988,8 @@ export function Conversation({
                     activePlanId,
                     latestPlanId: latestPlanToolCallId,
                     slippagePct,
+                    sponsorGas,
+                    sponsored: planSponsored,
                     signing: planSigning,
                     confirming: planConfirming,
                     executed: planExecuted,
@@ -1945,6 +2003,7 @@ export function Conversation({
                     onConfirm: handleConfirmPlan,
                     onCancel: handleCancelPlan,
                     onSlippageChange: handleSlippageChange,
+                    onSponsorGasChange: handleSponsorGasChange,
                     onRefresh: handlePlanRefresh,
                   }}
                 />

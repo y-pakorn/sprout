@@ -51,6 +51,10 @@ export type PlanActionState = {
   latestPlanId: string | null;
   /** Slippage cap shared by every swap step in any plan with swaps. */
   slippagePct: number;
+  /** "Sprout pays gas" (Enoki sponsorship) toggle — default on. */
+  sponsorGas: boolean;
+  /** True when the executed plan's gas was actually paid by the sponsor. */
+  sponsored: boolean;
   signing: boolean;
   confirming: boolean;
   executed: boolean;
@@ -67,6 +71,9 @@ export type PlanActionState = {
   /** Re-build the plan with the current slippage. Used by the slippage pills
    *  and the 5s auto-refresh widget on plans that contain swap steps. */
   onSlippageChange: (pct: number) => void;
+  /** Toggle sponsorship; triggers a silent rebuild to release/restore the
+   *  SUI gas reserve. */
+  onSponsorGasChange: (next: boolean) => void;
   onRefresh: (toolCallId: string) => Promise<void>;
 };
 
@@ -555,6 +562,9 @@ export function AgentMessage({
               iconLookup={planAction.iconLookup}
               slippagePct={planAction.slippagePct}
               onSlippageChange={planAction.onSlippageChange}
+              sponsorGas={planAction.sponsorGas}
+              onSponsorGasChange={planAction.onSponsorGasChange}
+              sponsored={isActivePlan && planAction.sponsored}
               onRefresh={() => planAction.onRefresh(p.toolCallId)}
               onConfirm={() => planAction.onConfirm(p.toolCallId)}
               onCancel={() => planAction.onCancel(p.toolCallId)}
