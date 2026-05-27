@@ -2,6 +2,26 @@ import { tool } from "ai";
 import { z } from "zod";
 
 /**
+ * Smaller models routinely serialize array-valued tool args as a JSON
+ * *string* (e.g. `steps: "[{...}]"`) instead of a real array, which fails
+ * schema validation and kills the whole tool call. This preprocess rescues
+ * that case by parsing a string back into a value before the array schema
+ * runs. zod's JSON-schema generation still emits the inner array (verified),
+ * so the model is told to send an array exactly as before — this only
+ * salvages the malformed string variant.
+ */
+const coerceJsonArray = (v: unknown) => {
+  if (typeof v === "string") {
+    try {
+      return JSON.parse(v);
+    } catch {
+      return v;
+    }
+  }
+  return v;
+};
+
+/**
  * Tool schemas. NO `execute` function — handled CLIENT-SIDE via `useChat`'s
  * `onToolCall` callback. This lets us call Bluefin7K from the user's browser
  * (spreading rate-limit load) and keep the heavy QuoteResponse payload off
@@ -183,7 +203,9 @@ export const swapTools = {
     description:
       "Assemble an atomic Sui transaction (PTB) from a sequence of low-level steps. The whole plan executes or none of it does, with ONE wallet signature. Steps reference each other through string `id`s — every step's output coin handle becomes available to later steps.\n\nStep kinds:\n- 'swap' — runs a Bluefin7K swap. Produces a coin of toSymbol under this step's id.\n- 'split' — splits one coin handle into N portions by bps (sum 10000). Produces handles `<id>.0`, `<id>.1`, …\n- 'merge' — merges multiple coin handles of the SAME token (and/or pulls from balance) into ONE coin. Produces a single handle under this step's id. Use when combining a swap output with an existing wallet balance, or two swap outputs, before splitting/depositing.\n- 'deposit' — deposits a coin handle into an Ember vault. Vault must accept the coin's token type; no auto-conversion (insert a swap step first).\n- 'redeemFromVault' — requests a withdrawal from an Ember vault by burning receipt shares. Funds arrive AFTER the vault's withdrawal lockup (NOT in this transaction); produces NO output coin handle. Use the receipt token symbol (e.g. ercUSD, eACRED) as the source. Optional 'sharesAmount' picks a partial redemption; omit to redeem all available shares (use 'fromAmount' if you want a specific amount via fromSymbol).\n- 'cancelRedeemFromVault' — cancels a previously-submitted pending withdrawal request, returning the shares to the user. Requires the request's 'sequenceNumber' (from getVaultBalance.withdrawals) and the matching vaultId. Has no coin handle input/output.\n- 'send' — transfers a coin to someone else. Sources its coin like a deposit (an upstream fromHandle, or fromSymbol+fromAmount / fromSymbol+fromPercent from balance) and sends it to 'recipient' (a 0x address or SuiNS name like yoisha.sui). Produces NO handle — the coin leaves the wallet. This is IRREVERSIBLE; pass the recipient exactly as the user gave it, never guess. DO NOT use this step for a single transfer of an allowlisted stablecoin (USDC, USDSUI, suiUSDe, USDY, FDUSD, AUSD, USDB) drawn straight from the wallet — that MUST use the `sendStablecoin` tool instead (gasless, $0, no SUI). Use 'send' only for chained sends (swap→send), splitting one amount across recipients, or non-allowlisted tokens.\n\nOrigin (how a step gets its input coin) — exactly ONE of:\n- `fromHandle` to consume an upstream output (e.g. `swap1`, `split1.0`).\n- `fromSymbol` + `fromAmount` to draw a SPECIFIC amount from sender's balance.\n- `fromSymbol` + `fromPercent` to draw a percentage of the balance (100 = everything). Prefer this over fromAmount for 'swap all'/'sell half' — it's resolved to the exact raw balance at build time, so there's no rounding dust or 'insufficient balance' overshoot.\n- `fromHandles` (merge only) — array of upstream handle ids to combine. Optionally combined with `fromSymbol`+`fromAmount` to also include balance.\n- For cancelRedeemFromVault, origin fields are ignored — it only needs vaultId + sequenceNumber.",
     inputSchema: z.object({
-      steps: z
+      steps: z.preprocess(
+        coerceJsonArray,
+        z
         .array(
           z.object({
             kind: z
@@ -280,8 +302,11 @@ export const swapTools = {
         .max(20)
         .describe(
           "Ordered list of plan steps. Topo-sorted by handle dependencies before execution.",
-        ),
-      risks: z
+        )
+      ),
+      risks: z.preprocess(
+        coerceJsonArray,
+        z
         .array(
           z.object({
             title: z
@@ -305,7 +330,8 @@ export const swapTools = {
         .optional()
         .describe(
           "Key risks of THIS plan, each rendered as its own Guardian row for the user. REQUIRED when the plan has a deposit. Ground each risk in the target vault's riskProfile / flags / fees / capacityPct / rewardApyPct / strategy / description from listVaults — be specific to the vault, not generic. Do not restate these in your chat reply.",
-        ),
+        )
+      ),
     }),
   }),
   sendStablecoin: tool({
