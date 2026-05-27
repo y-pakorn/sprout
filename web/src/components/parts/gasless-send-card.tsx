@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import {
   ArrowRight,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import { PillButton } from "@/components/ui/pill-button";
+import { PtbSummaryStrip } from "@/components/parts/ptb-summary-strip";
+import { PtbDialog } from "@/components/parts/ptb-dialog";
 import { scaleIn } from "@/lib/motion";
 import { fmtAmount, fmtAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -71,6 +74,7 @@ export function GaslessSendCard({
   const success = txStatus === "success";
   const failure = txStatus === "failure";
   const recipientLabel = cached.recipientName ?? fmtAddress(cached.recipient);
+  const [ptbOpen, setPtbOpen] = useState(false);
 
   return (
     <motion.div
@@ -121,6 +125,9 @@ export function GaslessSendCard({
         <Stat label="Recipient" value={recipientLabel} />
         <Stat label="Network fee" value="Free" tone="lime" />
       </div>
+
+      {/* Real PTB — compact teaser; opens the full interactive viewer. */}
+      <PtbSummaryStrip tx={cached.tx} onOpen={() => setPtbOpen(true)} />
 
       {/* Guardian */}
       <div className="space-y-1">
@@ -214,6 +221,8 @@ export function GaslessSendCard({
           )}
         </motion.div>
       )}
+
+      <PtbDialog open={ptbOpen} onOpenChange={setPtbOpen} tx={cached.tx} />
     </motion.div>
   );
 }

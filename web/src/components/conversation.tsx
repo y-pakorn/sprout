@@ -1815,7 +1815,7 @@ export function Conversation({
         >
           <div
             ref={stick.contentRef}
-            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 pb-3 sm:px-6"
           >
             {messages.map((m, i) => {
               const isLastAssistant = i === lastAssistantIdx;
@@ -1902,7 +1902,7 @@ export function Conversation({
       </div>
 
       <div className="shrink-0">
-        <div className="mx-auto w-full max-w-3xl px-6 py-4">
+        <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6">
           <ChatInput
             value={draft}
             onChange={setDraft}
@@ -1970,7 +1970,7 @@ function IdleHero({
     <CinematicShell mode="bright">
       {/* Foreground content. Vertically centered stack: headline + input
        *  + example chips, all in one column. */}
-      <div className="relative z-20 mx-auto flex w-full max-w-3xl flex-col items-center justify-center px-6 min-h-screen">
+      <div className="relative z-20 mx-auto flex w-full max-w-3xl flex-col items-center justify-center px-4 min-h-screen sm:px-6">
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}

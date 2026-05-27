@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { RotateCcw } from "lucide-react";
-import { computeMessageCost } from "@/lib/ai/pricing";
+import { computeMessageCostAndModelName } from "@/lib/ai/pricing";
 
 export type MessageUsage = {
   inputTokens?: number;
@@ -49,7 +49,11 @@ function fmtCost(usd: number): string {
  */
 export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
   const duration = fmtDuration(meta?.durationMs);
-  const cost = meta?.usage ? fmtCost(computeMessageCost(meta.usage)) : null;
+  const costAndModelName = meta?.usage
+    ? computeMessageCostAndModelName(meta.usage)
+    : null;
+  const cost = costAndModelName ? fmtCost(costAndModelName.cost) : null;
+  const modelName = costAndModelName ? costAndModelName.name : null;
   const tokens = meta?.usage?.totalTokens;
 
   const hasStats = duration || cost;
@@ -76,6 +80,8 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
       {duration && <span>{duration}</span>}
       {duration && cost && <span aria-hidden>·</span>}
       {cost && <span title={costLabel || undefined}>{cost}</span>}
+      {modelName && <span aria-hidden>·</span>}
+      {modelName && <span>{modelName}</span>}
       {canRegenerate && (
         <>
           {hasStats && <span aria-hidden>·</span>}

@@ -42,7 +42,10 @@ const FRAG = `
     uniform vec3 u_col3;
 
     float rand(vec2 co){
-      return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) / u_dpr;
+      // Divide by sqrt(dpr), not dpr: full /dpr makes the film grain nearly
+      // vanish on 2–3× phones (the wash reads flat); sqrt keeps texture on
+      // hi-DPI while still tempering shimmer.
+      return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) / sqrt(u_dpr);
     }
 
     vec4 circle(vec2 st, vec2 center, float radius, float blur, vec3 col){
@@ -129,9 +132,15 @@ const FRAG = `
       // Confine the wash to a contained glow in the bottom-right corner so
       // most of the page reads as clean base. (Their site clips the canvas to
       // a shaped path; we fade alpha by distance from a corner anchor.)
-      vec2 mc = vec2(0.85, 0.15);
+      // Aspect-aware: on a tall portrait phone (aspect<1) the fixed bottom
+      // anchor + small radius leave the glow hugging the bottom edge and
+      // looking washed out. Raise the anchor and extend the falloff as the
+      // canvas narrows so it fills a comparable fraction. Landscape (aspect>=1)
+      // is unchanged: portrait=0 collapses every mix() back to the originals.
+      float portrait = clamp(1.0 - aspect, 0.0, 1.0);
+      vec2 mc = vec2(0.85, mix(0.15, 0.42, portrait));
       float md = distance(vec2(fst.x*aspect, fst.y), vec2(mc.x*aspect, mc.y));
-      color *= 1.0 - smoothstep(0.24, 0.64, md);
+      color *= 1.0 - smoothstep(mix(0.24, 0.34, portrait), mix(0.64, 1.0, portrait), md);
 
       gl_FragColor = color;
     }

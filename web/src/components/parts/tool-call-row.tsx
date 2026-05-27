@@ -23,7 +23,7 @@ export function ToolCallRow({ label, status }: Props) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
-      className="flex w-fit items-center gap-2.5 surface-card px-3.5 py-2 text-body-sm font-medium rounded-card"
+      className="flex w-fit max-w-full min-w-0 items-center gap-2.5 surface-card px-3.5 py-2 text-body-sm font-medium rounded-card"
     >
       {isWorking ? (
         <LiquidBlob size={20} />
@@ -45,7 +45,12 @@ export function ToolCallRow({ label, status }: Props) {
           )}
         </motion.span>
       )}
-      <span className={isWorking ? "shimmer-text" : "text-midnight-ink"}>
+      <span
+        className={cn(
+          "min-w-0 break-words [overflow-wrap:anywhere]",
+          isWorking ? "shimmer-text" : "text-midnight-ink",
+        )}
+      >
         {label}
       </span>
     </motion.div>

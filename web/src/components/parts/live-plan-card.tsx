@@ -24,6 +24,8 @@ import {
   type RiskVerdict,
 } from "@/components/parts/vault-risk-detail";
 import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
+import { PtbSummaryStrip } from "@/components/parts/ptb-summary-strip";
+import { PtbDialog } from "@/components/parts/ptb-dialog";
 import { getGlossary } from "@/lib/ai/vault-glossary";
 import type {
   CachedActionPlan,
@@ -106,6 +108,7 @@ export function LivePlanCard({
   onRefresh,
 }: Props) {
   const [openVaultId, setOpenVaultId] = useState<string | null>(null);
+  const [ptbOpen, setPtbOpen] = useState(false);
   const depositSteps = cached.steps.filter(
     (s): s is ResolvedDepositStep => s.kind === "deposit",
   );
@@ -121,7 +124,7 @@ export function LivePlanCard({
   const inFlight = useRef(false);
   const refresh = async () => {
     if (!onRefresh) return;
-    if (signing || confirming || executed || inFlight.current) return;
+    if (signing || confirming || executed || inFlight.current || ptbOpen) return;
     inFlight.current = true;
     setRefreshing(true);
     try {
@@ -133,19 +136,20 @@ export function LivePlanCard({
   };
   useEffect(() => {
     if (!hasSwapSteps || !onRefresh) return;
-    if (signing || confirming || executed) return;
+    if (signing || confirming || executed || ptbOpen) return;
     const id = setInterval(() => void refresh(), REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSwapSteps, signing, confirming, executed]);
+  }, [hasSwapSteps, signing, confirming, executed, ptbOpen]);
 
-  // 1-second tick for the "Updated Xs ago" label.
+  // 1-second tick for the "Updated Xs ago" label. Paused while the PTB dialog
+  // is open so the card doesn't re-render (and reflow the viewer) every second.
   const [, tickAge] = useState(0);
   useEffect(() => {
-    if (!hasSwapSteps) return;
+    if (!hasSwapSteps || ptbOpen) return;
     const id = setInterval(() => tickAge((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [hasSwapSteps]);
+  }, [hasSwapSteps, ptbOpen]);
   const ageSec = Math.max(
     0,
     Math.floor((Date.now() - cached.fetchedAt) / 1000),
@@ -300,6 +304,9 @@ export function LivePlanCard({
       {/* Kind-dispatched aggregate stats */}
       <PlanStats cached={cached} />
 
+      {/* Real PTB — compact teaser; opens the full interactive viewer. */}
+      <PtbSummaryStrip tx={cached.tx} onOpen={() => setPtbOpen(true)} />
+
       {/* Guardian */}
       <div className="space-y-2">
         <div className="space-y-1">
@@ -442,6 +449,13 @@ export function LivePlanCard({
         onOpenChange={(o) => !o && setOpenVaultId(null)}
         iconLookup={iconLookup}
         onContinue={undefined}
+      />
+
+      <PtbDialog
+        open={ptbOpen}
+        onOpenChange={setPtbOpen}
+        tx={cached.tx}
+        steps={cached.steps}
       />
     </motion.div>
   );
@@ -2233,16 +2247,36 @@ function PlanStats({ cached }: { cached: CachedActionPlan }) {
     : tiles.length === 3 ? "sm:grid-cols-3"
     : "sm:grid-cols-2";
   return (
-    <div className={cn("grid gap-2", cols)}>
-      {tiles.map((tile) => (
-        <Stat
-          key={tile.id}
-          label={tile.label}
-          value={tile.value}
-          tone={tile.tone}
-        />
-      ))}
-    </div>
+    <>
+      {/* Mobile: compact label→value rows in one recessed panel — tighter and
+       *  easier to scan than full-width stacked tiles on a narrow screen. */}
+      <div className="surface-panel divide-y divide-hairline rounded-card sm:hidden">
+        {tiles.map((tile) => (
+          <div
+            key={tile.id}
+            className="flex items-center justify-between gap-3 px-3 py-2"
+          >
+            <span className="shrink-0 text-caption font-medium uppercase tracking-wider text-muted-ash">
+              {tile.label}
+            </span>
+            <span className="min-w-0 text-right text-body-sm font-medium tabular-nums text-midnight-ink">
+              {tile.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* Desktop: tile grid */}
+      <div className={cn("hidden gap-2 sm:grid", cols)}>
+        {tiles.map((tile) => (
+          <Stat
+            key={tile.id}
+            label={tile.label}
+            value={tile.value}
+            tone={tile.tone}
+          />
+        ))}
+      </div>
+    </>
   );
 }
 

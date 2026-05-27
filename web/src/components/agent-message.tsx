@@ -125,7 +125,7 @@ export function AgentMessage({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="prose-sprout surface-card max-w-[640px] px-3.5 py-2.5 text-body text-midnight-ink rounded-card"
+              className="prose-sprout surface-card min-w-0 max-w-[640px] break-words [overflow-wrap:anywhere] px-3.5 py-2.5 text-body-sm text-midnight-ink rounded-card"
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}

@@ -9,7 +9,7 @@ export default function FeedPage() {
   // bottom sheet on mobile).
   return (
     <CinematicShell mode="dim">
-      <div className="flex h-dvh flex-col px-6 pb-6 pt-20">
+      <div className="flex h-dvh flex-col px-4 pb-6 pt-20 sm:px-6">
         <div className="flex min-h-0 w-full flex-1 gap-6">
           {/* Timeline — contained white panel with divided rows */}
           <div className="min-h-0 flex-1 overflow-hidden surface-card rounded-card">

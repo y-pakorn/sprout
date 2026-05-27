@@ -16,12 +16,13 @@ const openrouter = createOpenRouter({
 /** DeepSeek v4 Flash (free tier) via OpenRouter. */
 // export const aiModel = openrouter("deepseek/deepseek-v4-flash");
 // export const aiModel = openrouter("tencent/hy3-preview");
-export const aiModel = openrouter("arcee-ai/trinity-large-thinking:free");
+export const aiModel = openrouter(
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+);
 // export const aiModels = ["tencent/hy3-preview"];
 // export const aiModels = ["deepseek/deepseek-v4-flash"];
 export const aiModels = [
-  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-  // "nvidia/nemotron-3-nano-30b-a3b:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free",
   "tencent/hy3-preview",
   "deepseek/deepseek-v4-flash",
 ];
