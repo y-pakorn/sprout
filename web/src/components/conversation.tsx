@@ -2208,6 +2208,38 @@ function IdleHero({
       {/* Foreground content. Vertically centered stack: headline + input
        *  + example chips, all in one column. */}
       <div className="relative z-20 mx-auto flex w-full max-w-3xl flex-col items-center justify-center px-4 min-h-screen sm:px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileHover={{ scale: 1.03 }}
+          transition={{
+            type: "spring",
+            visualDuration: 0.6,
+            bounce: 0.1,
+            delay: 0.08,
+          }}
+          className="mb-5 inline-flex cursor-default items-center gap-2 rounded-card border border-hairline bg-canvas-white/80 py-1 pl-1 pr-2.5 shadow-button backdrop-blur-sm"
+        >
+          <span className="inline-flex items-center gap-1.5 rounded-button bg-deliver-green/25 px-2 py-1">
+            <span className="relative flex size-1.5 shrink-0" aria-hidden>
+              <span className="absolute inline-flex size-full rounded-full bg-deliver-green opacity-75 motion-safe:animate-ping" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-deliver-green" />
+            </span>
+            <span className="text-[11px] font-medium uppercase tracking-wide text-midnight-ink">
+              Live
+            </span>
+          </span>
+          <span className="text-[13px] font-medium text-midnight-ink">
+            Sui Mainnet
+          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/sui-logo.png"
+            alt="Sui"
+            className="size-3.5 shrink-0 object-contain"
+          />
+        </motion.div>
+
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
