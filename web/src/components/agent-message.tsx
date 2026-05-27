@@ -78,6 +78,17 @@ type Props = {
   onRegenerate?: () => void;
 };
 
+/**
+ * Some models (e.g. poolside/laguna) leak their chat-template role/stop
+ * delimiters into the visible text — a stray `</assistant>`, `<|im_end|>`,
+ * `</s>`, etc. Strip those template tokens so they never render as content.
+ */
+const MODEL_TOKEN_RE =
+  /<\/?\s*(?:assistant|user|system|tool)\s*>|<\|[^|>]*\|>|<\/?s>/gi;
+function stripModelTokens(text: string): string {
+  return text.replace(MODEL_TOKEN_RE, "").trim();
+}
+
 export function AgentMessage({
   message,
   isStreaming,
@@ -113,7 +124,7 @@ export function AgentMessage({
 
         if (part.type === "reasoning") {
           // AI SDK reasoning part shape: { type: 'reasoning', text: string, state? }
-          const text = (part as { text?: string }).text ?? "";
+          const text = stripModelTokens((part as { text?: string }).text ?? "");
           // Streaming heuristic: the message is the last one and overall stream is active
           return (
             <ThinkingTrail key={key} text={text} streaming={isStreaming} />
@@ -121,8 +132,8 @@ export function AgentMessage({
         }
 
         if (part.type === "text") {
-          const text = (part as { text: string }).text;
-          if (!text.trim()) return null;
+          const text = stripModelTokens((part as { text: string }).text);
+          if (!text) return null;
           return (
             <motion.div
               key={key}
