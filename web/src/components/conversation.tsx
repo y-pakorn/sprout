@@ -168,13 +168,24 @@ export function Conversation({
   const modelRef = useRef(selectedModel);
   modelRef.current = selectedModel;
 
+  // The connected wallet address travels in the request body (not the system
+  // prompt) so the server can inject it per-turn without breaking prompt
+  // caching. Kept in a ref because the transport is memoized once.
+  const walletRef = useRef(account?.address);
+  walletRef.current = account?.address;
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
         fetch: signedFetch,
         prepareSendMessagesRequest: ({ messages, body }) => ({
-          body: { ...body, messages, model: modelRef.current },
+          body: {
+            ...body,
+            messages,
+            model: modelRef.current,
+            walletAddress: walletRef.current ?? null,
+          },
         }),
       }),
     []

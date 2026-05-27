@@ -25,7 +25,12 @@ export async function POST(req: Request) {
   const {
     messages: incoming = [],
     model: requestedModel,
-  }: { messages?: UIMessage[]; model?: string } = await req.json();
+    walletAddress = null,
+  }: {
+    messages?: UIMessage[];
+    model?: string;
+    walletAddress?: string | null;
+  } = await req.json();
 
   // The client picks a model in the input; validate it against the pricing
   // table (never trust an arbitrary id) and fall back to the default.
@@ -56,10 +61,32 @@ export async function POST(req: Request) {
 
   const startedAt = Date.now();
 
+  // Inject per-request context (connected wallet + current time) onto the
+  // LATEST user message instead of the system prompt. The system prompt is a
+  // stable cached prefix; appending dynamic data there would bust the cache on
+  // every turn. The newest user message is never cached, so this is free.
+  const modelMessages = await convertToModelMessages(messages);
+  const context =
+    `<context>\n` +
+    (walletAddress
+      ? `Connected wallet: ${walletAddress}`
+      : `No wallet connected.`) +
+    `\nCurrent time: ${new Date().toISOString()}\n</context>`;
+  for (let i = modelMessages.length - 1; i >= 0; i--) {
+    const m = modelMessages[i];
+    if (m.role !== "user") continue;
+    if (typeof m.content === "string") {
+      m.content = `${m.content}\n\n${context}`;
+    } else {
+      m.content = [...m.content, { type: "text", text: `\n\n${context}` }];
+    }
+    break;
+  }
+
   const result = streamText({
     model: chatModel(modelId),
     system: systemPrompt,
-    messages: await convertToModelMessages(messages),
+    messages: modelMessages,
     tools: swapTools,
     stopWhen: ({ steps }) => steps.length >= 10,
     // Plenty of output budget so tool-call args don't get truncated.
