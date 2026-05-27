@@ -188,19 +188,25 @@ export function Conversation({
       // signal.
       const last = msgs[msgs.length - 1];
       if (!last || last.role !== "assistant") return false;
+      // Find every tool part and the index of the last one. When the model
+      // emits PARALLEL tool calls in a single step, we must wait for ALL of
+      // them to resolve before re-submitting — otherwise we'd send the model
+      // an incomplete tool-result set (an orphaned tool_use) and the request
+      // errors. Only checking the positionally-last part would re-fire as
+      // soon as the last one resolves, even if an earlier call is still
+      // pending (parallel handlers finish out of order).
       let lastToolIdx = -1;
-      for (let i = last.parts.length - 1; i >= 0; i--) {
-        if (last.parts[i].type.startsWith("tool-")) {
-          lastToolIdx = i;
-          break;
+      let hasUnresolvedTool = false;
+      for (let i = 0; i < last.parts.length; i++) {
+        if (!last.parts[i].type.startsWith("tool-")) continue;
+        lastToolIdx = i;
+        const state = (last.parts[i] as { state?: string }).state;
+        if (state !== "output-available" && state !== "output-error") {
+          hasUnresolvedTool = true;
         }
       }
       if (lastToolIdx === -1) return false;
-      const lastTool = last.parts[lastToolIdx] as { state?: string };
-      const resolved =
-        lastTool.state === "output-available" ||
-        lastTool.state === "output-error";
-      if (!resolved) return false;
+      if (hasUnresolvedTool) return false;
       // If text was emitted AFTER the last tool, the agent is signaling
       // it's done — don't re-fire.
       for (let i = lastToolIdx + 1; i < last.parts.length; i++) {
