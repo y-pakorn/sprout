@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
-import { Sometype_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { CinematicChrome } from "@/components/cinematic-chrome";
 import "./globals.css";
+import { cn } from "@/lib/utils";
 
 const labilGrotesk = localFont({
   src: [{ path: "./Variable.woff2", weight: "100 800", style: "normal" }],
@@ -11,12 +11,12 @@ const labilGrotesk = localFont({
   display: "swap",
 });
 
-const sometypeMono = Sometype_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-mono-brand",
-  display: "swap",
-});
+// const geistMono = Geist_Mono({
+//   subsets: ["latin"],
+//   weight: ["400", "500", "600", "700"],
+//   variable: "--font-mono-brand",
+//   display: "swap",
+// });
 
 export const metadata: Metadata = {
   title: "Sprout — your money's agent on Sui",
@@ -30,10 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${labilGrotesk.variable} ${sometypeMono.variable} h-full`}
-    >
+    <html lang="en" className={cn(labilGrotesk.variable, "h-full")}>
       <body className="min-h-full flex flex-col">
         <Providers>
           <CinematicChrome>{children}</CinematicChrome>
