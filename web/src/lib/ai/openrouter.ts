@@ -16,7 +16,8 @@ const openrouter = createOpenRouter({
 /** DeepSeek v4 Flash (free tier) via OpenRouter. */
 // export const aiModel = openrouter("deepseek/deepseek-v4-flash");
 // export const aiModel = openrouter("tencent/hy3-preview");
-export const aiModel = openrouter("poolside/laguna-xs.2:free");
+// export const aiModel = openrouter("poolside/laguna-xs.2:free");
+export const aiModel = openrouter("inclusionai/ling-2.6-flash");
 // export const aiModels = ["tencent/hy3-preview"];
 // export const aiModels = ["deepseek/deepseek-v4-flash"];
 export const aiModels = [

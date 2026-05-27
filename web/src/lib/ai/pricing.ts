@@ -34,6 +34,18 @@ export const MODEL_PRICING = {
     outputPer1M: 0.06,
     name: "Trinity Large",
   },
+  "poolside/laguna-xs.2": {
+    inputPer1M: 0.05,
+    cachedInputPer1M: 0.05,
+    outputPer1M: 0.2,
+    name: "Sprout XS",
+  },
+  "inclusionai/ling-2.6-flash": {
+    inputPer1M: 0.1,
+    cachedInputPer1M: 0.02,
+    outputPer1M: 0.3,
+    name: "Sprout Flash",
+  },
 } as Record<
   string,
   {
