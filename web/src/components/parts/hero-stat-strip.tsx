@@ -12,16 +12,16 @@ type Stat = {
 };
 
 /**
- * A thin proof bar under the hero input: live Sui-native numbers we already
- * fetch (top vault APY, vault count) plus two capability stats (gasless, the
- * atomic swap+deposit PTB). Every item reads as value + label for a
- * consistent, restrained row. Numbers shimmer until the vault list loads.
+ * A thin proof bar under the hero input: one live Sui-native number we already
+ * fetch (top vault APY) plus three capability stats — the gasless stablecoin
+ * transfer, Enoki-sponsored gas (Sprout pays the gas), and the atomic
+ * swap+deposit PTB. Every item reads as value + label for a consistent,
+ * restrained row. The APY shimmers until the vault list loads.
  */
 export function HeroStatStrip() {
   const vaults = useVaults();
   const apys = vaults?.map((v) => v.apyPct).filter((n) => Number.isFinite(n)) ?? [];
   const topApy = apys.length ? Math.max(...apys) : null;
-  const count = vaults?.length ?? null;
 
   const stats: Stat[] = [
     {
@@ -29,8 +29,8 @@ export function HeroStatStrip() {
       label: "top vault APY",
       live: true,
     },
-    { value: count != null ? String(count) : null, label: "Sui vaults" },
     { value: "$0", label: "gasless sends" },
+    { value: "$0", label: "gas, sponsored by Sprout" },
     { value: "1-tx", label: "swap + deposit" },
   ];
 
