@@ -23,6 +23,7 @@ import { AgentMessage } from "@/components/agent-message";
 import { ErrorBanner } from "@/components/parts/error-banner";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { LiquidBlob } from "@/components/parts/liquid-blob";
+import { HeroStatStrip } from "@/components/parts/hero-stat-strip";
 import { SPRING_BOUNCY } from "@/lib/motion";
 import { subscribeAskSprout, takePendingAsk } from "@/lib/ask-sprout";
 import {
@@ -1974,12 +1975,34 @@ function IdleHero({
         <motion.h1
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.15 }}
+          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.15, delay: 0.15 }}
           className="font-alt display-tight max-w-[1100px] text-center font-medium leading-[1.05] tracking-tight text-midnight-ink text-[clamp(40px,5.4vw,72px)]"
         >
-          <span className="block">Yield without friction.</span>
-          <span className="block">Grow on your terms.</span>
+          <span className="block">Plant a goal.</span>
+          <span className="block">
+            <span className="text-gradient-sprout font-semibold">Sprout</span>{" "}
+            grows it on{" "}
+            <span className="text-gradient-sui font-semibold">Sui</span>.
+          </span>
         </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", visualDuration: 0.7, bounce: 0.1, delay: 0.3 }}
+          className="mt-5 max-w-3xl text-center text-body text-pretty text-muted-ash"
+        >
+          Describe a goal in plain English — Sprout routes the swaps, pools, and
+          deposits across Sui. Its{" "}
+          <span className="font-alt font-medium text-midnight-ink">
+            Adaptive Risk Guardian
+          </span>{" "}
+          flags every risk and lays each transaction out in plain terms, so you{" "}
+          <span className="font-alt font-medium text-midnight-ink">
+            understand before you sign
+          </span>{" "}
+          — never a blind confirm, never beyond your permission.
+        </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -1988,9 +2011,9 @@ function IdleHero({
             type: "spring",
             visualDuration: 0.7,
             bounce: 0.15,
-            delay: 0.3,
+            delay: 0.4,
           }}
-          className="mt-10 w-full max-w-2xl space-y-4"
+          className="mt-8 w-full max-w-2xl space-y-4"
         >
           <ChatInput
             value={draft}
@@ -2002,6 +2025,10 @@ function IdleHero({
           />
           <ExamplePrompts onPick={onSubmit} />
         </motion.div>
+
+        <div className="mt-7">
+          <HeroStatStrip />
+        </div>
       </div>
     </CinematicShell>
   );

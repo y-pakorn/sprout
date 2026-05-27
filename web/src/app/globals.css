@@ -188,6 +188,68 @@ html {
   }
 }
 
+/* Animated brand gradient text — hero keywords. "Sprout" sweeps through its
+ * accent trio (green → gold → blue); "Sui" through Sui's blues. Repeating
+ * gradients (first color == last) loop seamlessly. */
+/* Ping-pong sweep: background-position stays within 0–100% over an
+ * oversized (240%) gradient, so the image always covers the text and the
+ * sweep reverses instead of wrapping — no tiling seam at any gradient
+ * angle. ease-in-out makes it breathe rather than scroll. */
+@keyframes text-gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.text-gradient-sprout,
+.text-gradient-sui {
+  background-size: 240% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-gradient-pan 6s ease-in-out infinite;
+}
+/* Sprout — many shades of green, warmed by a single gold note (no blue). */
+.text-gradient-sprout {
+  background-image: linear-gradient(
+    110deg,
+    #047857,
+    #059669,
+    #10b981,
+    #34d399,
+    var(--color-deliver-green),
+    #6ee7b7,
+    #a7f3d0,
+    var(--color-engagement-gold),
+    #34d399,
+    #047857
+  );
+}
+/* Sui — its own family of blues. */
+.text-gradient-sui {
+  background-image: linear-gradient(
+    110deg,
+    #0a4a9e,
+    #1565c0,
+    #2f8fff,
+    #4da2ff,
+    #79c0ff,
+    #a5d8ff,
+    #4da2ff,
+    #1565c0,
+    #0a4a9e
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-gradient-sprout,
+  .text-gradient-sui {
+    animation: none;
+  }
+}
+
 /* "Thinking" blob — morphs its organic shape, rotates, and breathes. CSS
  * keyframes interpolate the 8-value border-radius smoothly (motion/JS does
  * not). The gradient itself is set inline on the element. */
