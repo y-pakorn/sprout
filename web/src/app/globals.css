@@ -212,35 +212,33 @@ html {
   color: transparent;
   animation: text-gradient-pan 6s ease-in-out infinite;
 }
-/* Sprout — many shades of green, warmed by a single gold note (no blue). */
+/* Sprout — deep, legible greens (no pale mints / gold) so the word stays
+ * readable on the off-white page; still sweeps for life. */
 .text-gradient-sprout {
   background-image: linear-gradient(
     110deg,
+    #065f46,
     #047857,
     #059669,
+    #0d9488,
     #10b981,
-    #34d399,
-    var(--color-deliver-green),
-    #6ee7b7,
-    #a7f3d0,
-    var(--color-engagement-gold),
-    #34d399,
-    #047857
+    #059669,
+    #047857,
+    #065f46
   );
 }
-/* Sui — its own family of blues. */
+/* Sui — deep blues only (the light Sui-sea tints washed out on white). */
 .text-gradient-sui {
   background-image: linear-gradient(
     110deg,
+    #0a3d7a,
     #0a4a9e,
     #1565c0,
+    #1e88e5,
     #2f8fff,
-    #4da2ff,
-    #79c0ff,
-    #a5d8ff,
-    #4da2ff,
     #1565c0,
-    #0a4a9e
+    #0a4a9e,
+    #0a3d7a
   );
 }
 @media (prefers-reduced-motion: reduce) {
