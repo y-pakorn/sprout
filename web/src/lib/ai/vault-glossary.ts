@@ -96,6 +96,36 @@ For Ember vaults specifically: assets are held in MPC wallets, strategies are ex
 };
 
 /**
+ * Human-readable display titles for each glossary key — used wherever a
+ * concept is named in the UI (e.g. the explainer trail), so we never show
+ * raw kebab-case keys like "impermanent-loss" or "bluefin7k-aggregator".
+ * Acronyms (APY/TVL/MPC) and the Bluefin7K wordmark stay correctly cased.
+ */
+export const GLOSSARY_LABELS: Record<GlossaryKey, string> = {
+  "impermanent-loss": "Impermanent loss",
+  "concentrated-liquidity": "Concentrated liquidity",
+  "apy-composition": "APY composition",
+  "reward-emissions": "Reward emissions",
+  "performance-fee": "Performance fee",
+  "management-fee": "Management fee",
+  "withdrawal-lockup": "Withdrawal lockup",
+  "mpc-custody": "MPC custody",
+  "variable-apy": "Variable APY",
+  "tvl-capacity": "TVL capacity",
+  "bluefin7k-aggregator": "Bluefin7K aggregator",
+  "price-impact": "Price impact",
+  slippage: "Slippage",
+  "protocol-risk": "Protocol risk",
+  "rate-slippage": "Rate slippage",
+  "vault-token-swap": "Vault token swap",
+};
+
+/** Display title for a glossary key; falls back to the raw key if unknown. */
+export function glossaryLabel(key: string): string {
+  return GLOSSARY_LABELS[key as GlossaryKey] ?? key;
+}
+
+/**
  * Helper to look up a glossary entry by key. Returns undefined for
  * unknown keys (so callers can decide whether to fall back).
  */

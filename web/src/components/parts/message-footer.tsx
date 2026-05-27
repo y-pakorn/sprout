@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "motion/react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Info } from "lucide-react";
 import { computeMessageCostAndModelName } from "@/lib/ai/pricing";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export type MessageUsage = {
   inputTokens?: number;
@@ -59,17 +60,6 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
   const hasStats = duration || cost;
   if (!hasStats && !canRegenerate) return null;
 
-  const tokenLabel = tokens ? `${tokens.toLocaleString()} tokens total` : "";
-  const costLabel =
-    meta?.usage && cost
-      ? `Input ${meta.usage.inputTokens ?? 0}` +
-        (meta.usage.cachedInputTokens
-          ? ` (cached ${meta.usage.cachedInputTokens})`
-          : "") +
-        ` · Output ${meta.usage.outputTokens ?? 0}` +
-        (tokenLabel ? ` · ${tokenLabel}` : "")
-      : "";
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -79,21 +69,87 @@ export function MessageFooter({ meta, canRegenerate, onRegenerate }: Props) {
     >
       {duration && <span>{duration}</span>}
       {duration && cost && <span aria-hidden>·</span>}
-      {cost && <span title={costLabel || undefined}>{cost}</span>}
+      {cost && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label="About this cost"
+                className="cursor-default tabular-nums text-muted-ash transition-colors hover:text-midnight-ink"
+              />
+            }
+          >
+            {cost}
+          </TooltipTrigger>
+          <TooltipContent className="max-w-56">
+            <span className="font-medium">Estimated AI Cost</span>
+            <span className="block text-canvas-white/60">
+              {modelName
+                ? `Token usage priced at ${modelName}'s published rate.`
+                : "Token usage priced at the model's published rate."}
+            </span>
+          </TooltipContent>
+        </Tooltip>
+      )}
       {modelName && <span aria-hidden>·</span>}
       {modelName && <span>{modelName}</span>}
+      {modelName && meta?.usage && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label="Token usage breakdown"
+                className="inline-flex size-4 items-center justify-center text-muted-ash transition-colors hover:text-midnight-ink rounded-full"
+              />
+            }
+          >
+            <Info className="size-3.5" strokeWidth={2.2} />
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="flex flex-col gap-0.5 tabular-nums">
+              <span>
+                Input {(meta.usage.inputTokens ?? 0).toLocaleString()}
+                {meta.usage.cachedInputTokens
+                  ? ` (cached ${meta.usage.cachedInputTokens.toLocaleString()})`
+                  : ""}
+              </span>
+              <span>
+                Output {(meta.usage.outputTokens ?? 0).toLocaleString()}
+              </span>
+              {tokens ? (
+                <span className="text-canvas-white/60">
+                  {tokens.toLocaleString()} total
+                </span>
+              ) : null}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      )}
       {canRegenerate && (
         <>
           {hasStats && <span aria-hidden>·</span>}
-          <button
-            type="button"
-            onClick={onRegenerate}
-            title="Regenerate response"
-            aria-label="Regenerate response"
-            className="inline-flex size-5 items-center justify-center text-muted-ash transition-colors hover:text-midnight-ink rounded-full"
-          >
-            <RotateCcw className="size-3.5" strokeWidth={2.2} />
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  onClick={onRegenerate}
+                  aria-label="Regenerate response"
+                  className="inline-flex size-5 items-center justify-center text-muted-ash transition-colors hover:text-midnight-ink rounded-full"
+                />
+              }
+            >
+              <RotateCcw className="size-3.5" strokeWidth={2.2} />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-52">
+              <span className="font-medium">Regenerate</span>
+              <span className="block text-canvas-white/60">
+                Discard this reply and re-run the agent on your last message.
+              </span>
+            </TooltipContent>
+          </Tooltip>
         </>
       )}
     </motion.div>

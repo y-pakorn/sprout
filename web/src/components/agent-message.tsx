@@ -7,6 +7,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ThinkingTrail } from "@/components/parts/thinking-trail";
 import { ToolCallRow } from "@/components/parts/tool-call-row";
+import {
+  ExplainerTrail,
+  type ExplainerItem,
+} from "@/components/parts/explainer-trail";
 import { LivePlanCard } from "@/components/parts/live-plan-card";
 import { BalanceCard } from "@/components/parts/balance-card";
 import { WalletCard, type WalletBalance } from "@/components/parts/wallet-card";
@@ -625,35 +629,33 @@ export function AgentMessage({
         }
 
         if (part.type === "tool-explainConcept") {
-          const p = part as unknown as {
-            toolCallId: string;
-            state:
-              | "input-streaming"
-              | "input-available"
-              | "output-available"
-              | "output-error";
-            input?: { key?: string };
-            output?: { key?: string; text?: string; error?: string };
-          };
-          if (p.state !== "output-available") {
-            return (
-              <ToolCallRow
-                key={key}
-                label={`Looking up ${p.input?.key ?? "concept"}…`}
-                status={p.state}
-              />
-            );
+          // Collapse a consecutive run of explainer lookups into one subtle
+          // reference pill (the agent quotes each explanation inline, so this
+          // is just a "what I referenced" acknowledgement). Only the run
+          // leader renders; later members in the run return null.
+          const prev = message.parts[i - 1];
+          if (prev?.type === "tool-explainConcept") return null;
+
+          const run: ExplainerItem[] = [];
+          for (
+            let j = i;
+            j < message.parts.length &&
+            message.parts[j].type === "tool-explainConcept";
+            j++
+          ) {
+            const ep = message.parts[j] as unknown as {
+              toolCallId: string;
+              state: ExplainerItem["state"];
+              input?: { key?: string };
+              output?: { key?: string };
+            };
+            run.push({
+              id: ep.toolCallId,
+              conceptKey: ep.output?.key ?? ep.input?.key ?? "concept",
+              state: ep.state,
+            });
           }
-          // The agent quotes the glossary text inline in its own message, so
-          // we just render a tiny acknowledgement chip to keep the trail
-          // clean instead of duplicating the explanation.
-          return (
-            <ToolCallRow
-              key={key}
-              label={`Explainer: ${p.output?.key ?? "concept"}`}
-              status="output-available"
-            />
-          );
+          return <ExplainerTrail key={key} items={run} />;
         }
 
         if (part.type === "tool-getAccountActivity") {
