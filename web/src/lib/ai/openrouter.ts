@@ -29,4 +29,3 @@ export const aiModels = [
 
 // Pricing + cost math lives in ./pricing.ts so the client can import it
 // without pulling the server-only provider chain.
-export { MODEL_PRICING, computeMessageCost } from "./pricing";
