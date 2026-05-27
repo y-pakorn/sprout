@@ -1815,7 +1815,7 @@ export function Conversation({
         >
           <div
             ref={stick.contentRef}
-            className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 pb-3"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
           >
             {messages.map((m, i) => {
               const isLastAssistant = i === lastAssistantIdx;
@@ -1902,7 +1902,7 @@ export function Conversation({
       </div>
 
       <div className="shrink-0">
-        <div className="mx-auto w-full max-w-4xl px-6 py-4">
+        <div className="mx-auto w-full max-w-3xl px-6 py-4">
           <ChatInput
             value={draft}
             onChange={setDraft}
@@ -1933,7 +1933,7 @@ function EmbeddedEmpty({
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-5">
-      <div className="w-full max-w-md space-y-4">
+      <div className="w-full max-w-2xl space-y-4">
         <div className="text-center">
           <h2 className="font-alt text-body-lg font-medium tracking-tight text-midnight-ink">
             Ask Sprout
