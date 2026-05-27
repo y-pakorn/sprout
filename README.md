@@ -1,72 +1,66 @@
 # Sprout
 
-**An intent execution engine for Sui. One sentence of plain English becomes one atomic, fully-sponsored on-chain transaction — and you see exactly what it does and what it risks before you sign.**
+An intent execution engine for Sui. Describe an outcome in plain English and Sprout turns it into a single atomic, fully sponsored on-chain transaction that you review in full before signing.
 
-Built for **[Sui Overflow 2026](https://overflow.sui.io)** · Agentic Web track (Intent Engine).
+Built for [Sui Overflow 2026](https://overflow.sui.io), Agentic Web track (Intent Engine).
 
----
+## Overview
 
-## What it is
+Sprout executes DeFi rather than describing it. You state an outcome, for example "swap everything to USDC and spread it across the safest three vaults" or "convert half my SUI and send it to alice.sui", and Sprout works out every action that outcome requires (swaps, splits, merges, vault deposits, withdrawals, transfers) and composes them into one atomic transaction on Sui. Whether the request is complex or trivial, it resolves to a single signature. Every step settles together or none of them do.
 
-Sprout is not a chatbot. It doesn't *talk about* DeFi — it *executes* it.
+Moving funds is the straightforward part. The harder part is doing it in a way the user can trust, so Sprout pairs execution with three guarantees: an Adaptive Risk Guardian that flags every relevant risk, a PTB viewer that presents the exact transaction in plain language, and a strict rule that nothing reaches the chain without the user reading and signing it. Every transaction is also fully sponsored, so no gas, dust, or SUI balance is required to act.
 
-It's an intent engine: you describe an outcome — *"swap everything to USDC and spread it across the safest three vaults"*, *"convert half my SUI and send it to alice.sui"* — and Sprout aggregates every action that outcome requires (swaps, splits, merges, vault deposits, withdrawals, transfers) and composes them, in parallel, into a **single atomic transaction on Sui**. Complex or trivial, it's one signature: every step lands together or nothing does.
+Plain-English intent goes in; a reviewed, atomic, gas-free transaction comes out.
 
-The hard part of an agent that moves money isn't the moving — it's earning the right to. So Sprout pairs that execution with a hard safety contract: an Adaptive Risk Guardian that flags every risk, a PTB viewer that shows you the exact transaction in plain human-readable terms, and a final rule that never bends — **nothing reaches the chain without your eyes on it and your signature on it.** And every transaction is fully sponsored: no gas, no dust, no SUI required to act.
+## Core capabilities
 
-Plain-English intent in. A verified, atomic, gas-free transaction out. That's the product.
+**Any Sui action, composed into one transaction.**
+Sprout supports swaps, splits, merges, multi-vault deposits, withdrawals, and transfers, and composes them in parallel inside a single transaction. A request like "swap everything to USDC and spread it across the top three vaults" becomes one atomic operation. Every step succeeds together or the whole transaction reverts, so there are no partial states and no sequence of wallet prompts to manage.
 
-## The core
+**An Adaptive Risk Guardian.**
+The Guardian reviews each transaction and surfaces every meaningful risk before the user commits. It is adaptive: as a transaction grows more complex, the review expands to cover it point by point. Capacity limits, fees, reward dependence, real-world-asset and lockup caveats, beta status, and irreversible transfers are each stated in plain language the user can read in one pass.
 
-**1. Anything on Sui, in one intent-driven transaction.**
-Sprout aggregates a wide range of Sui actions — swaps, splits, merges, multi-vault deposits, withdrawals, transfers — and composes them *in parallel inside a single transaction*. Complex or simple, it's the same flow: state the goal in English, and a goal like *"swap everything to USDC and spread it across the top 3 vaults"* becomes one atomic transaction. Every step succeeds together or none do — no half-finished states, no babysitting a chain of wallet popups.
+**A PTB viewer.**
+Before signing, Sprout shows the actual Programmable Transaction Block as a readable summary and a clear step-by-step flow: what moves, where it goes, and why. The user sees exactly what will be submitted to the chain instead of raw transaction data.
 
-**2. An Adaptive Risk Guardian that flags everything.**
-The Guardian reviews your transaction and surfaces every meaningful risk *before* you commit — and it's *adaptive*: the more complex the transaction, the more the review evolves to cover it, item by item. Capacity, fees, reward dependence, RWA and lockup caveats, beta status, irreversible sends — each called out in plain, human-readable language you can digest in one read.
+**Full gas sponsorship.**
+Every action and transfer run through Sprout is sponsored. Users do not need to hold SUI, top up gas, or keep dust on hand to transact.
 
-**3. A PTB viewer — see exactly what hits the chain, before you sign.**
-Before you ever press sign, Sprout shows you the actual Programmable Transaction Block in a human-readable summary and an easy-to-follow flow: *what* moves, *where*, and *why*. You see precisely what will be sent to the blockchain — never blind hex, never "trust me."
+## The core principle
 
-**4. Fully sponsored — no gas, no dust.**
-Every action and transfer you run through Sprout is fully sponsored. You don't need to hold SUI, top up gas, or keep dust around to act. Just connect and go.
+Sprout never takes an action the user did not ask for, and the user always sees the full transaction before signing.
 
-### The one rule that matters most
+An agent that handles funds is only safe if a person remains the final approver. Every action, without exception, is presented in full through the PTB viewer and the Guardian's risk review before a signature is requested. If the agent gets something wrong, the user catches it on screen, because there is no path to the chain that bypasses review. There are no blind confirmations and no silent execution. Nothing leaves the wallet until the user has read, understood, and signed it, and the agent cannot exceed the permissions it was given.
 
-**The agent never does anything you didn't tell it to — and you always see the truth before you sign.**
+## Built on Sui
 
-This is the heart of Sprout. An AI agent that touches your money is only safe if a human stays the final gate. So Sprout is built so that *every* action, without exception, is laid out in full — the readable PTB and the Guardian's risk review — *before* your signature. Even if the agent gets something wrong, you catch it on screen, because there is no path to the chain that skips your eyes. No blind confirms. No silent execution. No "the agent already did it." Nothing leaves your wallet until you've read it, understood it, and signed it yourself — and the agent can never exceed the permission you granted.
+Sprout relies on several Sui primitives that make this approach possible:
 
-You understand the transaction and its risk before you sign. That's the whole point.
+- **Programmable Transaction Blocks (PTBs)** allow a full multi-step plan to execute atomically under a single signature.
+- **zkLogin** lets users sign in and transact without managing a seed phrase.
+- **Sponsored transactions (Enoki)** let Sprout cover gas, so users do not need SUI to get started.
+- **SuiNS** resolves names like `alice.sui`, so recipients can be confirmed by name.
+- **Object-centric composability** lets Sprout route across protocols, using the 7K/Bluefin aggregator for swaps and Ember Finance for vaults, without deploying a custom contract.
 
-## Also does
+A generic language model that happens to hold SUI cannot do any of this. The agent is more capable, safer, and more composable because it runs on Sui.
 
-- **Reads anything on-chain.** Your balances, your vault positions and yield, any address's recent activity, token market data, and SuiNS name lookups — all in the same conversation.
-- **Teaches as it goes.** Ask "what's impermanent loss?" and it explains, grounded in what's actually on your screen.
+## How it works
 
-## Why Sui
+1. The user states a goal.
+2. Sprout reasons through it, calls on-chain tools to fetch live quotes and vault data, and assembles a plan.
+3. The plan renders as a PTB viewer card alongside the Guardian's risk review, showing exactly what will be submitted and why.
+4. The user reviews and signs once. The plan executes atomically and Sprout sponsors the gas.
 
-Sprout is built around the primitives that make Sui uniquely suited to an action agent:
+## Additional features
 
-- **Programmable Transaction Blocks (PTBs)** let an entire multi-step plan — swap, split, merge, deposit, send — execute atomically in one signature.
-- **zkLogin** means users sign in and transact without managing a seed phrase.
-- **Sponsored transactions (Enoki)** let Sprout cover gas, so onboarding doesn't require holding SUI first.
-- **SuiNS** turns `alice.sui` into a recipient you can confirm by name.
-- **Object-centric composability** lets Sprout route across protocols (the 7K/Bluefin aggregator for swaps, Ember Finance for yield) without deploying a custom contract.
+- **On-chain reads.** Balances, vault positions and yield, recent activity for any address, token market data, and SuiNS lookups.
+- **Explanations on demand.** Ask about a concept such as impermanent loss and Sprout explains it in the context of what is on screen.
 
-A generic LLM that happens to hold some SUI can't do any of this. The agent is better, safer, and more composable *because* it's on Sui.
+## Stack
 
-## How it works (at a glance)
+Next.js (App Router), React, TypeScript, Tailwind CSS, AI SDK over OpenRouter, `@mysten/sui` and dapp-kit (wallet, RPC, PTBs), Enoki (gas sponsorship), 7K/Bluefin aggregator (swaps), and Ember Finance (vaults).
 
-1. You type a goal.
-2. Sprout streams its reasoning, calls on-chain tools to fetch live quotes and vault data, and assembles a plan.
-3. The plan renders as a readable PTB viewer card alongside the Guardian's risk review — you see exactly what will hit the chain and why.
-4. You review, understand, then sign once. The whole plan executes atomically, and Sprout sponsors the gas — no SUI or dust required.
-
-## Tech
-
-Next.js (App Router) · React · TypeScript · Tailwind CSS · AI SDK over OpenRouter · `@mysten/sui` + dapp-kit (wallet, RPC, PTBs) · Enoki (gas sponsorship) · 7K/Bluefin aggregator (swaps) · Ember Finance (vaults).
-
-The full app lives in [`web/`](./web).
+The application lives in [`web/`](./web).
 
 ```bash
 cd web
@@ -74,4 +68,4 @@ pnpm install
 pnpm dev   # http://localhost:3000
 ```
 
-Requires an `OPENROUTER_API_KEY` (and an `ENOKI_API_KEY` for gas sponsorship) in `web/.env.local` — see `web/.env.example`.
+Set `OPENROUTER_API_KEY` and `ENOKI_API_KEY` (for gas sponsorship) in `web/.env.local`. See `web/.env.example`.
