@@ -34,6 +34,7 @@ import {
 } from "@/lib/client-coins";
 import { useVaults, fetchVaults } from "@/lib/client-vaults";
 import { signedFetch } from "@/lib/api-client";
+import { useRegisterChatReset } from "@/components/chat-reset";
 import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
@@ -171,6 +172,7 @@ export function Conversation({
   const {
     messages,
     sendMessage,
+    setMessages,
     addToolResult,
     regenerate,
     status,
@@ -1851,6 +1853,14 @@ export function Conversation({
     setDraft("");
     setSignError(null);
   }
+
+  // Clicking the navbar Sprout logo wipes this session back to the hero.
+  useRegisterChatReset(() => {
+    stop();
+    setMessages([]);
+    setDraft("");
+    setSignError(null);
+  });
 
   if (messages.length === 0) {
     if (embedded) {

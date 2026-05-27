@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { SiteHeader } from "@/components/site-header";
+import { ChatResetProvider } from "@/components/chat-reset";
 import { GradientField } from "@/components/parts/gradient-field";
 
 export type CinematicMode = "bright" | "dim";
@@ -28,10 +29,12 @@ export function CinematicChrome({ children }: { children: React.ReactNode }) {
   return (
     <CinematicModeContext.Provider value={{ mode, setMode }}>
       <GradientField mode={mode} />
-      <SiteHeader />
-      <div className="relative z-20 flex min-h-screen w-full flex-col">
-        {children}
-      </div>
+      <ChatResetProvider>
+        <SiteHeader />
+        <div className="relative z-20 flex min-h-screen w-full flex-col">
+          {children}
+        </div>
+      </ChatResetProvider>
     </CinematicModeContext.Provider>
   );
 }

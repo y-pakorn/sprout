@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Dialog } from "@base-ui/react";
 import { Menu, X } from "lucide-react";
 import { WalletButton } from "@/components/wallet-button";
+import { useChatReset } from "@/components/chat-reset";
 import { SPRING_BOUNCY } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -53,10 +54,18 @@ function Brand({
   logoSize?: number;
   onClick?: () => void;
 }) {
+  const resetChat = useChatReset();
+  // The logo always returns home AND wipes chat history → the idle hero.
+  // On the home route the <Link> is a no-op nav, so the reset is what
+  // actually clears an in-progress conversation.
+  const handleClick = () => {
+    resetChat();
+    onClick?.();
+  };
   return (
     <Link
       href="/"
-      onClick={onClick}
+      onClick={handleClick}
       className="flex items-center gap-0.5 text-canvas-white"
     >
       <SproutLogo size={logoSize} />
