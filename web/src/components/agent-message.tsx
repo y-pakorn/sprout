@@ -91,9 +91,7 @@ export function AgentMessage({
         transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
         className="flex justify-end"
       >
-        <div
-          className="max-w-[80%] break-words [overflow-wrap:anywhere] bg-surface-charcoal px-3.5 py-2 text-body-sm text-canvas-white rounded-card"
-        >
+        <div className="max-w-[80%] break-words [overflow-wrap:anywhere] bg-surface-charcoal px-3.5 py-2 text-body-sm text-canvas-white rounded-card">
           {message.parts
             .filter((p) => p.type === "text")
             .map((p, i) => (
@@ -114,11 +112,7 @@ export function AgentMessage({
           const text = (part as { text?: string }).text ?? "";
           // Streaming heuristic: the message is the last one and overall stream is active
           return (
-            <ThinkingTrail
-              key={key}
-              text={text}
-              streaming={isStreaming}
-            />
+            <ThinkingTrail key={key} text={text} streaming={isStreaming} />
           );
         }
 
@@ -131,7 +125,7 @@ export function AgentMessage({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="prose-sprout text-body text-midnight-ink"
+              className="prose-sprout surface-card max-w-[520px] px-3.5 py-2.5 text-body text-midnight-ink rounded-card"
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -165,9 +159,7 @@ export function AgentMessage({
                   // Markdown tables — system prompt discourages them, but
                   // style cleanly as a fallback so they don't look broken.
                   table: ({ children }) => (
-                    <div
-                      className="my-3 overflow-hidden bg-whisper-gray ring-1 ring-hairline rounded-card"
-                    >
+                    <div className="my-3 overflow-hidden bg-whisper-gray ring-1 ring-hairline rounded-card">
                       <table className="w-full border-collapse text-body-sm">
                         {children}
                       </table>
@@ -194,6 +186,11 @@ export function AgentMessage({
                   td: ({ children }) => (
                     <td className="px-3 py-2">{children}</td>
                   ),
+                  strong: ({ children }) => (
+                    <strong className="font-semibold font-alt text-midnight-ink">
+                      {children}
+                    </strong>
+                  ),
                 }}
               >
                 {text}
@@ -218,9 +215,7 @@ export function AgentMessage({
               coinType?: string;
               priceUsd?: number;
               valueUsd?: number;
-              vaultPosition?: import(
-                "@/components/parts/wallet-card"
-              ).VaultPosition;
+              vaultPosition?: import("@/components/parts/wallet-card").VaultPosition;
             };
             errorText?: string;
           };
@@ -268,7 +263,7 @@ export function AgentMessage({
               depositIconUrl={
                 p.output?.vaultPosition?.depositCoinType
                   ? planAction.iconLookup(
-                      p.output.vaultPosition.depositCoinType,
+                      p.output.vaultPosition.depositCoinType
                     )
                   : undefined
               }
@@ -384,7 +379,10 @@ export function AgentMessage({
             return (
               <ToolCallRow
                 key={key}
-                label={`Submitted ${p.output.digest.slice(0, 6)}…${p.output.digest.slice(-4)}`}
+                label={`Submitted ${p.output.digest.slice(
+                  0,
+                  6
+                )}…${p.output.digest.slice(-4)}`}
                 status="output-available"
               />
             );
@@ -521,15 +519,15 @@ export function AgentMessage({
               />
             );
           }
-          const isActivePlan =
-            planAction.activePlanId === p.toolCallId;
-          const isLatestPlan =
-            planAction.latestPlanId === p.toolCallId;
+          const isActivePlan = planAction.activePlanId === p.toolCallId;
+          const isLatestPlan = planAction.latestPlanId === p.toolCallId;
           if (!isLatestPlan && !isActivePlan) {
             return (
               <ToolCallRow
                 key={key}
-                label={`Earlier plan · ${formatPlanSummary(cached.summary)} · superseded`}
+                label={`Earlier plan · ${formatPlanSummary(
+                  cached.summary
+                )} · superseded`}
                 status="output-available"
               />
             );
@@ -590,7 +588,11 @@ export function AgentMessage({
           }
           if (p.output?.error) {
             return (
-              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
             );
           }
           const cached = gaslessSendCache.get(p.toolCallId);
@@ -870,7 +872,11 @@ export function AgentMessage({
           }
           if (p.output?.error) {
             return (
-              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
             );
           }
           const cached = coinListCache.get(p.toolCallId);
@@ -914,7 +920,11 @@ export function AgentMessage({
           }
           if (p.output?.error) {
             return (
-              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
             );
           }
           const cached = coinListCache.get(p.toolCallId);
@@ -964,7 +974,11 @@ export function AgentMessage({
           }
           if (p.output?.error) {
             return (
-              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
             );
           }
           const meta = coinMetadataCache.get(p.toolCallId);
@@ -1002,12 +1016,20 @@ export function AgentMessage({
           }
           if (p.state !== "output-available") {
             return (
-              <ToolCallRow key={key} label="Reading holders…" status={p.state} />
+              <ToolCallRow
+                key={key}
+                label="Reading holders…"
+                status={p.state}
+              />
             );
           }
           if (p.output?.error) {
             return (
-              <ToolCallRow key={key} label={p.output.error} status="output-error" />
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
             );
           }
           const cached = coinHoldersCache.get(p.toolCallId);
@@ -1083,13 +1105,14 @@ function VaultListCard({
             <button
               type="button"
               onClick={() => setOpenVaultId(v.id)}
-              className={cn("rounded-card", 
+              className={cn(
+                "rounded-card",
                 "group relative flex w-full cursor-pointer items-center gap-2.5 overflow-hidden px-3 py-2 text-left",
                 "bg-whisper-gray",
                 "transition-[background-color,box-shadow,transform] duration-200 ease-out",
                 "hover:bg-light-taupe",
                 "active:translate-y-px",
-                "focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-midnight-ink)]",
+                "focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_1.5px_var(--color-midnight-ink)]"
               )}
             >
               <AssetIcon
@@ -1102,9 +1125,7 @@ function VaultListCard({
                   <span className="truncate text-body-sm font-medium text-midnight-ink">
                     {v.name}
                   </span>
-                  <span
-                    className="inline-flex shrink-0 items-center bg-midnight-ink/[0.06] px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-muted-ash rounded-[6px]"
-                  >
+                  <span className="inline-flex shrink-0 items-center bg-midnight-ink/[0.06] px-1.5 py-0 text-[10px] font-medium uppercase tracking-wider text-muted-ash rounded-[6px]">
                     {v.depositSymbol}
                   </span>
                 </div>
@@ -1123,8 +1144,8 @@ function VaultListCard({
                   {v.tvlUsd >= 1_000_000
                     ? `$${(v.tvlUsd / 1_000_000).toFixed(1)}M`
                     : v.tvlUsd >= 1_000
-                      ? `$${(v.tvlUsd / 1_000).toFixed(1)}K`
-                      : `$${v.tvlUsd.toFixed(0)}`}{" "}
+                    ? `$${(v.tvlUsd / 1_000).toFixed(1)}K`
+                    : `$${v.tvlUsd.toFixed(0)}`}{" "}
                   TVL
                 </span>
               </div>
@@ -1156,25 +1177,29 @@ function formatPlanSummary(summary: {
 }): string {
   const parts: string[] = [];
   if (summary.swapCount > 0) {
-    parts.push(`${summary.swapCount} swap${summary.swapCount === 1 ? "" : "s"}`);
+    parts.push(
+      `${summary.swapCount} swap${summary.swapCount === 1 ? "" : "s"}`
+    );
   }
   if (summary.depositCount > 0) {
     parts.push(
-      `${summary.depositCount} deposit${summary.depositCount === 1 ? "" : "s"}`,
+      `${summary.depositCount} deposit${summary.depositCount === 1 ? "" : "s"}`
     );
   }
   if (summary.redeemCount > 0) {
     parts.push(
-      `${summary.redeemCount} redeem${summary.redeemCount === 1 ? "" : "s"}`,
+      `${summary.redeemCount} redeem${summary.redeemCount === 1 ? "" : "s"}`
     );
   }
   if (summary.cancelCount > 0) {
     parts.push(
-      `${summary.cancelCount} cancel${summary.cancelCount === 1 ? "" : "s"}`,
+      `${summary.cancelCount} cancel${summary.cancelCount === 1 ? "" : "s"}`
     );
   }
   if (summary.sendCount > 0) {
-    parts.push(`${summary.sendCount} send${summary.sendCount === 1 ? "" : "s"}`);
+    parts.push(
+      `${summary.sendCount} send${summary.sendCount === 1 ? "" : "s"}`
+    );
   }
   return parts.length > 0 ? parts.join(" + ") : "empty plan";
 }
