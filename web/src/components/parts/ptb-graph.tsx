@@ -53,7 +53,10 @@ export function PtbGraph({
   const active = hover ?? selected;
   const neighbors = useMemo(() => {
     if (active === null) return null;
+    // `active` can briefly point past the array when the view prop swaps to a
+    // smaller PTB while a stale hover/selection lingers — bail rather than crash.
     const c = view.commands[active];
+    if (!c) return null;
     return new Set<number>([active, ...c.consumes.commands, ...c.consumedBy]);
   }, [active, view.commands]);
 

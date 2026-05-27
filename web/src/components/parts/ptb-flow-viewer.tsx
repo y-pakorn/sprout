@@ -59,7 +59,10 @@ export function PtbFlowViewer({
   const [selected, setSelected] = useState<number>(
     Math.max(0, view.commands.length - 1),
   );
-  const selectedCmd = view.commands[selected];
+  // Clamp against the current view so a stale selection (after the view prop
+  // swaps to a smaller PTB) never indexes past the commands array.
+  const safeSelected = Math.min(selected, Math.max(0, view.commands.length - 1));
+  const selectedCmd = view.commands[safeSelected];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -94,7 +97,7 @@ export function PtbFlowViewer({
           </div>
           {view.commands.length > 0 ? (
             <div className="min-h-0 flex-1">
-              <PtbGraph view={view} selected={selected} onSelect={setSelected} />
+              <PtbGraph view={view} selected={safeSelected} onSelect={setSelected} />
             </div>
           ) : (
             <p className="text-body-sm text-muted-ash">No commands.</p>
