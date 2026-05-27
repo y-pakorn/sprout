@@ -2,23 +2,20 @@
 
 import { motion } from "motion/react";
 import { useVaults } from "@/lib/client-vaults";
-import { cn } from "@/lib/utils";
 
 type Stat = {
-  /** Rendered value; null = still loading (shows a shimmer placeholder). */
+  /** Short value token (number, $0, 1-tx). null = still loading → shimmer. */
   value: string | null;
   label: string;
   /** Live data point — gets a pulsing "live" dot. */
   live?: boolean;
-  /** Feature fact (no number, always available). */
-  fact?: boolean;
 };
 
 /**
- * A thin proof bar under the hero input: live, Sui-native numbers we already
- * fetch (top vault APY, vault count) alongside two capability facts (DEX
- * aggregation, gasless sends). Numbers shimmer until the vault list loads;
- * facts render immediately, so the strip degrades gracefully offline.
+ * A thin proof bar under the hero input: live Sui-native numbers we already
+ * fetch (top vault APY, vault count) plus two capability stats (gasless, the
+ * atomic swap+deposit PTB). Every item reads as value + label for a
+ * consistent, restrained row. Numbers shimmer until the vault list loads.
  */
 export function HeroStatStrip() {
   const vaults = useVaults();
@@ -33,8 +30,8 @@ export function HeroStatStrip() {
       live: true,
     },
     { value: count != null ? String(count) : null, label: "Sui vaults" },
-    { value: "Best route", label: "across Sui DEXs", fact: true },
-    { value: "Gasless", label: "stablecoin sends", fact: true },
+    { value: "$0", label: "gasless sends" },
+    { value: "1-tx", label: "swap + deposit" },
   ];
 
   return (
@@ -42,36 +39,28 @@ export function HeroStatStrip() {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.6, bounce: 0.1, delay: 0.55 }}
-      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-caption"
+      className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-caption"
     >
-      {stats.map((s, i) => (
-        <div key={s.label} className="flex items-center gap-4">
-          {i > 0 && <span className="h-3 w-px bg-hairline" aria-hidden />}
-          <span className="inline-flex items-center gap-1.5">
-            {s.live && (
-              <span
-                className="size-1.5 shrink-0 rounded-full bg-deliver-green motion-safe:animate-pulse"
-                aria-hidden
-              />
-            )}
-            {s.value === null ? (
-              <span
-                className="inline-block h-3 w-9 rounded bg-midnight-ink/10 motion-safe:animate-pulse"
-                aria-hidden
-              />
-            ) : (
-              <span
-                className={cn(
-                  "font-medium text-midnight-ink",
-                  !s.fact && "tabular-nums",
-                )}
-              >
-                {s.value}
-              </span>
-            )}
-            <span className="text-muted-ash">{s.label}</span>
-          </span>
-        </div>
+      {stats.map((s) => (
+        <span key={s.label} className="inline-flex items-baseline gap-1.5">
+          {s.live && (
+            <span
+              className="mb-px size-1.5 shrink-0 self-center rounded-full bg-deliver-green motion-safe:animate-pulse"
+              aria-hidden
+            />
+          )}
+          {s.value === null ? (
+            <span
+              className="inline-block h-3 w-9 self-center rounded bg-midnight-ink/10 motion-safe:animate-pulse"
+              aria-hidden
+            />
+          ) : (
+            <span className="font-medium tabular-nums text-midnight-ink">
+              {s.value}
+            </span>
+          )}
+          <span className="text-muted-ash">{s.label}</span>
+        </span>
       ))}
     </motion.div>
   );
