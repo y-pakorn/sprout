@@ -1,6 +1,6 @@
 # Sprout
 
-**An agentic money concierge for Sui. Tell it a goal in plain English — it builds the transaction, shows you exactly what will happen, and only acts once you understand and sign.**
+**An intent execution engine for Sui. One sentence of plain English becomes one atomic, fully-sponsored on-chain transaction — and you see exactly what it does and what it risks before you sign.**
 
 Built for **[Sui Overflow 2026](https://overflow.sui.io)** · Agentic Web track (Intent Engine).
 
@@ -8,11 +8,13 @@ Built for **[Sui Overflow 2026](https://overflow.sui.io)** · Agentic Web track 
 
 ## What it is
 
-Most people can't use DeFi. Not because the yields aren't there, but because doing anything means hopping between a swap aggregator, three vault dashboards, a block explorer, and a wallet popup full of hex you have to trust blindly.
+Sprout is not a chatbot. It doesn't *talk about* DeFi — it *executes* it.
 
-Sprout collapses all of that into one conversation. You say what you want — *"swap half my SUI to USDC and put it in the safest vault"*, *"send 20 USDC to alice.sui"*, *"what's my wallet earning right now?"* — and Sprout figures out the steps, fetches live on-chain data, and assembles a single transaction you can read before you sign.
+It's an intent engine: you describe an outcome — *"swap everything to USDC and spread it across the safest three vaults"*, *"convert half my SUI and send it to alice.sui"* — and Sprout aggregates every action that outcome requires (swaps, splits, merges, vault deposits, withdrawals, transfers) and composes them, in parallel, into a **single atomic transaction on Sui**. Complex or trivial, it's one signature: every step lands together or nothing does.
 
-It's not a chatbot that *describes* what you could do. It actually does it, on-chain, atomically.
+The hard part of an agent that moves money isn't the moving — it's earning the right to. So Sprout pairs that execution with a hard safety contract: an Adaptive Risk Guardian that flags every risk, a PTB viewer that shows you the exact transaction in plain human-readable terms, and a final rule that never bends — **nothing reaches the chain without your eyes on it and your signature on it.** And every transaction is fully sponsored: no gas, no dust, no SUI required to act.
+
+Plain-English intent in. A verified, atomic, gas-free transaction out. That's the product.
 
 ## The core
 
