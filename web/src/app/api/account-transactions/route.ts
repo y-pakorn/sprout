@@ -45,10 +45,13 @@ export async function GET(req: NextRequest) {
   const participation = PARTICIPATION.has(partRaw) ? partRaw : "SENDER";
   const sizeRaw = Number(sp.get("size") ?? "10");
   const size = Math.min(50, Math.max(1, Number.isFinite(sizeRaw) ? sizeRaw : 10));
+  // Cursor pagination: pass the prior response's nextCursor to fetch older txs.
+  const cursor = (sp.get("nextCursor") ?? "").trim();
 
   const url =
     `${BASE}/${address}/transactions` +
-    `?transactionsParticipationType=${participation}&orderBy=DESC&size=${size}`;
+    `?transactionsParticipationType=${participation}&orderBy=DESC&size=${size}` +
+    (cursor ? `&nextCursor=${encodeURIComponent(cursor)}` : "");
 
   try {
     const upstream = await fetch(url, {
@@ -64,7 +67,12 @@ export async function GET(req: NextRequest) {
     const items: AccountTx[] = (body.content ?? []).map(normalizeTransaction);
 
     return NextResponse.json(
-      { count: items.length, hasNextPage: !!body.hasNextPage, items },
+      {
+        count: items.length,
+        hasNextPage: !!body.hasNextPage,
+        nextCursor: body.nextCursor ?? undefined,
+        items,
+      },
       {
         headers: {
           "Cache-Control":

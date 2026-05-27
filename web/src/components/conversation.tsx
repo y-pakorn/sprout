@@ -814,10 +814,11 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    const { address, actionType, limit } = (toolCall.input ?? {}) as {
+    const { address, actionType, limit, cursor } = (toolCall.input ?? {}) as {
       address?: string;
       actionType?: "ALL" | "SEND" | "RECEIVE";
       limit?: number;
+      cursor?: string;
     };
     const addr = (address?.trim() || acct?.address || "").trim();
     if (!addr) {
@@ -837,11 +838,13 @@ export function Conversation({
         actionType: actionType ?? "ALL",
         size: String(limit ?? 10),
       });
+      if (cursor) params.set("nextCursor", cursor);
       const res = await signedFetch(`/api/tx-history?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         count?: number;
         hasNextPage?: boolean;
+        nextCursor?: string;
         items?: TxActivity[];
       };
       if (!res.ok || body.error) {
@@ -879,6 +882,7 @@ export function Conversation({
           address: addr,
           count: richItems.length,
           hasNextPage: !!body.hasNextPage,
+          nextCursor: body.nextCursor,
           items: modelItems,
         },
       });
@@ -899,10 +903,11 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    const { address, participation, limit } = (toolCall.input ?? {}) as {
+    const { address, participation, limit, cursor } = (toolCall.input ?? {}) as {
       address?: string;
       participation?: "SENDER" | "RECEIVER";
       limit?: number;
+      cursor?: string;
     };
     const addr = (address?.trim() || acct?.address || "").trim();
     if (!addr) {
@@ -953,6 +958,7 @@ export function Conversation({
         participation: participation ?? "SENDER",
         size: String(limit ?? 10),
       });
+      if (cursor) params.set("nextCursor", cursor);
       const res = await signedFetch(
         `/api/account-transactions?${params.toString()}`
       );
@@ -960,6 +966,7 @@ export function Conversation({
         error?: string;
         count?: number;
         hasNextPage?: boolean;
+        nextCursor?: string;
         items?: AccountTx[];
       };
       if (!res.ok || body.error) {
@@ -1000,6 +1007,7 @@ export function Conversation({
           address: addr,
           count: richItems.length,
           hasNextPage: !!body.hasNextPage,
+          nextCursor: body.nextCursor,
           items: modelItems,
         },
       });
@@ -1197,19 +1205,22 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    const { sortBy, limit } = (toolCall.input ?? {}) as {
+    const { sortBy, limit, page } = (toolCall.input ?? {}) as {
       sortBy?: string;
       limit?: number;
+      page?: number;
     };
     try {
       const params = new URLSearchParams({
         sortBy: sortBy ?? "MARKET_CAP",
         size: String(limit ?? 10),
+        page: String(page ?? 0),
       });
       const res = await signedFetch(`/api/coin-list?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         items?: CoinListItem[];
+        page?: number;
         hasNextPage?: boolean;
       };
       if (!res.ok || body.error) {
@@ -1227,6 +1238,7 @@ export function Conversation({
         output: pruneForModel({
           sortBy: sortBy ?? "MARKET_CAP",
           count: items.length,
+          page: body.page ?? page ?? 0,
           hasNextPage: !!body.hasNextPage,
           coins: items,
         }),
@@ -1288,9 +1300,10 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    const { coinType, limit } = (toolCall.input ?? {}) as {
+    const { coinType, limit, page } = (toolCall.input ?? {}) as {
       coinType?: string;
       limit?: number;
+      page?: number;
     };
     const ct = (coinType ?? "").trim();
     if (!isCoinType(ct)) {
@@ -1308,11 +1321,13 @@ export function Conversation({
       const params = new URLSearchParams({
         coinType: ct,
         size: String(limit ?? 10),
+        page: String(page ?? 0),
       });
       const res = await signedFetch(`/api/coin-holders?${params.toString()}`);
       const body = (await res.json()) as {
         error?: string;
         items?: CoinHolder[];
+        page?: number;
         hasNextPage?: boolean;
       };
       if (!res.ok || body.error) {
@@ -1331,6 +1346,7 @@ export function Conversation({
           coinType: ct,
           symbol: items[0]?.symbol ?? "?",
           count: items.length,
+          page: body.page ?? page ?? 0,
           hasNextPage: !!body.hasNextPage,
           holders: items,
         }),

@@ -39,10 +39,12 @@ export async function GET(req: NextRequest) {
   }
   const sizeRaw = Number(sp.get("size") ?? "10");
   const size = Math.min(100, Math.max(1, Number.isFinite(sizeRaw) ? sizeRaw : 10));
+  const pageRaw = Number(sp.get("page") ?? "0");
+  const page = Math.max(0, Number.isFinite(pageRaw) ? Math.floor(pageRaw) : 0);
 
   const url =
     `${BASE}/${encodeURIComponent(coinType)}/holders` +
-    `?page=0&size=${size}&orderBy=DESC&sortBy=AMOUNT`;
+    `?page=${page}&size=${size}&orderBy=DESC&sortBy=AMOUNT`;
 
   try {
     const upstream = await fetch(url, {
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
     const body = (await upstream.json()) as SpringPage<RawCoinHolder>;
     const items: CoinHolder[] = (body.content ?? []).map(normalizeCoinHolder);
     return NextResponse.json(
-      { items, hasNextPage: !body.last },
+      { items, page, hasNextPage: !body.last },
       {
         headers: {
           "Cache-Control":

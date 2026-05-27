@@ -48,10 +48,13 @@ export async function GET(req: NextRequest) {
   const actionType = ACTION_TYPES.has(actionTypeRaw) ? actionTypeRaw : "ALL";
   const sizeRaw = Number(sp.get("size") ?? "10");
   const size = Math.min(50, Math.max(1, Number.isFinite(sizeRaw) ? sizeRaw : 10));
+  // Cursor pagination: pass the prior response's nextCursor to fetch older items.
+  const cursor = (sp.get("nextCursor") ?? "").trim();
 
   const url =
     `${BASE}/${address}/activity` +
-    `?actionType=${actionType}&orderBy=DESC&size=${size}`;
+    `?actionType=${actionType}&orderBy=DESC&size=${size}` +
+    (cursor ? `&nextCursor=${encodeURIComponent(cursor)}` : "");
 
   try {
     const upstream = await fetch(url, {
@@ -67,7 +70,12 @@ export async function GET(req: NextRequest) {
     const items: TxActivity[] = (body.content ?? []).map(normalizeActivity);
 
     return NextResponse.json(
-      { count: items.length, hasNextPage: !!body.hasNextPage, items },
+      {
+        count: items.length,
+        hasNextPage: !!body.hasNextPage,
+        nextCursor: body.nextCursor ?? undefined,
+        items,
+      },
       {
         headers: {
           "Cache-Control":

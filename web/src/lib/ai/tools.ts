@@ -91,6 +91,12 @@ export const swapTools = {
         .max(50)
         .default(10)
         .describe("Max number of activities to return."),
+      cursor: z
+        .string()
+        .optional()
+        .describe(
+          "Pagination cursor. Omit for the most recent page; to go OLDER / see more, pass the `nextCursor` string returned by the previous call. hasNextPage in the result tells you if there's more.",
+        ),
     }),
   }),
   getTransactionDetail: tool({
@@ -117,6 +123,14 @@ export const swapTools = {
         .max(50)
         .default(10)
         .describe("Max number of coins to return."),
+      page: z
+        .number()
+        .int()
+        .min(0)
+        .default(0)
+        .describe(
+          "0-based page. Omit (0) for the first page; increment (1, 2, …) to fetch the next page — use hasNextPage from the previous result to know if there's more.",
+        ),
     }),
   }),
   searchToken: tool({
@@ -153,6 +167,14 @@ export const swapTools = {
         .max(50)
         .default(10)
         .describe("Max number of holders to return."),
+      page: z
+        .number()
+        .int()
+        .min(0)
+        .default(0)
+        .describe(
+          "0-based page. Omit (0) for the first page; increment (1, 2, …) to fetch the next page — use hasNextPage from the previous result to know if there's more.",
+        ),
     }),
   }),
   getAccountTransactions: tool({
@@ -178,6 +200,12 @@ export const swapTools = {
         .max(50)
         .default(10)
         .describe("Max number of transactions to return."),
+      cursor: z
+        .string()
+        .optional()
+        .describe(
+          "Pagination cursor. Omit for the most recent page; to go OLDER / see more, pass the `nextCursor` string returned by the previous call. hasNextPage in the result tells you if there's more.",
+        ),
     }),
   }),
   listVaults: tool({
