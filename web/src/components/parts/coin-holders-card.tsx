@@ -19,7 +19,7 @@ export function CoinHoldersCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="surface-card max-w-[520px] overflow-hidden rounded-card p-2"
+      className="surface-card max-w-[640px] overflow-hidden rounded-card p-2"
     >
       <div className="flex items-center justify-between px-2 pb-2 pt-1">
         <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">

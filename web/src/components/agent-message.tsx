@@ -125,7 +125,7 @@ export function AgentMessage({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
-              className="prose-sprout surface-card max-w-[520px] px-3.5 py-2.5 text-body text-midnight-ink rounded-card"
+              className="prose-sprout surface-card max-w-[640px] px-3.5 py-2.5 text-body text-midnight-ink rounded-card"
             >
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -1089,7 +1089,7 @@ function VaultListCard({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="surface-card p-2 rounded-card max-w-[520px]"
+      className="surface-card p-2 rounded-card max-w-[640px]"
     >
       <div className="flex items-center justify-between px-2 pt-1 pb-2">
         <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">

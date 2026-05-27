@@ -152,7 +152,7 @@ export function Conversation({
     | null
   >(null);
 
-  const { messages, sendMessage, addToolResult, regenerate, status, error } =
+  const { messages, sendMessage, addToolResult, regenerate, status, error, stop } =
     useChat({
       transport,
       sendAutomaticallyWhen: ({ messages: msgs }) => {
@@ -290,6 +290,14 @@ export function Conversation({
   // Keep the ref pointed at the latest addToolResult
   addToolResultRef.current =
     addToolResult as unknown as typeof addToolResultRef.current;
+
+  // Abort the in-flight generation when this chat unmounts (e.g. the user
+  // navigates to another page). Tab close is handled server-side via
+  // req.signal; this covers in-app SPA navigation, where the fetch would
+  // otherwise keep the stream — and the model — running unread.
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
+  useEffect(() => () => void stopRef.current(), []);
 
   // "Ask Sprout" handoff from the feed. Both chat panes (desktop rail + the
   // always-mounted mobile sheet) subscribe, so we gate on the breakpoint and
@@ -1807,7 +1815,7 @@ export function Conversation({
         >
           <div
             ref={stick.contentRef}
-            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-4 pb-3"
+            className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-6 py-4 pb-3"
           >
             {messages.map((m, i) => {
               const isLastAssistant = i === lastAssistantIdx;
@@ -1894,7 +1902,7 @@ export function Conversation({
       </div>
 
       <div className="shrink-0">
-        <div className="mx-auto w-full max-w-3xl px-6 py-4">
+        <div className="mx-auto w-full max-w-4xl px-6 py-4">
           <ChatInput
             value={draft}
             onChange={setDraft}

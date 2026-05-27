@@ -54,6 +54,14 @@ export async function POST(req: Request) {
     stopWhen: ({ steps }) => steps.length >= 10,
     // Plenty of output budget so tool-call args don't get truncated.
     maxOutputTokens: 8192,
+    // Stop the upstream model call the moment the client disconnects (tab
+    // closed, navigated away, or useChat.stop()). Next.js aborts req.signal
+    // on disconnect; forwarding it here cancels the in-flight LLM request so
+    // we don't keep generating (and billing) for a stream nobody's reading.
+    abortSignal: req.signal,
+    onAbort: () => {
+      console.log("[api/chat] aborted by client disconnect");
+    },
     onError: (e) => {
       console.error("[api/chat] streamText error", e);
     },

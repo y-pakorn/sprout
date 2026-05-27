@@ -33,7 +33,7 @@ export function CoinMetadataCard({ meta }: { meta: CoinMetadata }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-      className="surface-card max-w-[520px] rounded-card p-3"
+      className="surface-card max-w-[640px] rounded-card p-3"
     >
       {/* Header */}
       <div className="flex items-center gap-3 pb-3">
