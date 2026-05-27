@@ -42,7 +42,7 @@ export function TxHistoryCard({
           {address ? shortAddr(address) : ""}
         </span>
       </div>
-      <ul className="space-y-1">
+      <ul className="max-h-64 space-y-1 overflow-y-auto">
         {items.map((a, i) => (
           <li key={`${a.digest}:${i}`}>
             <a

@@ -29,7 +29,7 @@ export function CoinHoldersCard({
           {items.length}
         </span>
       </div>
-      <ul>
+      <ul className="max-h-64 overflow-y-auto">
         {items.map((h, i) => (
           <li
             key={`${h.address}:${i}`}

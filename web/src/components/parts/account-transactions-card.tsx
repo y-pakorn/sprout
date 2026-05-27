@@ -42,7 +42,7 @@ export function AccountTransactionsCard({
           {address ? shortAddr(address) : ""}
         </span>
       </div>
-      <ul className="space-y-1">
+      <ul className="max-h-64 space-y-1 overflow-y-auto">
         {items.map((tx, i) => {
           const title = tx.protocol?.name ?? tx.txType;
           const fn = tx.functions.length

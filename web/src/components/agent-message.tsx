@@ -1161,7 +1161,7 @@ function VaultListCard({
           {vaults.length} option{vaults.length === 1 ? "" : "s"}
         </span>
       </div>
-      <ul className="space-y-1">
+      <ul className="max-h-64 space-y-1 overflow-y-auto">
         {vaults.map((v) => (
           <li key={v.id}>
             <button

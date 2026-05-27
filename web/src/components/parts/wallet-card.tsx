@@ -116,7 +116,7 @@ export function WalletCard({ balances, iconLookup }: Props) {
       {tokens.length > 0 && (
         <>
           {positions.length > 0 && <SectionLabel>Tokens</SectionLabel>}
-          <ul className="flex flex-col gap-1">
+          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
             {tokens.map((b, i) => (
               <TokenRow
                 key={b.coinType}

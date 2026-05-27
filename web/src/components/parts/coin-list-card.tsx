@@ -36,7 +36,7 @@ export function CoinListCard({
           {items.length}
         </span>
       </div>
-      <ul>
+      <ul className="max-h-64 overflow-y-auto">
         {items.map((c, i) => (
           <li
             key={c.coinType}

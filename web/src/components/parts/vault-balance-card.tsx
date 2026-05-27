@@ -130,7 +130,7 @@ export function VaultBalanceCard({
       {/* ───── Pane ───── */}
       {tab === "positions" &&
         (positions.length > 0 ? (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
             {positions.map((p, i) => (
               <PositionRow
                 key={p.vaultId}
@@ -147,7 +147,7 @@ export function VaultBalanceCard({
 
       {tab === "pending" &&
         (pending.length > 0 ? (
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
             {pending.map((w, i) => (
               <PendingWithdrawalRow
                 key={w.txDigest}

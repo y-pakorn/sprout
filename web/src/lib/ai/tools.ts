@@ -90,7 +90,9 @@ export const swapTools = {
         .min(1)
         .max(50)
         .default(10)
-        .describe("Max number of activities to return."),
+        .describe(
+          "Max activities to return. Leave unset — it defaults to 10. Do NOT raise it unless the user explicitly asks for a specific count; to show OLDER activity, paginate with `cursor` instead of fetching a bigger page.",
+        ),
       cursor: z
         .string()
         .optional()
