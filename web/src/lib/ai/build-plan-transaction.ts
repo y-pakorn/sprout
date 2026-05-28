@@ -232,8 +232,12 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           rawAmount: raw,
         };
       }
+      // useGasCoin: false is REQUIRED for Enoki sponsorship to work. When
+      // the source is SUI, the SDK defaults to pulling from the gas coin —
+      // but Enoki reserves GasCoin for its own use and rejects the tx with
+      // "Cannot use GasCoin as a transaction argument".
       const arg = tx.add(
-        coinWithBalance({ balance: raw, type: coin.coin_type })
+        coinWithBalance({ balance: raw, type: coin.coin_type, useGasCoin: false })
       ) as unknown as TransactionObjectArgument;
       return {
         arg,
@@ -430,28 +434,43 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
             `Merge ${step.id}: unknown token '${step.fromSymbol}'.`
           );
         }
-        // drawRaw handles both fromAmount and fromPercent (and the SUI gas
-        // reserve), so "merge the swap outputs + 100% of my wallet USDC" is
-        // expressible without a stale fixed amount.
-        const raw = drawRaw(step, coin.coin_type, coin.decimals);
-        const arg = tx.add(
-          coinWithBalance({
-            balance: raw,
-            type: coin.coin_type,
-            useGasCoin: false,
-          })
-        ) as unknown as TransactionObjectArgument;
-        sources.push({
-          entry: {
-            arg,
-            symbol: step.fromSymbol.toUpperCase(),
-            coinType: coin.coin_type,
-            decimals: coin.decimals,
-            expectedHuman: Number(raw) / 10 ** coin.decimals,
-            rawAmount: raw,
-          },
-          label: `balance:${step.fromSymbol.toUpperCase()}`,
-        });
+        // For merge, the balance source is OPTIONAL — when the agent says
+        // "also fold in any existing wallet balance" but the wallet holds
+        // zero of that token (or the percent draw rounds to zero), skip
+        // silently rather than failing the whole plan. The fromHandles
+        // already carry the user's intent (e.g. "swap WAL+SUI+USDSUI to
+        // USDC, merge, send" works fine even when the user has no
+        // pre-existing USDC). Without this guard the agent would have to
+        // call getBalance before every consolidation step. NOTE: only
+        // merge gets this leniency — swap/deposit/send still throw on a
+        // zero draw, because there the balance source is the ONLY input
+        // and skipping would silently drop the user's intent.
+        let raw: bigint;
+        try {
+          raw = drawRaw(step, coin.coin_type, coin.decimals);
+        } catch {
+          raw = BigInt(0);
+        }
+        if (raw > BigInt(0)) {
+          const arg = tx.add(
+            coinWithBalance({
+              balance: raw,
+              type: coin.coin_type,
+              useGasCoin: false,
+            })
+          ) as unknown as TransactionObjectArgument;
+          sources.push({
+            entry: {
+              arg,
+              symbol: step.fromSymbol.toUpperCase(),
+              coinType: coin.coin_type,
+              decimals: coin.decimals,
+              expectedHuman: Number(raw) / 10 ** coin.decimals,
+              rawAmount: raw,
+            },
+            label: `balance:${step.fromSymbol.toUpperCase()}`,
+          });
+        }
       }
       if (sources.length < 2) {
         throw new Error(
