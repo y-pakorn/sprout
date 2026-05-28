@@ -15,13 +15,17 @@ import {
   RefreshCw,
   X,
   Send,
+  AlertTriangle,
+  OctagonX,
 } from "lucide-react";
 import { SLIPPAGE_OPTIONS } from "@/lib/intent";
 import { AssetIcon } from "@/components/asset-icon";
 import { Tag } from "@/components/ui/tag";
+import { StatusDisk } from "@/components/ui/status-disk";
 import { Switch } from "@/components/ui/switch";
 import {
   VaultRiskDetail,
+  RiskMarkdown,
   type RiskVerdict,
 } from "@/components/parts/vault-risk-detail";
 import { VaultInfoDialog } from "@/components/parts/vault-info-dialog";
@@ -193,7 +197,7 @@ export function LivePlanCard({
             <button
               type="button"
               onClick={walletHoldings.refresh}
-              className="inline-flex cursor-pointer items-center gap-1 bg-whisper-gray px-2.5 py-1 text-caption font-medium text-midnight-ink transition-colors hover:bg-light-taupe rounded-button"
+              className="inline-flex cursor-pointer items-center gap-1 bg-canvas-white px-2.5 py-1 text-caption font-medium text-midnight-ink ring-1 ring-hairline transition-colors hover:bg-light-taupe rounded-button"
             >
               <RefreshCw className="size-3" strokeWidth={2.4} />
               Refresh balance
@@ -212,11 +216,13 @@ export function LivePlanCard({
     ...(insufficientRow ? [insufficientRow] : []),
     ...rawRisks,
   ].sort((a, b) => severityOrder[a.verdict] - severityOrder[b.verdict]);
-  const passCount = risks.filter((r) => r.verdict === "pass").length;
-  const flagCount = risks.filter((r) => r.verdict === "flag").length;
-  const blockCount = risks.filter((r) => r.verdict === "block").length;
+  const blockRisks = risks.filter((r) => r.verdict === "block");
+  const flagRisks = risks.filter((r) => r.verdict === "flag");
+  const clearedRisks = risks.filter((r) => r.verdict === "pass");
+  const passCount = clearedRisks.length;
+  const flagCount = flagRisks.length;
+  const blockCount = blockRisks.length;
   const blocking = blockCount > 0;
-  const topIdx = risks.findIndex((r) => r.verdict !== "pass");
   const guardianVerdict = blocking
     ? "Sprout flagged this — read carefully before signing."
     : flagCount > 0
@@ -319,44 +325,87 @@ export function LivePlanCard({
       <PtbSummaryStrip tx={cached.tx} onOpen={() => setPtbOpen(true)} />
 
       {/* Guardian */}
-      <div className="space-y-2">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn("rounded-[9px]", 
-                "inline-flex size-5 items-center justify-center",
-                blocking
-                  ? "bg-destructive text-canvas-white"
-                  : flagCount > 0
-                    ? "bg-warning text-midnight-ink"
-                    : "bg-deliver-green text-midnight-ink",
+      <div className="space-y-3 border-t border-hairline/60 pt-3">
+        {/* Header — shield disk + verdict prose + tally tags so the user can
+         *  read the bottom line and the breakdown at a glance, without
+         *  drilling into each row. */}
+        <div className="flex items-start gap-2.5">
+          <StatusDisk
+            tone={blocking ? "red" : flagCount > 0 ? "gold" : "green"}
+            solid
+            className="size-7"
+          >
+            <ShieldCheck className="size-3.5" strokeWidth={2.6} />
+          </StatusDisk>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="leading-snug">
+              <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
+                Guardian
+              </div>
+              <p className="text-body-sm text-midnight-ink">
+                {guardianVerdict}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {blockCount > 0 && (
+                <Tag tone="red">
+                  {blockCount} Blocked
+                </Tag>
               )}
-            >
-              <ShieldCheck className="size-2.5" strokeWidth={2.6} />
-            </span>
-            <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
-              Guardian
-            </span>
+              {flagCount > 0 && (
+                <Tag tone="gold">
+                  {flagCount} Heads up
+                </Tag>
+              )}
+              {passCount > 0 && (
+                <Tag tone="green">
+                  {passCount} Cleared
+                </Tag>
+              )}
+            </div>
           </div>
-          <p className="text-body-sm leading-snug text-midnight-ink">
-            {guardianVerdict}
-          </p>
         </div>
-        <div className="divide-y divide-hairline/60">
-          {risks.map((r, i) => (
-            <VaultRiskDetail
-              key={r.id}
-              title={r.title}
-              summary={r.summary}
-              verdict={r.verdict}
-              detail={r.detail}
-              defaultOpen={i === topIdx}
-              onAskAgent={onAskAgent ? () => onAskAgent(r.askPrompt) : undefined}
-            >
-              {r.extra}
-            </VaultRiskDetail>
-          ))}
-        </div>
+
+        {/* Block items — each gets its own destructive-tinted surface so the
+         *  user can't miss the thing that prevents signing. Sit visually
+         *  above the flag list. */}
+        {blockRisks.length > 0 && (
+          <div className="space-y-2">
+            {blockRisks.map((r) => (
+              <GuardianBlockItem
+                key={r.id}
+                risk={r}
+                onAskAgent={onAskAgent}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Flag items — plain rows separated by hairlines on the parent
+         *  card surface. No per-row bg tint — the gold verdict icon does
+         *  the severity work, so multiple flags don't compound into a wall
+         *  of orange that fights the page wash. */}
+        {flagRisks.length > 0 && (
+          <div className="divide-y divide-hairline/60">
+            {flagRisks.map((r) => (
+              <GuardianFlagItem
+                key={r.id}
+                risk={r}
+                onAskAgent={onAskAgent}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Cleared items — single disclosure ("X cleared checks") so they
+         *  stop crowding the section. Expanding shows each pass as a
+         *  compact collapsible row (still drillable if curious). */}
+        {clearedRisks.length > 0 && (
+          <ClearedRisksDisclosure
+            risks={clearedRisks}
+            onAskAgent={onAskAgent}
+          />
+        )}
       </div>
 
       {/* Sprout-pays-gas toggle — applies to every plan kind. */}
@@ -1155,6 +1204,217 @@ type GuardianRow = {
   extra?: React.ReactNode;
 };
 
+/**
+ * Block-severity row. Demands resolution before signing, so it gets its
+ * own destructive-tinted surface, a prominent red icon disk, and
+ * canvas-white action buttons that pop above the tint.
+ */
+function GuardianBlockItem({
+  risk,
+  onAskAgent,
+}: {
+  risk: GuardianRow;
+  onAskAgent?: (prompt: string) => void;
+}) {
+  return (
+    <div className="rounded-card bg-destructive/[0.06] px-3.5 py-3">
+      <div className="flex items-start gap-3">
+        <StatusDisk tone="red" solid className="mt-0.5 size-8">
+          <OctagonX className="size-4" strokeWidth={2.4} />
+        </StatusDisk>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="leading-snug">
+            <div className="text-body font-medium text-midnight-ink">
+              {risk.title}
+            </div>
+            {risk.summary && risk.summary !== risk.title && (
+              <div className="text-body-sm text-midnight-ink/80">
+                {risk.summary}
+              </div>
+            )}
+          </div>
+          {risk.detail && <RiskMarkdown>{risk.detail}</RiskMarkdown>}
+          {(risk.extra || onAskAgent) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              {risk.extra}
+              {onAskAgent && (
+                <button
+                  type="button"
+                  onClick={() => onAskAgent(risk.askPrompt)}
+                  className="inline-flex cursor-pointer items-center gap-1 bg-canvas-white px-2.5 py-1 text-caption font-medium text-midnight-ink ring-1 ring-hairline transition-colors hover:bg-light-taupe rounded-button"
+                >
+                  Ask Sprout to explain →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Flag-severity row. Sits on the parent card surface — no per-row bg tint.
+ * Click-to-expand: the `title — summary` line stays always visible (carries
+ * the key finding for scanning); the educational body collapses behind a
+ * chevron. With four flags this turns a 20-line slab into four scannable
+ * one-liners, with the option to read more on demand.
+ */
+function GuardianFlagItem({
+  risk,
+  onAskAgent,
+}: {
+  risk: GuardianRow;
+  onAskAgent?: (prompt: string) => void;
+}) {
+  const hasBody = !!risk.detail || !!risk.extra;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="py-2.5 first:pt-0 last:pb-0">
+      <button
+        type="button"
+        onClick={() => hasBody && setOpen((v) => !v)}
+        disabled={!hasBody}
+        className={cn(
+          "flex w-full items-start gap-2.5 text-left",
+          hasBody && "cursor-pointer",
+        )}
+      >
+        <AlertTriangle
+          className="mt-[3px] size-3.5 shrink-0 text-warning"
+          strokeWidth={2.4}
+        />
+        <p className="min-w-0 flex-1 leading-snug">
+          <span className="text-body-sm font-medium text-midnight-ink">
+            {risk.title}
+          </span>
+          {risk.summary && risk.summary !== risk.title && (
+            <span className="text-body-sm text-muted-ash">
+              {" — "}
+              {risk.summary}
+            </span>
+          )}
+        </p>
+        {hasBody && (
+          <ChevronDown
+            className={cn(
+              "mt-[3px] size-3.5 shrink-0 text-muted-ash transition-transform duration-200",
+              open && "rotate-180",
+            )}
+            strokeWidth={2.4}
+          />
+        )}
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && hasBody && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="ml-6 mt-2 space-y-2">
+              {risk.detail && (
+                <RiskMarkdown className="text-caption leading-relaxed text-muted-ash">
+                  {risk.detail}
+                </RiskMarkdown>
+              )}
+              {risk.extra && <div>{risk.extra}</div>}
+              {onAskAgent && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAskAgent(risk.askPrompt);
+                  }}
+                  className="inline-flex cursor-pointer items-center gap-1 text-caption font-medium text-muted-ash transition-colors hover:text-midnight-ink"
+                >
+                  Ask Sprout to explain →
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Collapsed bucket for all "pass" Guardian rows. Keeps the section
+ * scannable when most checks clear — one row says "X cleared checks",
+ * expanding reveals the individual rows (each still drillable for the
+ * full markdown body).
+ */
+function ClearedRisksDisclosure({
+  risks,
+  onAskAgent,
+}: {
+  risks: GuardianRow[];
+  onAskAgent?: (prompt: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      {/* Toggle row — sits on the parent card surface (canvas-white). No
+       *  surrounding panel chrome; the row itself is the affordance. */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-center gap-2.5 py-1.5 text-left"
+        aria-expanded={open}
+      >
+        <Check
+          className="size-3.5 shrink-0 text-deliver-green"
+          strokeWidth={3}
+        />
+        <span className="min-w-0 flex-1 text-body-sm font-medium text-midnight-ink">
+          {risks.length} cleared check{risks.length === 1 ? "" : "s"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-3.5 shrink-0 text-muted-ash transition-transform duration-200",
+            open && "rotate-180",
+          )}
+          strokeWidth={2.4}
+        />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-hairline/60">
+              {risks.map((r) => (
+                <VaultRiskDetail
+                  key={r.id}
+                  title={r.title}
+                  summary={r.summary}
+                  verdict={r.verdict}
+                  detail={r.detail}
+                  onAskAgent={
+                    onAskAgent ? () => onAskAgent(r.askPrompt) : undefined
+                  }
+                >
+                  {r.extra}
+                </VaultRiskDetail>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function buildRisks(
   cached: CachedActionPlan,
   sponsorGas: boolean,
@@ -1187,12 +1447,23 @@ function buildRisks(
   for (const [i, r] of (cached.risks ?? []).entries()) {
     const verdict: RiskVerdict =
       r.level === "block" || r.level === "flag" ? r.level : "pass";
+    // Derive a one-line summary from the first sentence of the note. Avoids
+    // duplicating the title (which the agent sometimes echoes) and gives the
+    // "Title — Summary" inline layout something distinct to render. When the
+    // first sentence becomes the summary, strip it from the detail so the
+    // body doesn't repeat what already sits on the summary line.
+    const noteFirst = r.note.split(/(?<=[.!?])\s+/)[0]?.trim() ?? "";
+    const promoted = noteFirst.length > 0 && noteFirst !== r.title;
+    const summary = promoted ? noteFirst : "";
+    const detail = promoted
+      ? r.note.slice(noteFirst.length).trim()
+      : r.note;
     out.push({
       id: `agent-risk-${i}`,
       title: r.title,
-      summary: r.title,
+      summary,
       verdict,
-      detail: r.note,
+      detail,
       askPrompt: "Walk me through this risk.",
     });
   }
@@ -1629,7 +1900,7 @@ function PlanReceipt({
       )}
 
       {failure && txError && (
-        <div className="text-caption text-destructive">{txError}</div>
+        <div className="text-caption text-midnight-ink/80">{txError}</div>
       )}
     </motion.div>
   );
@@ -2206,7 +2477,7 @@ function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
   return (
     <div className="space-y-3">
       <DetailHero
-        label={`Redeem · ${v.name}`}
+        label="Redeem"
         value={
           <>
             {fmtAmount(s.sharesHuman)} {s.receiptSymbol}
@@ -2220,15 +2491,14 @@ function RedeemDetail({ s }: { s: ResolvedRedeemStep }) {
                 ? `≤${v.withdrawalPeriodDays}d`
                 : "Soon"
             }
-            tone={v.withdrawalPeriodDays ? "warn" : "default"}
           />
         }
       />
-      <div
-        className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-muted-ash rounded-[10px]"
-      >
-        Funds arrive after the operator unwinds — not in this transaction.
-      </div>
+      <p className="text-caption leading-relaxed text-muted-ash">
+        Funds arrive after the operator unwinds the strategy — they
+        don&apos;t show up in this transaction. Track the request in your
+        portfolio.
+      </p>
     </div>
   );
 }
@@ -2271,13 +2541,13 @@ function SendDetail({
           </div>
         )}
       </div>
-      <div className="flex items-start gap-2 border-l-2 border-warning/40 bg-warning/[0.06] px-2.5 py-2 text-caption text-muted-ash rounded-[10px]">
+      <p className="text-caption leading-relaxed text-muted-ash">
         Transfers are irreversible
         {s.recipientName
           ? " — confirm the SuiNS name resolved to the address above"
           : " — double-check the recipient address"}
         .
-      </div>
+      </p>
     </div>
   );
 }
