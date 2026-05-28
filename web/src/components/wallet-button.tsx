@@ -234,8 +234,10 @@ function ConnectDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const wallets = useWallets();
   const dAppKit = useDAppKit();
+  const wallets = useWallets({
+    dAppKit,
+  });
 
   function handleConnect(wallet: DetectedWallet) {
     dAppKit
