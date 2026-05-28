@@ -46,6 +46,27 @@ import { cn } from "@/lib/utils";
 
 type IconLookup = (coinType: string) => string | undefined;
 
+/**
+ * Boil a raw executePlan failure (Zod validation dump, plan-builder error,
+ * RPC error) down to a single short header. The model retries on its own —
+ * the user just needs to see that *this* attempt didn't land.
+ */
+function summarizePlanError(raw: string | undefined): string {
+  if (!raw) return "Plan couldn't be built";
+  const text = String(raw);
+  if (/Type validation failed|Invalid input for tool/i.test(text)) {
+    return "Plan format invalid — agent will retry";
+  }
+  // Plan-builder errors include a "FIX:" hint aimed at the model. Strip it
+  // and keep only the first sentence for the user.
+  const beforeFix = text.split(/\s*FIX:/i)[0];
+  const firstSentence = (beforeFix.split(/\.\s/)[0] ?? text).trim();
+  const clean = firstSentence.replace(/^Plan build failed:\s*/i, "");
+  if (clean.length === 0) return "Plan build failed";
+  if (clean.length <= 80) return `Plan build failed — ${clean.toLowerCase()}`;
+  return "Plan build failed";
+}
+
 export type PlanActionState = {
   activePlanId: string | null;
   latestPlanId: string | null;
@@ -504,7 +525,7 @@ export function AgentMessage({
             return (
               <ToolCallRow
                 key={key}
-                label={`Plan build failed: ${p.errorText ?? "unknown"}`}
+                label={summarizePlanError(p.errorText)}
                 status="output-error"
               />
             );
@@ -527,7 +548,7 @@ export function AgentMessage({
             return (
               <ToolCallRow
                 key={key}
-                label={p.output.error}
+                label={summarizePlanError(p.output.error)}
                 status="output-error"
               />
             );
