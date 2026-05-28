@@ -19,6 +19,7 @@ export const MODEL_PRICING = {
     name: "Sprout Medium",
     description:
       "Balanced reasoning for multi-step DeFi planning, tradeoffs, and risk explanations.",
+    isDefault: true,
   },
   "inclusionai/ling-2.6-flash": {
     inputPer1M: 0.1,
@@ -27,7 +28,6 @@ export const MODEL_PRICING = {
     name: "Sprout Flash",
     description:
       "Responsive default assistant for everyday planning with clear, wallet-ready summaries.",
-    isDefault: true,
   },
 } as Record<
   string,
