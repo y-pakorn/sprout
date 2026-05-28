@@ -945,7 +945,8 @@ export function Conversation({
   ) {
     const addResult = ref.current;
     if (!addResult) return;
-    const { address, participation, limit, cursor } = (toolCall.input ?? {}) as {
+    const { address, participation, limit, cursor } = (toolCall.input ??
+      {}) as {
       address?: string;
       participation?: "SENDER" | "RECEIVER";
       limit?: number;
@@ -2012,7 +2013,15 @@ export function Conversation({
   })();
 
   const body = (
-    <div className={cn("flex flex-col", embedded ? "h-full" : "h-dvh")}>
+    <div
+      className={cn(
+        "flex flex-col",
+        // When embedded inside a flex-row rail (feed page aside), the
+        // container has no explicit width — it must stretch to fill the
+        // parent or the chat collapses to content width.
+        embedded ? "h-full w-full min-w-0" : "h-dvh",
+      )}
+    >
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={stick.scrollRef}
@@ -2020,7 +2029,7 @@ export function Conversation({
         >
           <div
             ref={stick.contentRef}
-            className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-4 pb-3 sm:px-6"
+            className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-4 pb-3 sm:px-6"
           >
             {messages.map((m, i) => {
               const isLastAssistant = i === lastAssistantIdx;
@@ -2086,9 +2095,13 @@ export function Conversation({
             {sponsorFallbackReason && (
               <div className="flex items-start justify-between gap-3 surface-card px-4 py-3 text-body-sm text-midnight-ink rounded-card ring-1 ring-engagement-gold/40">
                 <span>
-                  <span className="font-medium">Sprout couldn&apos;t cover gas</span>{" "}
+                  <span className="font-medium">
+                    Sprout couldn&apos;t cover gas
+                  </span>{" "}
                   — you paid the network fee from your wallet instead.{" "}
-                  <span className="text-muted-ash">{sponsorFallbackReason}</span>
+                  <span className="text-muted-ash">
+                    {sponsorFallbackReason}
+                  </span>
                 </span>
                 <button
                   type="button"
@@ -2127,7 +2140,7 @@ export function Conversation({
       </div>
 
       <div className="shrink-0">
-        <div className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6">
+        <div className="mx-auto w-full max-w-4xl px-4 py-4 sm:px-6">
           <ChatInput
             value={draft}
             onChange={setDraft}
@@ -2163,7 +2176,7 @@ function EmbeddedEmpty({
   onModelChange?: (id: string) => void;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-5">
+    <div className="flex h-full w-full min-w-0 flex-col items-center justify-center px-5">
       <div className="w-full max-w-2xl space-y-4">
         <div className="text-center">
           <h2 className="font-alt text-body-lg font-medium tracking-tight text-midnight-ink">
