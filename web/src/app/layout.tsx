@@ -18,10 +18,33 @@ const labilGrotesk = localFont({
 //   display: "swap",
 // });
 
+const SITE_TITLE = "Sprout — your money's agent on Sui";
+const SITE_DESCRIPTION =
+  "Tell us your goal in plain English. Sprout routes swaps, pools, and vaults across Sui — atomically — with a guardian that flags risk before you sign.";
+
+// Production URL for absolute OG/Twitter image URLs; Vercel sets the env var,
+// falls back to localhost in dev. opengraph-image.tsx / twitter-image.tsx are
+// auto-detected by Next and resolved against this base.
+const SITE_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Sprout — your money's agent on Sui",
-  description:
-    "Tell us your goal in plain English. Sprout routes swaps, pools, and vaults across Sui — atomically — with a guardian that flags risk before you sign.",
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    siteName: "Sprout",
+    url: "/",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
