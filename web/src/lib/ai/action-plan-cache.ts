@@ -1,6 +1,7 @@
 "use client";
 
 import type { Transaction } from "@mysten/sui/transactions";
+import type { ExecutePlanStep } from "@/lib/ai/plan-steps";
 import type { SuiVault } from "@/lib/vaults";
 import type { TxActivity } from "@/lib/tx-history";
 import type { AccountTxView } from "@/lib/account-transactions";
@@ -183,9 +184,10 @@ export type PlanRisk = {
 export type CachedActionPlan = {
   tx: Transaction;
   steps: ResolvedStep[];
-  /** Source-of-truth step list the agent emitted. Used to rebuild the
-   *  plan when the user adjusts slippage. */
-  originalInput: RawStep[];
+  /** Source-of-truth step list the agent emitted (model-facing union shape).
+   *  Used to rebuild the plan when the user adjusts slippage — the rebuild
+   *  re-runs adaptPlanSteps() on these, so it must stay the emitted shape. */
+  originalInput: ExecutePlanStep[];
   /** Agent's per-plan risk assessment (executePlan `risks`). Rendered by the
    *  Guardian; preserved across silent slippage rebuilds. */
   risks?: PlanRisk[];

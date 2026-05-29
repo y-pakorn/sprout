@@ -55,8 +55,8 @@ import {
   type ResolvedRedeemStep,
   type ResolvedCancelRedeemStep,
   type ResolvedSendStep,
-  type RawStep,
 } from "@/lib/ai/action-plan-cache";
+import { adaptPlanSteps, type ExecutePlanStep } from "@/lib/ai/plan-steps";
 import { pruneForModel } from "@/lib/ai/prune-output";
 import type { TxActivity, TxCoin } from "@/lib/tx-history";
 import type { AccountTx, AccountTxView } from "@/lib/account-transactions";
@@ -1498,9 +1498,13 @@ export function Conversation({
     }
 
     const { steps, risks } = toolCall.input as {
-      steps: RawStep[];
+      steps: ExecutePlanStep[];
       risks?: PlanRisk[];
     };
+    // Map the model-facing origin-union steps onto the builder's flat RawStep
+    // shape. Pure + deterministic, so the silent slippage rebuild — which
+    // re-runs this on the cached union steps — produces an identical plan.
+    const rawSteps = adaptPlanSteps(steps);
 
     try {
       // On silent rebuilds, preserve the previously-computed real gas
@@ -1510,7 +1514,7 @@ export function Conversation({
         : undefined;
 
       const { tx, resolved, summary } = await buildPlanTransaction({
-        steps,
+        steps: rawSteps,
         sender: acct.address,
         coinMap: map,
         vaultList,

@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { planStepSchema } from "@/lib/ai/plan-steps";
 
 /**
  * Smaller models routinely serialize array-valued tool args as a JSON
@@ -231,103 +232,12 @@ export const swapTools = {
   }),
   executePlan: tool({
     description:
-      "Assemble an atomic Sui transaction (PTB) from a sequence of low-level steps. The whole plan executes or none of it does, with ONE wallet signature. Steps reference each other through string `id`s — every step's output coin handle becomes available to later steps.\n\nStep kinds:\n- 'swap' — runs a Bluefin7K swap. Produces a coin of toSymbol under this step's id.\n- 'split' — splits one coin handle into N portions by bps (sum 10000). Produces handles `<id>.0`, `<id>.1`, …\n- 'merge' — merges multiple coin handles of the SAME token (and/or pulls from balance) into ONE coin. Produces a single handle under this step's id. Use when combining a swap output with an existing wallet balance, or two swap outputs, before splitting/depositing.\n- 'deposit' — deposits a coin handle into an Ember vault. Vault must accept the coin's token type; no auto-conversion (insert a swap step first).\n- 'redeemFromVault' — requests a withdrawal from an Ember vault by burning receipt shares. Funds arrive AFTER the vault's withdrawal lockup (NOT in this transaction); produces NO output coin handle. Use the receipt token symbol (e.g. ercUSD, eACRED) as the source. Optional 'sharesAmount' picks a partial redemption; omit to redeem all available shares (use 'fromAmount' if you want a specific amount via fromSymbol).\n- 'cancelRedeemFromVault' — cancels a previously-submitted pending withdrawal request, returning the shares to the user. Requires the request's 'sequenceNumber' (from getVaultBalance.withdrawals) and the matching vaultId. Has no coin handle input/output.\n- 'send' — transfers a coin to someone else. Sources its coin like a deposit (an upstream fromHandle, or fromSymbol+fromAmount / fromSymbol+fromPercent from balance) and sends it to 'recipient' (a 0x address or SuiNS name like yoisha.sui). Produces NO handle — the coin leaves the wallet. This is IRREVERSIBLE; pass the recipient exactly as the user gave it, never guess. DO NOT use this step for a single transfer of an allowlisted stablecoin (USDC, USDSUI, suiUSDe, USDY, FDUSD, AUSD, USDB) drawn straight from the wallet — that MUST use the `sendStablecoin` tool instead (gasless, $0, no SUI). Use 'send' only for chained sends (swap→send), splitting one amount across recipients, or non-allowlisted tokens.\n\nOrigin (how a step gets its input coin) — exactly ONE of:\n- `fromHandle` to consume an upstream output (e.g. `swap1`, `split1.0`).\n- `fromSymbol` + `fromAmount` to draw a SPECIFIC amount from sender's balance.\n- `fromSymbol` + `fromPercent` to draw a percentage of the balance (100 = everything). Prefer this over fromAmount for 'swap all'/'sell half' — it's resolved to the exact raw balance at build time, so there's no rounding dust or 'insufficient balance' overshoot.\n- `fromHandles` (merge only) — array of upstream handle ids to combine. Optionally combined with `fromSymbol`+`fromAmount` to also include balance.\n- For cancelRedeemFromVault, origin fields are ignored — it only needs vaultId + sequenceNumber.",
+      "Assemble an atomic Sui transaction (PTB) from a sequence of low-level steps. The whole plan executes or none of it does, with ONE wallet signature. Steps reference each other through string `id`s — every step's output coin handle becomes available to later steps.\n\nStep kinds:\n- 'swap' — runs a Bluefin7K swap. Produces a coin of toSymbol under this step's id.\n- 'split' — splits one coin handle into N portions by bps (sum 10000). Produces handles `<id>.0`, `<id>.1`, …\n- 'merge' — merges multiple coin handles of the SAME token (and/or pulls from balance) into ONE coin. Produces a single handle under this step's id. Use when combining a swap output with an existing wallet balance, or two swap outputs, before splitting/depositing.\n- 'deposit' — deposits a coin handle into an Ember vault. Vault must accept the coin's token type; no auto-conversion (insert a swap step first).\n- 'redeemFromVault' — requests a withdrawal from an Ember vault by burning receipt shares. Funds arrive AFTER the vault's withdrawal lockup (NOT in this transaction); produces NO output coin handle. The `origin` sources the receipt-token shares (e.g. ercUSD, eACRED): use origin from:'percent' percent:100 to redeem the whole position, or from:'amount' with the receipt symbol for a specific share count.\n- 'cancelRedeemFromVault' — cancels a previously-submitted pending withdrawal request, returning the shares to the user. Requires the request's 'sequenceNumber' (from getVaultBalance.withdrawals) and the matching vaultId. Has no coin handle input/output.\n- 'send' — transfers a coin to someone else. Sources its coin via `origin` (an upstream handle, or a balance draw) and sends it to 'recipient' (a 0x address or SuiNS name like yoisha.sui). Produces NO handle — the coin leaves the wallet. This is IRREVERSIBLE; pass the recipient exactly as the user gave it, never guess. DO NOT use this step for a single transfer of an allowlisted stablecoin (USDC, USDSUI, suiUSDe, USDY, FDUSD, AUSD, USDB) drawn straight from the wallet — that MUST use the `sendStablecoin` tool instead (gasless, $0, no SUI). Use 'send' only for chained sends (swap→send), splitting one amount across recipients, or non-allowlisted tokens.\n\nOrigin — every step except cancelRedeemFromVault carries an `origin` object choosing EXACTLY ONE input shape (discriminator `from`):\n- `{ from: \"handle\", handle }` — consume an upstream step's whole output (split portion: `\"split1.0\"`).\n- `{ from: \"amount\", symbol, amount }` — a STATED quantity from the sender's balance (e.g. amount 300 for '300 USDC'). The plan targets this EXACT amount, so an insufficient balance shows up in the Guardian rather than failing the build. Use this whenever the user names a number.\n- `{ from: \"percent\", symbol, percent }` — a FRACTION of the live balance (100 = all, 50 = half, 25 = a quarter), resolved to the exact on-chain amount at build time (no dust, no overshoot). Use ONLY for 'all'/'everything'/'half'/'25%' phrasing — NEVER for a stated number. For SUI itself stay ≤ 99 to leave gas.\n- `{ from: \"handles\", handles, balanceSymbol?, balancePercent? }` — MERGE only: combine upstream coins, optionally folding in the wallet balance of the same token (balancePercent: 100 = add all of it).\ncancelRedeemFromVault takes no `origin` — it only needs vaultId + sequenceNumber.",
     inputSchema: z.object({
       steps: z.preprocess(
         coerceJsonArray,
         z
-        .array(
-          z.object({
-            kind: z
-              .enum([
-                "swap",
-                "split",
-                "merge",
-                "deposit",
-                "redeemFromVault",
-                "cancelRedeemFromVault",
-                "send",
-              ])
-              .describe("Step type."),
-            id: z
-              .string()
-              .min(1)
-              .describe(
-                "Short unique id for this step (referenced by downstream steps). Example: 'swap1', 'merge1', 'split1'.",
-              ),
-            fromHandle: z
-              .string()
-              .optional()
-              .describe(
-                "(swap/split/deposit) Consume the entire coin produced by a previous step. For split outputs use '<id>.<index>' e.g. 'split1.0'.",
-              ),
-            fromHandles: z
-              .array(z.string())
-              .optional()
-              .describe(
-                "(merge only) Two or more upstream handle ids to merge into one coin. All MUST be the same token type. Can be combined with fromSymbol + fromAmount OR fromSymbol + fromPercent to also fold in the sender's wallet balance of that token (use fromPercent: 100 to add ALL of it — the robust way to consolidate swap outputs WITH existing wallet balance).",
-              ),
-            fromSymbol: z
-              .string()
-              .optional()
-              .describe(
-                "Start from the sender's balance of this token. Pair with fromAmount. For merge, this is an ADDITIONAL source on top of fromHandles.",
-              ),
-            fromAmount: z
-              .number()
-              .positive()
-              .optional()
-              .describe(
-                "Amount in human units of fromSymbol to consume from the sender's balance. Use for a SPECIFIC amount. To swap a fraction or ALL of a balance, prefer fromPercent — it avoids rounding dust and 'insufficient balance' errors.",
-              ),
-            fromPercent: z
-              .number()
-              .gt(0)
-              .max(100)
-              .optional()
-              .describe(
-                "Draw this percent (0–100) of the sender's fromSymbol balance instead of fromAmount. Resolved to an EXACT raw amount from the live on-chain balance at build time, so 100 swaps the entire balance with no leftover dust and no overshoot. Use this for 'swap everything', 'sell half my X', etc. Pair with fromSymbol; do not combine with fromAmount or fromHandle. For SUI itself, stay below 100 (leave headroom for gas).",
-              ),
-            toSymbol: z
-              .string()
-              .optional()
-              .describe("(swap only) destination token symbol."),
-            slippagePct: z
-              .number()
-              .min(0.1)
-              .max(20)
-              .optional()
-              .describe(
-                "(swap only) slippage tolerance in percent. Default 1.",
-              ),
-            portionsBps: z
-              .array(z.number().int().min(1).max(10000))
-              .min(2)
-              .max(10)
-              .optional()
-              .describe(
-                "(split only) Per-portion bps, MUST sum to exactly 10000.",
-              ),
-            vaultId: z
-              .string()
-              .optional()
-              .describe(
-                "(deposit / redeemFromVault / cancelRedeemFromVault) Ember vault UUID from listVaults / getVaultBalance.",
-              ),
-            sequenceNumber: z
-              .string()
-              .optional()
-              .describe(
-                "(cancelRedeemFromVault only) The pending withdrawal's sequenceNumber from getVaultBalance.withdrawals[].",
-              ),
-            recipient: z
-              .string()
-              .optional()
-              .describe(
-                "(send only) Where to transfer the coin: a raw Sui address (0x…) or a SuiNS name (e.g. yoisha.sui / @yoisha). Resolved to an address at build time; pass the user's address/name VERBATIM — never invent one.",
-              ),
-          }),
-        )
+        .array(planStepSchema)
         .min(1)
         .max(20)
         .describe(
