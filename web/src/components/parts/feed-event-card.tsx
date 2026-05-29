@@ -1,8 +1,9 @@
 "use client";
 
+import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { AssetIcon } from "@/components/asset-icon";
 import { fmtUsd, fmtAmount } from "@/lib/format";
-import { FeedRow } from "@/components/parts/feed-row";
+import { FeedRow, type FeedAction } from "@/components/parts/feed-row";
 import type { FeedEvent, EventDisplay } from "@/lib/sui-events";
 
 type Props = {
@@ -38,6 +39,10 @@ export function FeedEventCard({
   const connector = isRedeem ? "from" : "into";
   const vaultName = display.vaultName ?? "a vault";
 
+  const action: FeedAction = isRedeem
+    ? { icon: ArrowUpRight, tone: "neutral", label: "Vault withdraw" }
+    : { icon: ArrowDownLeft, tone: "green", label: "Vault deposit" };
+
   const askPrompt = `What happened in transaction ${event.digest}?`;
 
   return (
@@ -49,17 +54,23 @@ export function FeedEventCard({
       askPrompt={askPrompt}
       isSelf={isSelf}
       fresh={fresh}
+      action={action}
     >
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-body text-muted-ash">
         <span>{verb}</span>
         <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
-          <AssetIcon src={display.tokenIcon} label={display.ticker} size={16} />
+          <AssetIcon src={display.tokenIcon} label={display.ticker} size={14} />
           <span className="font-medium tabular-nums text-midnight-ink">
             {valueText}
           </span>
         </span>
         <span>{connector}</span>
-        <span className="text-midnight-ink">{vaultName}</span>
+        <span className="inline-flex items-center gap-1 whitespace-nowrap align-middle">
+          {display.vaultLogo && (
+            <AssetIcon src={display.vaultLogo} label={vaultName} size={14} />
+          )}
+          <span className="font-medium text-midnight-ink">{vaultName}</span>
+        </span>
       </div>
     </FeedRow>
   );

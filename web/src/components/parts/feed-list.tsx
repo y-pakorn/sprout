@@ -135,7 +135,7 @@ export function FeedList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: (i) => (rows[i]?.type === "header" ? 37 : 112),
+    estimateSize: (i) => (rows[i]?.type === "header" ? 36 : 100),
     overscan: 6,
     getItemKey: (i) => rows[i]?.id ?? i,
   });
@@ -212,7 +212,7 @@ export function FeedList() {
       <div className="shrink-0 border-b border-hairline px-5 py-3">
         <div className="flex items-center gap-2">
           <span className="relative flex size-2">
-            <span className="absolute inline-flex size-full animate-ping rounded-full bg-deliver-green/60" />
+            <span className="absolute inline-flex size-full rounded-full bg-deliver-green/60 motion-safe:animate-ping" />
             <span className="relative inline-flex size-2 rounded-full bg-deliver-green" />
           </span>
           <span className="text-body-sm font-medium text-midnight-ink">
@@ -225,7 +225,7 @@ export function FeedList() {
             return (
               <PillButton
                 key={key}
-                variant={on ? "primary" : "secondary"}
+                variant={on ? "secondary" : "ghost"}
                 onClick={() => toggleFilter(key)}
                 aria-pressed={on}
                 className="gap-1 rounded-card px-2.5 py-1 text-caption"
@@ -266,7 +266,7 @@ export function FeedList() {
                     style={{ transform: `translateY(${vi.start}px)` }}
                   >
                     {row.type === "header" ? (
-                      <div className="border-b border-hairline bg-whisper-gray/40 px-5 py-2 text-caption font-medium uppercase tracking-wider text-muted-ash">
+                      <div className="px-5 pb-1 pt-4 text-caption font-medium uppercase tracking-wider text-muted-ash">
                         {row.label}
                       </div>
                     ) : row.event.source === "dex" ? (
