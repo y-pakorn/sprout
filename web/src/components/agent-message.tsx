@@ -32,6 +32,7 @@ import {
 import {
   actionPlanCache,
   gaslessSendCache,
+  paymentLinkCache,
   vaultsListCache,
   txHistoryCache,
   accountTxCache,
@@ -41,6 +42,7 @@ import {
   coinHoldersCache,
 } from "@/lib/ai/action-plan-cache";
 import { GaslessSendCard } from "@/components/parts/gasless-send-card";
+import { PaymentLinkCard } from "@/components/parts/payment-link-card";
 import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
 
@@ -667,6 +669,63 @@ export function AgentMessage({
               txStatus={isActive ? planAction.txStatus : undefined}
               txError={isActive ? planAction.txError : undefined}
               walletConnected={planAction.walletConnected}
+            />
+          );
+        }
+
+        if (part.type === "tool-createPaymentLink") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`Payment link failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Creating payment link…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const cached = paymentLinkCache.get(p.toolCallId);
+          if (!cached) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Link expired — ask again to rebuild"
+                status="output-error"
+              />
+            );
+          }
+          return (
+            <PaymentLinkCard
+              key={key}
+              cached={cached}
+              iconLookup={planAction.iconLookup}
             />
           );
         }

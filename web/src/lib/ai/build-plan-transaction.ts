@@ -833,20 +833,46 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         );
       }
       const { address, name } = await resolveRecipientCached(step.recipient);
-      // origin.arg is the coin to transfer (an upstream handle, already marked
-      // consumed by resolveOrigin, or a fresh coinWithBalance draw). Send
-      // produces no handle — the coin leaves the wallet.
-      tx.transferObjects([origin.arg], tx.pure.address(address));
-      resolved.push({
-        kind: "send",
-        id: step.id,
-        symbol: origin.symbol,
-        coinType: origin.coinType,
-        decimals: origin.decimals,
-        amountHuman: origin.expectedHuman,
-        recipient: address,
-        recipientName: name,
-      });
+      if (step.sendExactRaw != null) {
+        // EXACT-OUTPUT settle (Sprout Pay "pay with any token"): split EXACTLY
+        // sendExactRaw off the origin coin, send that to the recipient, and
+        // refund the remainder to the sender. The origin (a swap output) is
+        // sized to exceed this amount; if it ever falls short, splitCoins
+        // aborts the whole atomic tx, so the payer is never short-changed and
+        // the recipient always receives the exact requested figure. The origin
+        // handle is already marked consumed by resolveOrigin, so the orphan
+        // sweep won't double-transfer the remainder.
+        const exact = BigInt(step.sendExactRaw);
+        const splitResult = tx.splitCoins(origin.arg, [tx.pure.u64(exact)]);
+        const childCoin = splitResult[0] as unknown as TransactionObjectArgument;
+        tx.transferObjects([childCoin], tx.pure.address(address));
+        tx.transferObjects([origin.arg], tx.pure.address(sender));
+        resolved.push({
+          kind: "send",
+          id: step.id,
+          symbol: origin.symbol,
+          coinType: origin.coinType,
+          decimals: origin.decimals,
+          amountHuman: Number(exact) / 10 ** origin.decimals,
+          recipient: address,
+          recipientName: name,
+        });
+      } else {
+        // origin.arg is the coin to transfer (an upstream handle, already
+        // marked consumed by resolveOrigin, or a fresh coinWithBalance draw).
+        // Send produces no handle — the coin leaves the wallet.
+        tx.transferObjects([origin.arg], tx.pure.address(address));
+        resolved.push({
+          kind: "send",
+          id: step.id,
+          symbol: origin.symbol,
+          coinType: origin.coinType,
+          decimals: origin.decimals,
+          amountHuman: origin.expectedHuman,
+          recipient: address,
+          recipientName: name,
+        });
+      }
     }
   }
 

@@ -16,8 +16,13 @@ import {
 type SuiClientLike = ReturnType<typeof useCurrentClient>;
 import type { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
-import { buildGaslessSend } from "@/lib/gasless";
-import { lookupSuins } from "@/lib/suins";
+import { buildGaslessSend, isGaslessStablecoin } from "@/lib/gasless";
+import { lookupSuins, resolveRecipient } from "@/lib/suins";
+import {
+  encodePaymentLink,
+  paymentLinkUrl,
+  type PaymentLinkData,
+} from "@/lib/payment-link";
 import { fetchAllBalances, fetchBalance } from "@/lib/grpc-balances";
 import { ChatInput } from "@/components/chat-input";
 import { ExamplePrompts } from "@/components/example-prompts";
@@ -41,6 +46,7 @@ import type { SuiVault } from "@/lib/vaults";
 import {
   actionPlanCache,
   gaslessSendCache,
+  paymentLinkCache,
   vaultsListCache,
   txHistoryCache,
   accountTxCache,
@@ -305,6 +311,16 @@ export function Conversation({
       }
       if (toolCall.toolName === "sendStablecoin") {
         void runSendStablecoin(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "createPaymentLink") {
+        void runCreatePaymentLink(
           toolCall,
           coinMap,
           accountRef.current,
@@ -1467,6 +1483,118 @@ export function Conversation({
         toolCallId: toolCall.toolCallId,
         output: {
           error: `Gasless send failed to build: ${(e as Error).message}`,
+        },
+      });
+    }
+  }
+
+  async function runCreatePaymentLink(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { symbol, amount, recipient, title, expiryHours } =
+      toolCall.input as {
+        symbol: string;
+        amount?: number;
+        recipient?: string;
+        title?: string;
+        expiryHours?: number;
+      };
+
+    // Recipient defaults to the connected wallet ("a link for me").
+    const recipientInput = (recipient ?? "").trim() || acct?.address;
+    if (!recipientInput) {
+      await addResult({
+        tool: "createPaymentLink",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "No wallet connected and no recipient named. Ask the user to connect a wallet or name who should be paid.",
+        },
+      });
+      return;
+    }
+
+    // Token is literal — never substitute. Unknown symbol → tell the agent to searchToken.
+    const coin = resolveSymbol(map, symbol);
+    if (!coin) {
+      await addResult({
+        tool: "createPaymentLink",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: `Unknown token '${symbol}'. Call searchToken to confirm the exact symbol, then retry — never substitute a different token.`,
+        },
+      });
+      return;
+    }
+
+    try {
+      // Validate the recipient now (gives the creator immediate feedback on a
+      // bad name/address) and capture a preview address. The pay page resolves
+      // the verbatim recipient again, live, before anyone pays.
+      const { address, name } = await resolveRecipient(
+        recipientInput,
+        client as unknown as SuiGrpcClient
+      );
+
+      const data: PaymentLinkData = {
+        version: 1,
+        recipient: recipientInput,
+        symbol: symbol.toUpperCase(),
+        amount: amount != null && amount > 0 ? amount : undefined,
+        title: title?.trim() ? title.trim().slice(0, 80) : undefined,
+        expiryMs:
+          expiryHours && expiryHours > 0
+            ? Date.now() + expiryHours * 3_600_000
+            : undefined,
+        creator: acct?.address,
+      };
+
+      const blob = encodePaymentLink(data);
+      const origin =
+        typeof window !== "undefined" ? window.location.origin : "";
+      const url = paymentLinkUrl(origin, blob);
+      const gaslessEligible = isGaslessStablecoin(coin.coin_type);
+
+      paymentLinkCache.set(toolCall.toolCallId, {
+        data,
+        blob,
+        url,
+        resolvedRecipient: address,
+        recipientName: name,
+        coinType: coin.coin_type,
+        decimals: coin.decimals,
+        gaslessEligible,
+        fetchedAt: Date.now(),
+      });
+
+      // URL-free summary for the model (the card reads the cache for the link).
+      await addResult({
+        tool: "createPaymentLink",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          status: "built_unsigned" as const,
+          note: "Payment link created. The URL + QR are rendered in the card below your reply — you do NOT have the URL here and must NEVER write, paste, guess, or placeholder one (no https://…, no localhost…, no markdown link, no '(replace with actual link)'). Reply in ONE short sentence pointing the user at the card to copy/scan/share. Nothing is on-chain; never say it's paid or sent.",
+          symbol: data.symbol,
+          amount: data.amount ?? null,
+          openAmount: data.amount == null,
+          recipient: address,
+          recipientName: name ?? null,
+          title: data.title ?? null,
+          gasless: gaslessEligible,
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "createPaymentLink",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: `Couldn't create payment link: ${(e as Error).message}`,
         },
       });
     }

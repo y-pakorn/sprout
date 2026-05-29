@@ -11,6 +11,7 @@ import type {
   CoinMetadata,
   CoinHolder,
 } from "@/lib/blockberry-coins";
+import type { PaymentLinkData } from "@/lib/payment-link";
 
 // ───────────────────────────────────────────────────────────────────────
 // Generic action plan cache. Built by `runExecutePlan`, consumed by the
@@ -172,6 +173,12 @@ export type RawStep = {
   sequenceNumber?: string;
   /** (send only) 0x address or SuiNS name (e.g. yoisha.sui) to transfer to. */
   recipient?: string;
+  /** (send only) When set, split EXACTLY this raw u64 amount off the origin
+   *  coin, send that to `recipient`, and refund the remainder to the sender —
+   *  i.e. exact-OUTPUT settlement. Used by Sprout Pay "pay with any token"
+   *  (swap an oversized input → settle the exact requested amount). The agent
+   *  NEVER sets this; it's populated programmatically by the pay page. */
+  sendExactRaw?: string;
 };
 
 /** Agent-authored plan risk, rendered as a Guardian row. */
@@ -325,6 +332,36 @@ export const gaslessSendCache = {
   },
   get(id: string): CachedGaslessSend | undefined {
     return gaslessSendMap.get(id);
+  },
+};
+
+// Payment link (Sprout Pay) — the decoded data + the share URL/QR metadata the
+// PaymentLinkCard renders. Informational only (no built Transaction): the pay
+// page builds + signs. Keyed by toolCallId.
+export type CachedPaymentLink = {
+  /** Decoded link data (recipient verbatim, symbol, amount?, title?, …). */
+  data: PaymentLinkData;
+  /** base64url blob for the /pay/<blob> URL. */
+  blob: string;
+  /** Absolute share URL (origin + /pay/blob), filled client-side. */
+  url: string;
+  /** Resolved 0x recipient (creator-side preview; pay page re-resolves live). */
+  resolvedRecipient: string;
+  /** SuiNS name when one was used, for display. */
+  recipientName?: string;
+  coinType: string;
+  decimals: number;
+  /** True when the requested token is a protocol-gasless stablecoin. */
+  gaslessEligible: boolean;
+  fetchedAt: number;
+};
+const paymentLinkMap = new Map<string, CachedPaymentLink>();
+export const paymentLinkCache = {
+  set(id: string, entry: CachedPaymentLink) {
+    paymentLinkMap.set(id, entry);
+  },
+  get(id: string): CachedPaymentLink | undefined {
+    return paymentLinkMap.get(id);
   },
 };
 

@@ -331,6 +331,42 @@ export const swapTools = {
         ),
     }),
   }),
+  createPaymentLink: tool({
+    description:
+      "Create a shareable PAYMENT LINK the user sends to someone to GET PAID — the inverse of a send. The recipient (who RECEIVES the funds) DEFAULTS to the user's own connected wallet; only set `recipient` when the user explicitly names someone else (a 0x address or SuiNS name). Use for 'create a payment link', 'make me a 5 USDC link', 'payment link for yoisha.sui titled Dinner', 'a tip jar link', 'request 20 USDC'. This only BUILDS the link — nothing is signed or on-chain; the client renders a card with a copyable URL + QR. The friend opens the link on a public page and pays from their wallet (gasless — they can even pay with a different token and Sprout swaps it to settle the exact requested token). Fixed amount → set `amount`; OPEN / tip-jar ('pay me whatever') → OMIT `amount`. The token is LITERAL — if you're not 100% sure an unfamiliar symbol resolves, call searchToken FIRST and copy its exact symbol; NEVER substitute a lookalike.",
+    inputSchema: z.object({
+      symbol: z
+        .string()
+        .describe(
+          "Token the link requests — e.g. USDC, SUI. LITERAL: copy exactly; confirm unfamiliar tokens with searchToken before using.",
+        ),
+      amount: z
+        .number()
+        .positive()
+        .optional()
+        .describe(
+          "Requested amount in human units (5 = 5 USDC). OMIT for an OPEN / tip-jar link where the payer chooses the amount.",
+        ),
+      recipient: z
+        .string()
+        .optional()
+        .describe(
+          "Who gets paid: a 0x address or SuiNS name (yoisha.sui / @yoisha). OMIT to default to the user's own connected wallet. Pass VERBATIM — never invent.",
+        ),
+      title: z
+        .string()
+        .max(80)
+        .optional()
+        .describe(
+          "Short title/memo shown to the payer, e.g. 'Haidilao Meal', 'Coffee'.",
+        ),
+      expiryHours: z
+        .number()
+        .positive()
+        .optional()
+        .describe("Hours until the link expires. OMIT for no expiry."),
+    }),
+  }),
 };
 
 export type ToolName = keyof typeof swapTools;
