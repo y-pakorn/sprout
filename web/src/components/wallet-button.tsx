@@ -26,7 +26,8 @@ import { Identicon } from "@/components/ui/identicon";
 
 export function WalletButton({
   tone = "default",
-}: { tone?: "default" | "glass" } = {}) {
+  className,
+}: { tone?: "default" | "glass"; className?: string } = {}) {
   const account = useCurrentAccount();
   // SuiNS reverse-resolution isn't wired on the new gRPC client yet — fall
   // back to the short address (display already handles the no-name case).
@@ -54,11 +55,12 @@ export function WalletButton({
         <PillButton
           variant={glass ? "secondary" : "primary"}
           onClick={() => setConnectOpen(true)}
-          className={
+          className={cn(
             glass
               ? "gap-1.5 bg-canvas-white shadow-button hover:bg-whisper-gray"
-              : "gap-2 px-5 py-2.5"
-          }
+              : "gap-2 px-5 py-2.5",
+            className,
+          )}
         >
           <WalletIcon
             className={glass ? "size-3.5" : "size-4"}

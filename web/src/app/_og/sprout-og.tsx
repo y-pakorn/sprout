@@ -262,6 +262,18 @@ export async function renderPaymentLinkOg(d: {
           >
             {amountLabel}
           </div>
+          {d.amount == null ? (
+            <div
+              style={{
+                display: "flex",
+                fontSize: 46,
+                color: INK,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              in {d.symbol}
+            </div>
+          ) : null}
           {d.title ? (
             <div
               style={{

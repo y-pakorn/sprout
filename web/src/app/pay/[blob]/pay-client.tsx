@@ -754,7 +754,7 @@ export function PayClient({ blob }: { blob: string }) {
         {/* Action */}
         {!account ? (
           <div className="space-y-2">
-            <WalletButton />
+            <WalletButton className="w-full py-3" />
             <p className="text-center text-caption text-muted-ash">
               Connect a wallet to pay — gasless, with any token you hold.
             </p>
