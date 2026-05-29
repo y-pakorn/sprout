@@ -10,6 +10,7 @@ import {
   X as XIcon,
   Loader2,
   AlertTriangle,
+  Repeat,
 } from "lucide-react";
 import {
   useCurrentAccount,
@@ -25,8 +26,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { WalletButton } from "@/components/wallet-button";
 import { RedeemDialog } from "@/components/parts/redeem-dialog";
+import { DcaCancelDialog } from "@/components/parts/dca-cancel-dialog";
 import { CoinFlow } from "@/components/parts/coin-flow";
 import { useVaultBalance } from "@/lib/client-vault-balance";
+import { useDcaOrders } from "@/lib/client-dca-orders";
+import { fmtInterval } from "@/lib/seven-k-dca";
+import type { DcaOrderView } from "@/lib/dca-orders";
 import { useWalletHoldings, type TokenHolding } from "@/lib/client-wallet";
 import { useAccountActivity } from "@/lib/client-account-activity";
 import type { TxActivity, TxCoin } from "@/lib/tx-history";
@@ -57,9 +62,11 @@ export function PortfolioView() {
   const { state: vaultState, refresh: refreshVaults } = useVaultBalance();
   const { state: holdingsState, refresh: refreshHoldings } =
     useWalletHoldings();
+  const { state: dcaState, refresh: refreshDca } = useDcaOrders();
   const [openPosition, setOpenPosition] = useState<VaultBalancePosition | null>(
     null,
   );
+  const [cancelDca, setCancelDca] = useState<DcaOrderView | null>(null);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllAccountActivity, setShowAllAccountActivity] = useState(false);
 
@@ -109,9 +116,13 @@ export function PortfolioView() {
     ? accountActivity
     : accountActivity.slice(0, 6);
 
+  const dcaOrders = dcaState.data?.orders ?? [];
+  const activeDca = dcaOrders.filter((o) => o.isActive);
+
   function refresh() {
     refreshVaults();
     refreshHoldings();
+    refreshDca();
   }
 
   const loading =
@@ -154,6 +165,14 @@ export function PortfolioView() {
                   @{" "}
                   <span className="font-medium text-midnight-ink">
                     {fmtPct(totals.blendedApy)} APY
+                  </span>
+                </>
+              )}
+              {activeDca.length > 0 && (
+                <>
+                  {" · "}
+                  <span className="text-midnight-ink">
+                    {activeDca.length} DCA running
                   </span>
                 </>
               )}
@@ -210,6 +229,25 @@ export function PortfolioView() {
                 now={now}
                 positions={vaultData.positions}
                 onCancelled={refresh}
+              />
+            ))}
+          </Section>
+        )}
+
+        {/* ───── DCA orders ───── */}
+        {account && dcaOrders.length > 0 && (
+          <Section
+            title="DCA orders"
+            subtitle="Recurring buys · scheduled on 7K"
+            count={dcaOrders.length}
+          >
+            {dcaOrders.map((o, i) => (
+              <DcaPortfolioRow
+                key={o.orderId}
+                o={o}
+                i={i}
+                now={now}
+                onCancel={() => setCancelDca(o)}
               />
             ))}
           </Section>
@@ -287,7 +325,8 @@ export function PortfolioView() {
           pending.length === 0 &&
           holdings.length === 0 &&
           activity.length === 0 &&
-          accountActivity.length === 0 && (
+          accountActivity.length === 0 &&
+          dcaOrders.length === 0 && (
             <EmptyCard>
               <span className="text-muted-ash">
                 Nothing in your garden yet. Plant a seed →
@@ -303,6 +342,16 @@ export function PortfolioView() {
         onSuccess={() => {
           // Re-fetch after a brief delay so the new pending request shows.
           setTimeout(refresh, 800);
+        }}
+      />
+
+      <DcaCancelDialog
+        order={cancelDca}
+        open={!!cancelDca}
+        onOpenChange={(o) => !o && setCancelDca(null)}
+        onSuccess={() => {
+          setCancelDca(null);
+          setTimeout(refreshDca, 800);
         }}
       />
     </CinematicShell>
@@ -422,6 +471,79 @@ function Section({
       </div>
       <div className="space-y-1.5">{children}</div>
     </motion.section>
+  );
+}
+
+function DcaPortfolioRow({
+  o,
+  i,
+  now,
+  onCancel,
+}: {
+  o: DcaOrderView;
+  i: number;
+  now: number;
+  onCancel: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.04 * i, duration: 0.25 }}
+      className="flex flex-col gap-2.5 surface-card px-4 py-3 rounded-card"
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative shrink-0">
+          <AssetIcon src={o.payIcon} label={o.paySymbol} size={36} />
+          <SproutBadge />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 truncate text-body-sm font-medium text-midnight-ink">
+              <Repeat className="size-3 text-muted-ash" strokeWidth={2.4} />
+              {o.paySymbol} → {o.targetSymbol}
+            </span>
+            <Tag tone={o.isActive ? "green" : "neutral"}>
+              {o.isActive ? "Active" : o.status}
+            </Tag>
+          </div>
+          <span className="truncate text-caption tabular-nums text-muted-ash">
+            {fmtAmount(o.amountPerOrderHuman)} {o.paySymbol} · every{" "}
+            {fmtInterval(o.intervalMs)}
+            {o.maxPrice != null &&
+              ` · ≤ ${fmtAmount(o.maxPrice)} ${o.paySymbol}`}
+          </span>
+        </div>
+        {o.isActive && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex shrink-0 items-center gap-1 bg-whisper-gray px-3 py-1.5 text-caption font-medium text-midnight-ink ring-1 ring-hairline transition-colors hover:bg-destructive/10 rounded-button"
+          >
+            <XIcon className="size-3" strokeWidth={2.4} />
+            Cancel
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-1">
+        <div className="h-1.5 w-full overflow-hidden bg-midnight-ink/[0.06] rounded-full">
+          <div
+            className="h-full bg-deliver-green rounded-full"
+            style={{ width: `${Math.max(2, o.progressPct)}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-caption tabular-nums text-muted-ash">
+          <span>
+            {o.filled}/{o.numOrders} filled · {fmtAmount(o.obtainedHuman)}{" "}
+            {o.targetSymbol} bought
+          </span>
+          {o.isActive && o.nextExecTs && (
+            <span>next in {fmtCountdown(o.nextExecTs, now)}</span>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

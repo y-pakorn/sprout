@@ -15,6 +15,11 @@ export const EXAMPLE_PROMPTS: { label: string; text: string }[] = [
     label: "Swap → send in one tx",
     text: "Swap 1 SUI to USDC and send it to yoisha.sui",
   },
+  // DCA — recurring buys
+  {
+    label: "DCA into SUI weekly",
+    text: "DCA 200 USDC into SUI weekly for 8 weeks",
+  },
   // Yield — deposit to the best vault
   {
     label: "Deposit 100 USDC, best APY",

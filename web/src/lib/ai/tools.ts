@@ -367,6 +367,94 @@ export const swapTools = {
         .describe("Hours until the link expires. OMIT for no expiry."),
     }),
   }),
+  placeDcaOrder: tool({
+    description:
+      "Set up a DCA (dollar-cost averaging) order on 7K: spend a pay token to accumulate a target token in equal tranches on a fixed schedule — works in BOTH directions (recurring BUY or recurring SELL). Use for 'DCA <amount> into <token>', 'buy <token> every <interval>', 'sell <token> over N weeks', 'DCA out of <token>', 'ladder/offload out of <token>', 'dollar-cost average', 'recurring buy/sell'.\n\nDIRECTION: paySymbol is the token that LEAVES the wallet (spent/sold); targetSymbol is the token received. 'DCA into X' / 'buy X' → target X, pay the funding token (USDC unless named). 'sell X' / 'DCA out of X' → pay X, target the proceeds token (USDC unless named). The amount is ALWAYS denominated in the PAY token (so 'sell 100 WAL' = paySymbol WAL, amountPerOrder 100). The FULL pay budget (per-order amount × number of orders) is locked up front into the order escrow when the user signs, then swapped tranche-by-tranche; cancelling later reclaims whatever hasn't been spent.\n\nThis only BUILDS the order — nothing is signed or on-chain until the user clicks 'Start DCA' in the card. After this tool, NEVER say it's started/done; say 'Ready — review and sign to start'.\n\nTokens are LITERAL (same rule as swaps): if you're not 100% sure an unfamiliar symbol resolves, call searchToken FIRST and copy the exact symbol; NEVER substitute a lookalike. Requires a connected wallet.\n\nPrice guards (optional): `maxPrice` / `minPrice` are the price of 1 TARGET expressed in PAY units (for a stablecoin pay token this ≈ the target's USD price). A guarded order only executes a tranche while the market price is within the band — so it may fill slowly or not complete.",
+    inputSchema: z.object({
+      paySymbol: z
+        .string()
+        .describe(
+          "Token SPENT/SOLD each tranche — the one that LEAVES the wallet. For 'buy X with USDC' / 'DCA $N into X' this is the funding token (USDC); for 'sell X' / 'DCA out of X' this is X itself.",
+        ),
+      targetSymbol: z
+        .string()
+        .describe(
+          "Token RECEIVED each tranche. For 'buy/DCA into X' this is X; for 'sell X' this is the proceeds token (USDC unless the user names another).",
+        ),
+      numOrders: z
+        .number()
+        .int()
+        .min(2)
+        .max(60)
+        .describe("Total number of scheduled buys (2–60)."),
+      intervalUnit: z
+        .enum(["minute", "hour", "day", "week"])
+        .describe("Schedule unit between buys."),
+      intervalCount: z
+        .number()
+        .int()
+        .min(1)
+        .default(1)
+        .describe("How many units between buys (e.g. unit 'day' + count 1 = daily; count 2 = every other day)."),
+      amountPerOrder: z
+        .number()
+        .positive()
+        .optional()
+        .describe(
+          "Amount of the PAY token per tranche, human units (e.g. 50 when buying with 50 USDC each time; 100 when selling 100 WAL each time). Provide EXACTLY ONE of amountPerOrder or totalAmount.",
+        ),
+      totalAmount: z
+        .number()
+        .positive()
+        .optional()
+        .describe(
+          "Total pay budget across ALL buys, human units (split evenly into numOrders). Provide EXACTLY ONE of amountPerOrder or totalAmount.",
+        ),
+      slippagePct: z
+        .number()
+        .min(0.1)
+        .max(20)
+        .optional()
+        .describe("Per-tranche slippage tolerance in percent. Default 1."),
+      maxPrice: z
+        .number()
+        .positive()
+        .optional()
+        .describe(
+          "Only buy while 1 target costs AT MOST this many pay units (a price ceiling). For 'only buy SUI under $4' with USDC pay → 4.",
+        ),
+      minPrice: z
+        .number()
+        .positive()
+        .optional()
+        .describe(
+          "Only buy while 1 target costs AT LEAST this many pay units (a price floor). Omit unless the user wants a lower bound.",
+        ),
+    }),
+  }),
+  getDcaOrders: tool({
+    description:
+      "Read an address's DCA orders on 7K: active/expired orders (pay→target pair, per-tranche amount, schedule, progress filled/total, amount bought so far, price band) and, with scope 'all', the execution history (each filled tranche). Defaults to the connected wallet; pass `address` for ANOTHER address. Use for 'show my DCA orders', 'my recurring buys', 'how's my DCA going', 'do I have any DCA running', or before cancelling one (to get its orderId). Errors only if no `address` is given and no wallet is connected.",
+    inputSchema: z.object({
+      address: z
+        .string()
+        .optional()
+        .describe("Sui address (0x…) to read. Omit to use the connected wallet."),
+      scope: z
+        .enum(["open", "all"])
+        .optional()
+        .describe("'open' = active/expired orders (default). 'all' = also include execution history."),
+    }),
+  }),
+  cancelDcaOrder: tool({
+    description:
+      "Cancel an existing DCA order, stopping future buys and returning the unspent pay funds to the wallet (already-bought target tokens stay). First call getDcaOrders to find the order, then pass its `orderId`. This only BUILDS the cancellation — the user signs it in the card; never say it's cancelled until a signed result. Requires a connected wallet that owns the order.",
+    inputSchema: z.object({
+      orderId: z
+        .string()
+        .describe("The on-chain order id (the `orderId` field from getDcaOrders)."),
+    }),
+  }),
 };
 
 export type ToolName = keyof typeof swapTools;

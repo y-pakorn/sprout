@@ -43,6 +43,9 @@ import {
 } from "@/lib/ai/action-plan-cache";
 import { GaslessSendCard } from "@/components/parts/gasless-send-card";
 import { PaymentLinkCard } from "@/components/parts/payment-link-card";
+import { DcaActionCard } from "@/components/parts/dca-action-card";
+import { DcaOrdersCard } from "@/components/parts/dca-orders-card";
+import { dcaActionCache, dcaOrdersCache } from "@/lib/ai/dca-cache";
 import type { SuiVault } from "@/lib/vaults";
 import { cn } from "@/lib/utils";
 
@@ -723,6 +726,139 @@ export function AgentMessage({
           }
           return (
             <PaymentLinkCard
+              key={key}
+              cached={cached}
+              iconLookup={planAction.iconLookup}
+            />
+          );
+        }
+
+        if (
+          part.type === "tool-placeDcaOrder" ||
+          part.type === "tool-cancelDcaOrder"
+        ) {
+          const isPlace = part.type === "tool-placeDcaOrder";
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`${isPlace ? "DCA order" : "DCA cancel"} failed: ${
+                  p.errorText ?? "unknown"
+                }`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={isPlace ? "Building DCA order…" : "Preparing cancellation…"}
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const cached = dcaActionCache.get(p.toolCallId);
+          if (!cached) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="DCA action expired — ask again to rebuild"
+                status="output-error"
+              />
+            );
+          }
+          const isActive = planAction.activePlanId === p.toolCallId;
+          return (
+            <DcaActionCard
+              key={key}
+              cached={cached}
+              iconLookup={planAction.iconLookup}
+              onConfirm={() => planAction.onConfirm(p.toolCallId)}
+              onCancel={() => planAction.onCancel(p.toolCallId)}
+              signing={isActive && planAction.signing}
+              confirming={isActive && planAction.confirming}
+              executed={isActive && planAction.executed}
+              txDigest={isActive ? planAction.txDigest : undefined}
+              txStatus={isActive ? planAction.txStatus : undefined}
+              txError={isActive ? planAction.txError : undefined}
+              walletConnected={planAction.walletConnected}
+              sponsorGas={planAction.sponsorGas}
+              onSponsorGasChange={planAction.onSponsorGasChange}
+              sponsored={isActive && planAction.sponsored}
+            />
+          );
+        }
+
+        if (part.type === "tool-getDcaOrders") {
+          const p = part as unknown as {
+            toolCallId: string;
+            state:
+              | "input-streaming"
+              | "input-available"
+              | "output-available"
+              | "output-error";
+            output?: { error?: string };
+            errorText?: string;
+          };
+          if (p.state === "output-error") {
+            return (
+              <ToolCallRow
+                key={key}
+                label={`DCA orders read failed: ${p.errorText ?? "unknown"}`}
+                status="output-error"
+              />
+            );
+          }
+          if (p.state !== "output-available") {
+            return (
+              <ToolCallRow
+                key={key}
+                label="Reading DCA orders…"
+                status={p.state}
+              />
+            );
+          }
+          if (p.output?.error) {
+            return (
+              <ToolCallRow
+                key={key}
+                label={p.output.error}
+                status="output-error"
+              />
+            );
+          }
+          const cached = dcaOrdersCache.get(p.toolCallId);
+          if (!cached || (cached.orders.length === 0 && cached.history.length === 0)) {
+            return (
+              <ToolCallRow
+                key={key}
+                label="No DCA orders found"
+                status="output-available"
+              />
+            );
+          }
+          return (
+            <DcaOrdersCard
               key={key}
               cached={cached}
               iconLookup={planAction.iconLookup}

@@ -86,8 +86,20 @@ import {
   executeSponsored,
   SponsorshipUnavailableError,
 } from "@/lib/enoki-sponsor";
+import { dcaActionCache, dcaOrdersCache } from "@/lib/ai/dca-cache";
+import {
+  buildPlaceDcaTx,
+  buildCancelDcaTx,
+  dcaRateBounds,
+  intervalMs as dcaIntervalMs,
+  fmtInterval as fmtDcaInterval,
+  DEFAULT_DCA_SLIPPAGE_PCT,
+  type IntervalUnit,
+} from "@/lib/seven-k-dca";
+import { fetchDcaOrdersClient } from "@/lib/client-dca-orders";
+import type { DcaOrderView } from "@/lib/dca-orders";
 import type { SuiNetwork } from "@/lib/sui";
-import { floorToDecimals } from "@/lib/format";
+import { floorToDecimals, fmtAmount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { VaultPosition } from "@/components/parts/wallet-card";
 import {
@@ -325,6 +337,29 @@ export function Conversation({
           coinMap,
           accountRef.current,
           suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "placeDcaOrder") {
+        void runPlaceDca(
+          toolCall,
+          coinMap,
+          accountRef.current,
+          suiClientRef.current,
+          addToolResultRef
+        );
+        return;
+      }
+      if (toolCall.toolName === "getDcaOrders") {
+        void runGetDcaOrders(toolCall, accountRef.current, addToolResultRef);
+        return;
+      }
+      if (toolCall.toolName === "cancelDcaOrder") {
+        void runCancelDca(
+          toolCall,
+          coinMap,
+          accountRef.current,
           addToolResultRef
         );
         return;
@@ -1603,6 +1638,360 @@ export function Conversation({
     }
   }
 
+  async function runPlaceDca(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    client: SuiClientLike,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    if (!acct) {
+      await addResult({
+        tool: "placeDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "Wallet not connected. The user needs to connect a wallet before I can set up a DCA order.",
+        },
+      });
+      return;
+    }
+    const input = toolCall.input as {
+      paySymbol: string;
+      targetSymbol: string;
+      numOrders: number;
+      intervalUnit: IntervalUnit;
+      intervalCount?: number;
+      amountPerOrder?: number;
+      totalAmount?: number;
+      slippagePct?: number;
+      maxPrice?: number;
+      minPrice?: number;
+    };
+    const fail = (error: string) =>
+      addResult({
+        tool: "placeDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: { error },
+      });
+
+    const payCoin = resolveSymbol(map, input.paySymbol);
+    if (!payCoin) {
+      await fail(
+        `Unknown pay token '${input.paySymbol}'. Call searchToken to confirm the exact symbol, then retry — never substitute a different token.`
+      );
+      return;
+    }
+    const targetCoin = resolveSymbol(map, input.targetSymbol);
+    if (!targetCoin) {
+      await fail(
+        `Unknown target token '${input.targetSymbol}'. Call searchToken to confirm the exact symbol, then retry — never substitute a different token.`
+      );
+      return;
+    }
+    const numOrders = Math.round(Number(input.numOrders));
+    if (!Number.isFinite(numOrders) || numOrders < 2) {
+      await fail("numOrders must be an integer ≥ 2.");
+      return;
+    }
+    const hasPer = input.amountPerOrder != null && input.amountPerOrder > 0;
+    const hasTotal = input.totalAmount != null && input.totalAmount > 0;
+    if (!hasPer && !hasTotal) {
+      await fail(
+        "Provide either amountPerOrder (per tranche) or totalAmount (whole budget)."
+      );
+      return;
+    }
+    const amountPerOrderHuman = hasPer
+      ? (input.amountPerOrder as number)
+      : (input.totalAmount as number) / numOrders;
+
+    try {
+      const payDecimals = payCoin.decimals;
+      const targetDecimals = targetCoin.decimals;
+      const payCoinAmountEach = BigInt(
+        Math.floor(amountPerOrderHuman * 10 ** payDecimals)
+      );
+      if (payCoinAmountEach <= BigInt(0)) {
+        await fail("Per-order amount rounds to zero — increase it.");
+        return;
+      }
+      const totalRaw = payCoinAmountEach * BigInt(numOrders);
+      const totalLockedHuman = amountPerOrderHuman * numOrders;
+      const slippagePct = input.slippagePct ?? DEFAULT_DCA_SLIPPAGE_PCT;
+      const interval = dcaIntervalMs(
+        input.intervalUnit,
+        input.intervalCount ?? 1
+      );
+      const { minRate, maxRate } = dcaRateBounds({
+        payDecimals,
+        targetDecimals,
+        maxPrice: input.maxPrice,
+        minPrice: input.minPrice,
+      });
+
+      // Pre-check spendable balance (the full budget is escrowed up front).
+      let insufficient = false;
+      let balHuman = 0;
+      try {
+        const balRaw = await fetchBalance(
+          client,
+          acct.address,
+          payCoin.coin_type
+        );
+        balHuman = Number(balRaw) / 10 ** payDecimals;
+        insufficient = BigInt(balRaw) < totalRaw;
+      } catch {
+        /* balance read best-effort; don't block the build */
+      }
+
+      const tx = await buildPlaceDcaTx({
+        payCoinType: payCoin.coin_type,
+        targetCoinType: targetCoin.coin_type,
+        payCoinAmountEach,
+        numOrders,
+        interval,
+        slippagePct,
+        minRate,
+        maxRate,
+      });
+      tx.setSender(acct.address);
+
+      const SUI_TYPE = canonicalCoinType("0x2::sui::SUI");
+      const sponsorEligible =
+        canonicalCoinType(payCoin.coin_type) !== SUI_TYPE;
+      const priceBounded = input.maxPrice != null || input.minPrice != null;
+
+      const risks: PlanRisk[] = [];
+      if (insufficient) {
+        risks.push({
+          level: "block",
+          title: "Insufficient balance",
+          note: `This locks ${fmtAmount(totalLockedHuman)} ${input.paySymbol.toUpperCase()} up front, but the wallet holds ${fmtAmount(balHuman)}. Add funds or lower the per-order amount / number of orders.`,
+        });
+      }
+      risks.push({
+        level: "flag",
+        title: "Funds locked up front",
+        note: `The full ${fmtAmount(totalLockedHuman)} ${input.paySymbol.toUpperCase()} moves into the DCA escrow when you sign, then buys ${input.targetSymbol.toUpperCase()} in ${numOrders} tranches. Cancel anytime to reclaim whatever hasn't been spent.`,
+      });
+      if (priceBounded) {
+        risks.push({
+          level: "flag",
+          title: "Price-bounded order",
+          note: `A tranche only executes while the price is in your band, so the order may fill slowly or not complete the full ${numOrders} buys.`,
+        });
+      }
+      risks.push({
+        level: "pass",
+        title: "Routed via 7K aggregator",
+        note: `Each buy executes at the market rate across 7K's routes, with a ${slippagePct}% per-tranche slippage cap.`,
+      });
+      if (payCoin.verified && targetCoin.verified) {
+        risks.push({
+          level: "pass",
+          title: "Tokens verified",
+          note: `${input.paySymbol.toUpperCase()} and ${input.targetSymbol.toUpperCase()} are both verified on the Sui token registry.`,
+        });
+      }
+
+      dcaActionCache.set(toolCall.toolCallId, {
+        kind: "place",
+        tx,
+        paySymbol: input.paySymbol.toUpperCase(),
+        payCoinType: payCoin.coin_type,
+        payDecimals,
+        payIcon: payCoin.icon_url,
+        targetSymbol: input.targetSymbol.toUpperCase(),
+        targetCoinType: targetCoin.coin_type,
+        targetDecimals,
+        targetIcon: targetCoin.icon_url,
+        amountPerOrderHuman,
+        numOrders,
+        intervalMs: interval,
+        totalLockedHuman,
+        runsThroughMs: Date.now() + interval * numOrders,
+        slippagePct,
+        minPrice: input.minPrice,
+        maxPrice: input.maxPrice,
+        sponsorEligible,
+        risks,
+        fetchedAt: Date.now(),
+      });
+
+      await addResult({
+        tool: "placeDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          status: "built_unsigned" as const,
+          note: "DCA order constructed and shown in the card. NOT started — the user must review and click Start DCA to sign. Do not say it's started/done; invite them to review and sign.",
+          paySymbol: input.paySymbol.toUpperCase(),
+          targetSymbol: input.targetSymbol.toUpperCase(),
+          numOrders,
+          every: fmtDcaInterval(interval),
+          amountPerOrder: Number(amountPerOrderHuman.toFixed(6)),
+          totalLocked: Number(totalLockedHuman.toFixed(6)),
+          slippagePct,
+          maxPrice: input.maxPrice ?? null,
+          minPrice: input.minPrice ?? null,
+          insufficient,
+        },
+      });
+    } catch (e) {
+      await fail(`DCA order failed to build: ${(e as Error).message}`);
+    }
+  }
+
+  async function runGetDcaOrders(
+    toolCall: { toolCallId: string; input: unknown },
+    acct: ReturnType<typeof useCurrentAccount>,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    const { address } = (toolCall.input ?? {}) as {
+      address?: string;
+      scope?: "open" | "all";
+    };
+    const target = (address?.trim() || acct?.address || "").trim();
+    if (!target) {
+      await addResult({
+        tool: "getDcaOrders",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error:
+            "No wallet connected and no address given. Ask the user to connect a wallet or name an address.",
+        },
+      });
+      return;
+    }
+    try {
+      const { orders, history } = await fetchDcaOrdersClient(target, "all");
+      dcaOrdersCache.set(toolCall.toolCallId, { orders, history, address: target });
+      await addResult({
+        tool: "getDcaOrders",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          count: orders.length,
+          active: orders.filter((o) => o.isActive).length,
+          fills: history.length,
+          // Compact rows — include orderId so a follow-up cancel can reference it.
+          orders: orders.map((o) => ({
+            orderId: o.orderId,
+            pair: `${o.paySymbol}->${o.targetSymbol}`,
+            perOrder: Number(o.amountPerOrderHuman.toFixed(6)),
+            paySymbol: o.paySymbol,
+            every: fmtDcaInterval(o.intervalMs),
+            progress: `${o.filled}/${o.numOrders}`,
+            bought: Number(o.obtainedHuman.toFixed(6)),
+            targetSymbol: o.targetSymbol,
+            status: o.status,
+            ...(o.maxPrice != null
+              ? { maxPrice: Number(o.maxPrice.toFixed(6)) }
+              : {}),
+            ...(o.minPrice != null
+              ? { minPrice: Number(o.minPrice.toFixed(6)) }
+              : {}),
+          })),
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "getDcaOrders",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `DCA orders read failed: ${(e as Error).message}` },
+      });
+    }
+  }
+
+  async function runCancelDca(
+    toolCall: { toolCallId: string; input: unknown },
+    map: typeof coinMap,
+    acct: ReturnType<typeof useCurrentAccount>,
+    ref: React.RefObject<AddResultFn | null>
+  ) {
+    const addResult = ref.current;
+    if (!addResult) return;
+    void map; // coin types come from the order record, not the map
+    if (!acct) {
+      await addResult({
+        tool: "cancelDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          error: "Wallet not connected. Connect a wallet to cancel a DCA order.",
+        },
+      });
+      return;
+    }
+    const { orderId } = toolCall.input as { orderId: string };
+    try {
+      let order: DcaOrderView | undefined = dcaOrdersCache
+        .latest()
+        ?.orders.find((o) => o.orderId === orderId);
+      if (!order) {
+        const { orders } = await fetchDcaOrdersClient(acct.address, "open");
+        order = orders.find((o) => o.orderId === orderId);
+      }
+      if (!order) {
+        await addResult({
+          tool: "cancelDcaOrder",
+          toolCallId: toolCall.toolCallId,
+          output: {
+            error:
+              "No matching DCA order found. Call getDcaOrders first and pass an orderId from the result.",
+          },
+        });
+        return;
+      }
+      const tx = await buildCancelDcaTx({
+        orderId: order.orderId,
+        payCoinType: order.payCoinType,
+        targetCoinType: order.targetCoinType,
+      });
+      tx.setSender(acct.address);
+      const risks: PlanRisk[] = [
+        {
+          level: "flag",
+          title: "Reclaims unspent funds",
+          note: `Cancelling returns ${fmtAmount(order.remainingHuman)} ${order.paySymbol} of unspent funds to your wallet and stops future buys. Already-bought ${order.targetSymbol} stays yours.`,
+        },
+      ];
+      dcaActionCache.set(toolCall.toolCallId, {
+        kind: "cancel",
+        tx,
+        orderId: order.orderId,
+        paySymbol: order.paySymbol,
+        payCoinType: order.payCoinType,
+        payIcon: order.payIcon,
+        targetSymbol: order.targetSymbol,
+        targetIcon: order.targetIcon,
+        remainingHuman: order.remainingHuman,
+        sponsorEligible: true,
+        risks,
+        fetchedAt: Date.now(),
+      });
+      await addResult({
+        tool: "cancelDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: {
+          status: "built_unsigned" as const,
+          note: "Cancellation constructed and shown in the card. NOT cancelled yet — the user must review and sign. Do not say it's cancelled until a signed result.",
+          paySymbol: order.paySymbol,
+          targetSymbol: order.targetSymbol,
+          reclaim: Number(order.remainingHuman.toFixed(6)),
+        },
+      });
+    } catch (e) {
+      await addResult({
+        tool: "cancelDcaOrder",
+        toolCallId: toolCall.toolCallId,
+        output: { error: `Cancel failed to build: ${(e as Error).message}` },
+      });
+    }
+  }
+
   async function runExecutePlan(
     toolCall: { toolCallId: string; input: unknown },
     map: typeof coinMap,
@@ -1820,6 +2209,10 @@ export function Conversation({
     // (they can't be composite PTBs). Route them before the plan lookup.
     if (gaslessSendCache.get(toolCallId)) {
       return handleConfirmGaslessSend(toolCallId);
+    }
+    // DCA place/cancel are standalone txs with their own cache + confirm path.
+    if (dcaActionCache.get(toolCallId)) {
+      return handleConfirmDcaAction(toolCallId);
     }
     setSignError(null);
     setPlanTxError(undefined);
@@ -2048,6 +2441,120 @@ export function Conversation({
           `Couldn't confirm on chain: ${
             (waitErr as Error).message
           }. The transfer may still be processing.`
+        );
+      } finally {
+        setPlanConfirming(false);
+        setPlanExecuted(true);
+      }
+    } catch (e) {
+      setSignError((e as Error).message || "Wallet rejected");
+      setPlanSigning(false);
+      setPlanConfirming(false);
+    }
+  }
+
+  async function handleConfirmDcaAction(toolCallId: string) {
+    setSignError(null);
+    setPlanTxError(undefined);
+    setPlanTxStatus(undefined);
+    setPlanGasSui(undefined);
+    setPlanReceivedShares(undefined);
+    setPlanSponsored(false);
+    setSponsorFallbackReason(undefined);
+    const cached = dcaActionCache.get(toolCallId);
+    if (!cached) {
+      setSignError("DCA action expired. Ask again to rebuild.");
+      return;
+    }
+    const acct = accountRef.current;
+    if (!acct) {
+      setSignError("Connect a wallet first.");
+      return;
+    }
+    setActivePlanId(toolCallId);
+    setPlanSigning(true);
+    setPlanConfirming(false);
+    setPlanExecuted(false);
+    setPlanTxDigest(undefined);
+    try {
+      const tx = cached.tx as unknown as Transaction;
+      let digest: string;
+      let sponsored = false;
+      const walletPay = async () => {
+        const signed = await signAndExecute({ transaction: tx });
+        const signedTx =
+          signed.$kind === "Transaction"
+            ? signed.Transaction
+            : signed.FailedTransaction;
+        return signedTx.digest;
+      };
+      // SUI-funded placements can't be sponsored (the pay coin contends with
+      // the Enoki gas coin) — `sponsorEligible` is false for those.
+      if (cached.sponsorEligible && sponsorGasRef.current) {
+        try {
+          digest = await executeSponsored({
+            tx,
+            sender: acct.address,
+            network: currentNetwork,
+            suiClient: suiClientRef.current as unknown as SuiGrpcClient,
+            signTransaction,
+          });
+          sponsored = true;
+        } catch (sponsorErr) {
+          if (!(sponsorErr instanceof SponsorshipUnavailableError)) {
+            throw sponsorErr;
+          }
+          console.error(
+            "[handleConfirmDcaAction] Enoki sponsorship unavailable — falling back to wallet-paid gas:",
+            (sponsorErr as Error).message
+          );
+          setSponsorFallbackReason((sponsorErr as Error).message);
+          digest = await walletPay();
+        }
+      } else {
+        digest = await walletPay();
+      }
+      setPlanSponsored(sponsored);
+      setPlanSigning(false);
+      setPlanConfirming(true);
+      setPlanTxDigest(digest);
+      try {
+        const finalized = await suiClientRef.current.core.waitForTransaction({
+          digest,
+          include: { effects: true },
+        });
+        const finTx =
+          finalized.$kind === "Transaction"
+            ? finalized.Transaction
+            : finalized.FailedTransaction;
+        if (finTx.status.success) {
+          setPlanTxStatus("success");
+          const gas = finTx.effects?.gasUsed;
+          if (gas) {
+            const mist =
+              BigInt(gas.computationCost) +
+              BigInt(gas.storageCost) -
+              BigInt(gas.storageRebate);
+            setPlanGasSui(Math.max(0, Number(mist) / 1e9));
+          }
+        } else {
+          setPlanTxStatus("failure");
+          const err = finTx.status.success ? null : finTx.status.error;
+          setPlanTxError(
+            (typeof err === "string"
+              ? err
+              : err
+              ? JSON.stringify(err)
+              : null) || "DCA transaction failed on chain."
+          );
+        }
+      } catch (waitErr) {
+        console.warn("[handleConfirmDcaAction] waitForTransaction failed", waitErr);
+        setPlanTxStatus("failure");
+        setPlanTxError(
+          `Couldn't confirm on chain: ${
+            (waitErr as Error).message
+          }. The tx may still be processing.`
         );
       } finally {
         setPlanConfirming(false);
