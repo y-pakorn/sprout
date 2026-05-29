@@ -26,6 +26,7 @@ import { ErrorBanner } from "@/components/parts/error-banner";
 import { CinematicShell } from "@/components/parts/cinematic-shell";
 import { LiquidBlob } from "@/components/parts/liquid-blob";
 import { HeroStatStrip } from "@/components/parts/hero-stat-strip";
+import { LiveMainnetBadge } from "@/components/parts/live-mainnet-badge";
 import { SPRING_BOUNCY } from "@/lib/motion";
 import { subscribeAskSprout, takePendingAsk } from "@/lib/ask-sprout";
 import {
@@ -2235,26 +2236,9 @@ function IdleHero({
             bounce: 0.1,
             delay: 0.08,
           }}
-          className="mb-5 inline-flex cursor-default items-center gap-2 rounded-card border border-hairline bg-canvas-white/80 py-1 pl-1 pr-2.5 shadow-button backdrop-blur-sm"
+          className="mb-5 inline-flex"
         >
-          <span className="inline-flex items-center gap-1.5 rounded-button bg-deliver-green/25 px-2 py-1">
-            <span className="relative flex size-1.5 shrink-0" aria-hidden>
-              <span className="absolute inline-flex size-full rounded-full bg-deliver-green opacity-75 motion-safe:animate-ping" />
-              <span className="relative inline-flex size-1.5 rounded-full bg-deliver-green" />
-            </span>
-            <span className="text-[11px] font-medium uppercase tracking-wide text-midnight-ink">
-              Live
-            </span>
-          </span>
-          <span className="text-[13px] font-medium text-midnight-ink">
-            Sui Mainnet
-          </span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/sui-logo.png"
-            alt="Sui"
-            className="size-3.5 shrink-0 object-contain"
-          />
+          <LiveMainnetBadge />
         </motion.div>
 
         <motion.h1
