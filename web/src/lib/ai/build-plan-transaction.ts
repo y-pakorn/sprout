@@ -472,10 +472,10 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
           });
         }
       }
-      if (sources.length < 2) {
-        throw new Error(
-          `Merge ${step.id}: needs at least 2 source coins (fromHandles + optional fromSymbol/fromAmount).`
-        );
+      if (sources.length === 0) {
+        // Unreachable via the schema (the `handles` origin requires ≥1 handle),
+        // but guard defensively rather than emit an empty merge.
+        throw new Error(`Merge ${step.id}: no source coins to merge.`);
       }
       // All sources must share coin type
       const ct = canonicalCoinType(sources[0].entry.coinType);
@@ -487,10 +487,19 @@ export async function buildPlanTransaction(args: BuildPlanArgs): Promise<BuiltPl
         }
       }
       const [dest, ...rest] = sources;
-      tx.mergeCoins(
-        dest.entry.arg,
-        rest.map((r) => r.entry.arg)
-      );
+      // A balance fold-in that resolved to zero (e.g. balancePercent: 100 on a
+      // wallet holding none of that token) leaves a SINGLE source. Don't fail —
+      // pass that coin through as the merge output. A merge included to fold in
+      // an existing balance ("send all my WAL" = swap output + held WAL) must
+      // not crash the build just because the held balance turned out to be 0;
+      // the shortfall, if any, surfaces through the upstream step's wallet draw,
+      // never as a thrown build error.
+      if (rest.length > 0) {
+        tx.mergeCoins(
+          dest.entry.arg,
+          rest.map((r) => r.entry.arg)
+        );
+      }
       const totalHuman = sources.reduce(
         (s, x) => s + x.entry.expectedHuman,
         0
