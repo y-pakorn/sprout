@@ -27,32 +27,39 @@ const jsonRpcClient = new SuiJsonRpcClient({
  * a *venue* pool's own fee logic (e.g. magma/bluemove), not our commission —
  * `metaQuote` handles them by ranking successfully-simulated quotes first.
  */
+/**
+ * DEX venues the Bluefin7K provider routes through. Exported so the UI can
+ * report the real coverage count (see HeroStatStrip) without hardcoding —
+ * keep this list as the single source of truth for both routing and display.
+ */
+export const DEX_SOURCES = [
+  "bluefin",
+  "bluefinx",
+  "turbos",
+  "suiswap",
+  "cetus",
+  "aftermath",
+  "flowx",
+  "flowx_v3",
+  "kriya",
+  "kriya_v3",
+  "deepbook_v3",
+  "obric",
+  "stsui",
+  "steamm",
+  "sevenk_v1",
+  "fullsail",
+  "ferra_dlmm",
+  "ferra_clmm",
+  "haedal_pmm",
+  "momentum",
+] as const;
+
 export const metaAg = new MetaAg({
   client: jsonRpcClient,
   providers: {
     [EProvider.BLUEFIN7K]: {
-      sources: [
-        "bluefin",
-        "bluefinx",
-        "turbos",
-        "suiswap",
-        "cetus",
-        "aftermath",
-        "flowx",
-        "flowx_v3",
-        "kriya",
-        "kriya_v3",
-        "deepbook_v3",
-        "obric",
-        "stsui",
-        "steamm",
-        "sevenk_v1",
-        "fullsail",
-        "ferra_dlmm",
-        "ferra_clmm",
-        "haedal_pmm",
-        "momentum",
-      ],
+      sources: [...DEX_SOURCES],
     },
     [EProvider.CETUS]: {},
     [EProvider.FLOWX]: {
