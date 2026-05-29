@@ -18,9 +18,9 @@ const labilGrotesk = localFont({
 //   display: "swap",
 // });
 
-const SITE_TITLE = "Sprout — your money's agent on Sui";
+const SITE_TITLE = "Sprout — Intent Execution Engine for Sui";
 const SITE_DESCRIPTION =
-  "Tell us your goal in plain English. Sprout routes swaps, pools, and vaults across Sui — atomically — with a guardian that flags risk before you sign.";
+  "Describe an outcome in plain English and Sprout turns it into a single atomic, fully sponsored on-chain transaction that you review in full before signing.";
 
 // Production URL for absolute OG/Twitter image URLs; Vercel sets the env var,
 // falls back to localhost in dev. opengraph-image.tsx / twitter-image.tsx are
