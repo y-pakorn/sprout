@@ -27,7 +27,7 @@ import {
   executeSponsored,
   SponsorshipUnavailableError,
 } from "@/lib/enoki-sponsor";
-import { resolveRecipient } from "@/lib/suins";
+import { lookupSuins } from "@/lib/suins";
 import { useCoinMap, resolveSymbol, canonicalCoinType } from "@/lib/client-coins";
 import { fetchWalletHoldings, type TokenHolding } from "@/lib/client-wallet";
 import { getTokenPrices } from "@/lib/bluefin7k";
@@ -115,7 +115,9 @@ export function PayClient({ blob }: { blob: string }) {
   useEffect(() => {
     if (!data) return;
     let alive = true;
-    resolveRecipient(data.recipient, client as unknown as SuiGrpcClient)
+    // Bidirectional: a SuiNS-name link forward-resolves; a raw-address link
+    // reverse-resolves to its primary name (when set) instead of showing 0x….
+    lookupSuins(data.recipient, client as unknown as SuiGrpcClient)
       .then((r) => {
         if (alive)
           setRecipient({ status: "ok", address: r.address, name: r.name });

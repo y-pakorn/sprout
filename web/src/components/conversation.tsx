@@ -17,7 +17,7 @@ type SuiClientLike = ReturnType<typeof useCurrentClient>;
 import type { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { buildGaslessSend, isGaslessStablecoin } from "@/lib/gasless";
-import { lookupSuins, resolveRecipient } from "@/lib/suins";
+import { lookupSuins } from "@/lib/suins";
 import {
   encodePaymentLink,
   paymentLinkUrl,
@@ -1537,7 +1537,10 @@ export function Conversation({
       // Validate the recipient now (gives the creator immediate feedback on a
       // bad name/address) and capture a preview address. The pay page resolves
       // the verbatim recipient again, live, before anyone pays.
-      const { address, name } = await resolveRecipient(
+      // Bidirectional: a SuiNS name forward-resolves; a raw 0x address
+      // reverse-resolves to its primary name (when set) so the card can show
+      // it instead of a bare address.
+      const { address, name } = await lookupSuins(
         recipientInput,
         client as unknown as SuiGrpcClient
       );
