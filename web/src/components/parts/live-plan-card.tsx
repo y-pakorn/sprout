@@ -381,19 +381,25 @@ export function LivePlanCard({
           </div>
         )}
 
-        {/* Flag items — plain rows separated by hairlines on the parent
-         *  card surface. No per-row bg tint — the gold verdict icon does
-         *  the severity work, so multiple flags don't compound into a wall
-         *  of orange that fights the page wash. */}
+        {/* Flag items — labelled "Heads up" so the list reads as a grouped
+         *  section of the review, not loose one-liners. Plain rows separated
+         *  by hairlines on the parent card surface; no per-row bg tint — the
+         *  gold verdict icon does the severity work, so multiple flags don't
+         *  compound into a wall of orange that fights the page wash. */}
         {flagRisks.length > 0 && (
-          <div className="divide-y divide-hairline/60">
-            {flagRisks.map((r) => (
-              <GuardianFlagItem
-                key={r.id}
-                risk={r}
-                onAskAgent={onAskAgent}
-              />
-            ))}
+          <div className="space-y-1">
+            <div className="text-caption font-medium uppercase tracking-wider text-muted-ash">
+              Heads up
+            </div>
+            <div className="divide-y divide-hairline/60">
+              {flagRisks.map((r) => (
+                <GuardianFlagItem
+                  key={r.id}
+                  risk={r}
+                  onAskAgent={onAskAgent}
+                />
+              ))}
+            </div>
           </div>
         )}
 
@@ -430,9 +436,10 @@ export function LivePlanCard({
         </div>
       )}
 
-      {/* Action row */}
+      {/* Action row — part of the commit footer (shares the single divider
+       *  above the gas toggle), so it carries no second border of its own. */}
       {!executed && !confirming && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-hairline/60 pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {hasSwapSteps && onSlippageChange ? (
             <div className="flex items-center gap-2">
               <span className="text-caption font-medium uppercase tracking-wider text-muted-ash">
@@ -1035,7 +1042,7 @@ function SplitSummary({
         {s.portions.map((p, i) => (
           <span
             key={i}
-            className="inline-flex items-center bg-whisper-gray px-2 py-0 text-caption font-medium tabular-nums text-midnight-ink rounded-card"
+            className="inline-flex items-center bg-canvas-white px-2 py-0 text-caption font-medium tabular-nums text-midnight-ink ring-1 ring-hairline rounded-card"
           >
             {(p.bps / 100).toFixed(p.bps % 100 === 0 ? 0 : 2)}%
           </span>
@@ -1155,6 +1162,24 @@ function summarizeDeposits(deposits: ResolvedDepositStep[]): string {
   return Array.from(byToken.entries())
     .map(([sym, total]) => `${fmtAmount(total)} ${sym}`)
     .join(" + ");
+}
+
+/**
+ * Projected yearly yield in the deposit token — Σ(amount × vault APY). Only
+ * defined when every deposit shares one token symbol (can't sum across
+ * different tokens); mixed-token plans fall back to showing Blended APY.
+ */
+function estimateAnnualYield(deposits: ResolvedDepositStep[]): string | null {
+  if (deposits.length === 0) return null;
+  const symbols = new Set(deposits.map((d) => d.sourceSymbol));
+  if (symbols.size !== 1) return null;
+  const sym = deposits[0].sourceSymbol;
+  const yearly = deposits.reduce(
+    (sum, d) => sum + d.amountHuman * (d.vault.apyPct / 100),
+    0,
+  );
+  if (!Number.isFinite(yearly) || yearly <= 0) return null;
+  return `${fmtAmount(yearly)} ${sym}`;
 }
 
 function Stat({
@@ -2671,19 +2696,25 @@ function computeStatTiles(
         value: `~${gas.toFixed(4)} SUI`,
       };
 
-  // Deposit-driven plans (with or without an upstream swap)
+  // Deposit-driven plans (with or without an upstream swap). The header
+  // already carries Blended APY, so the middle tile shows the more tangible
+  // projected yearly yield in the deposit token (falling back to APY only
+  // when deposits span multiple tokens and can't be summed).
   if (depositCount > 0) {
+    const yearly = estimateAnnualYield(deposits);
     return [
       {
         id: "deposit",
         label: depositCount === 1 ? "Deposit" : "Total deposit",
         value: summarizeDeposits(deposits),
       },
-      {
-        id: "apy",
-        label: "Blended APY",
-        value: fmtPct(cached.summary.blendedApyPct),
-      },
+      yearly
+        ? { id: "yield", label: "Est. yield / yr", value: `+${yearly}`, tone: "lime" }
+        : {
+            id: "apy",
+            label: "Blended APY",
+            value: fmtPct(cached.summary.blendedApyPct),
+          },
       gasTile,
     ];
   }
