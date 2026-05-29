@@ -2,8 +2,6 @@
 
 An intent execution engine for Sui. Describe an outcome in plain English and Sprout turns it into a single atomic, fully sponsored on-chain transaction that you review in full before signing.
 
-Built for [Sui Overflow 2026](https://overflow.sui.io), Agentic Web track (Intent Engine).
-
 ## Overview
 
 Sprout executes DeFi rather than describing it. You state an outcome, for example "swap everything to USDC and spread it across the safest three vaults" or "convert half my SUI and send it to alice.sui", and Sprout works out every action that outcome requires (swaps, splits, merges, vault deposits, withdrawals, transfers) and composes them into one atomic transaction on Sui. Whether the request is complex or trivial, it resolves to a single signature. Every step settles together or none of them do.
@@ -37,7 +35,6 @@ An agent that handles funds is only safe if a person remains the final approver.
 Sprout relies on several Sui primitives that make this approach possible:
 
 - **Programmable Transaction Blocks (PTBs)** allow a full multi-step plan to execute atomically under a single signature.
-- **zkLogin** lets users sign in and transact without managing a seed phrase.
 - **Sponsored transactions (Enoki)** let Sprout cover gas, so users do not need SUI to get started.
 - **SuiNS** resolves names like `alice.sui`, so recipients can be confirmed by name.
 - **Object-centric composability** lets Sprout route across protocols, using the 7K/Bluefin aggregator for swaps and Ember Finance for vaults, without deploying a custom contract.
